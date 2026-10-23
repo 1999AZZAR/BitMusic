@@ -829,6 +829,7 @@ fun BitChordDesktopApp() {
         persistence.saveHistory(history)
         if (showMusicVideo) {
             activeMusicVideoId = song.videoId
+            DesktopMpvPlayer.stop()
         }
         playbackEngine.load(song, startPlaying)
         partySyncHolder[0]?.onLocalIntent(song.videoId)
@@ -879,6 +880,7 @@ fun BitChordDesktopApp() {
         val currentPos = playbackEngine.state.value.positionMs
         val wasPlaying = playbackEngine.state.value.isPlaying
         showMusicVideo = false
+        DesktopMpvPlayer.stop()
 
         if (!current.isVideo) {
             return
@@ -3566,6 +3568,18 @@ fun BitChordDesktopApp() {
                                     videoId = activeMusicVideoId ?: playerSong.videoId,
                                     title = playerSong.title,
                                     startAtSec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L),
+                                    isPlaying = playback.isPlaying,
+                                    onLaunchPip = {
+                                        val vId = activeMusicVideoId ?: playerSong.videoId
+                                        val sec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L)
+                                        DesktopMpvPlayer.play(
+                                            videoId = vId,
+                                            startAtSec = sec,
+                                            title = playerSong.title,
+                                            onStart = { playbackEngine.pause() },
+                                            onExit = { playbackEngine.play() },
+                                        )
+                                    },
                                     onClose = {
                                         switchToSong()
                                     },

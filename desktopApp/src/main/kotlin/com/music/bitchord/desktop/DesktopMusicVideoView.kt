@@ -1,14 +1,21 @@
 package com.music.bitchord.desktop
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,121 +24,217 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import javafx.application.Platform
-import javafx.embed.swing.JFXPanel
-import javafx.scene.Scene
-import javafx.scene.web.WebView
 import java.awt.Desktop
 import java.net.URI
-import java.util.concurrent.CountDownLatch
 
-object DesktopFxInitializer {
-    private val started = CountDownLatch(1)
-    private var isStarted = false
+/**
+ * Controller for spawning floating Picture-in-Picture (PiP) video windows via mpv.
+ * Zero-deadlock, hardware accelerated on Linux X11/Wayland.
+ */
+object DesktopMpvPlayer {
+    private var currentProcess: Process? = null
 
-    fun ensureStarted() {
-        if (isStarted) return
+    fun play(
+        videoId: String,
+        startAtSec: Long,
+        title: String? = null,
+        onStart: () -> Unit = {},
+        onExit: () -> Unit = {},
+    ) {
+        stop()
         try {
-            Platform.startup {
-                started.countDown()
+            val process = ProcessBuilder(
+                "mpv",
+                "--ontop",
+                "--no-terminal",
+                "--geometry=640x360-24+24",
+                "--title=BitMusic MV - ${title ?: "Video"}",
+                "--ytdl-path=/home/azzar/.local/bin/yt-dlp",
+                "https://www.youtube.com/watch?v=$videoId",
+                "--start=$startAtSec",
+            ).start()
+            currentProcess = process
+            onStart()
+            Thread {
+                runCatching {
+                    process.waitFor()
+                    onExit()
+                }
+            }.start()
+        } catch (e: Exception) {
+            DesktopTrackLog.log("mpv launch failed: ${e.message}")
+            runCatching {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().browse(URI("https://www.youtube.com/watch?v=$videoId&t=${startAtSec}s"))
+                }
             }
-        } catch (_: IllegalStateException) {
-            started.countDown()
         }
-        Platform.setImplicitExit(false)
-        started.await()
-        isStarted = true
+    }
+
+    fun isPlaying(): Boolean = currentProcess?.isAlive == true
+
+    fun stop() {
+        runCatching {
+            currentProcess?.destroy()
+            currentProcess = null
+        }
     }
 }
 
 /**
- * High-performance embedded Music Video (MV) player for YouTube Music.
- * Features synchronized audio playback via BitMusic engine, native PiP player launcher,
- * and direct WebKit integration.
+ * Pure Compose Desktop Music Video stage.
+ * Never blocks the AWT/Skiko rendering thread, eliminating UI freeze issues completely.
  */
 @Composable
 fun DesktopMusicVideoView(
     videoId: String,
     title: String? = null,
     startAtSec: Long = 0L,
+    isPlaying: Boolean = true,
+    onLaunchPip: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val jfxPanel = remember(videoId) {
-        DesktopFxInitializer.ensureStarted()
-        val panel = JFXPanel()
-        Platform.runLater {
-            val webView = WebView()
-            webView.isContextMenuEnabled = false
-            val engine = webView.engine
+    val containerShape = RoundedCornerShape(16.dp)
+    val thumbUrl = "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg"
 
-            // Spoof desktop Chrome UA so YouTube serves complete desktop embed without mobile restrictions
-            engine.userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-
-            // Direct embed URL with mute=1 for autoplay bypass and sync with BitMusic master audio
-            val embedUrl = "https://www.youtube.com/embed/$videoId?autoplay=1&start=$startAtSec&enablejsapi=1&origin=https://music.youtube.com&controls=1&modestbranding=1&rel=0&iv_load_policy=3&mute=1"
-            engine.load(embedUrl)
-
-            val scene = Scene(webView)
-            panel.scene = scene
-        }
-        panel
-    }
-
-    DisposableEffect(videoId) {
-        onDispose {
-            Platform.runLater {
-                jfxPanel.scene?.root = null
-            }
-        }
-    }
-
-    val containerShape = RoundedCornerShape(14.dp)
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseScale",
+    )
 
     Box(
         modifier = modifier
-            .shadow(20.dp, containerShape)
+            .shadow(24.dp, containerShape)
             .clip(containerShape)
-            .border(1.dp, Color.White.copy(alpha = 0.14f), containerShape)
+            .border(1.dp, Color.White.copy(alpha = 0.15f), containerShape)
             .background(Color.Black),
     ) {
-        // Embedded WebView video surface
-        SwingPanel(
-            factory = { jfxPanel },
+        // High-resolution Music Video stage backdrop
+        DesktopArtwork(
+            url = thumbUrl,
+            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Top control overlay bar for MV metadata and PiP/browser actions
+        // Vignette and gradient scrims
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Black.copy(alpha = 0.65f),
+                        0.3f to Color.Black.copy(alpha = 0.20f),
+                        0.65f to Color.Black.copy(alpha = 0.35f),
+                        1.0f to Color.Black.copy(alpha = 0.85f),
+                    ),
+                ),
+        )
+
+        // Center Action: Launch Native Video / PiP
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .clickable { onLaunchPip?.invoke() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .scale(pulseScale)
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE50914))
+                        .shadow(12.dp, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = "Watch MV",
+                        tint = Color.White,
+                        modifier = Modifier.size(38.dp),
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.PictureInPictureAlt,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Play in Floating PiP",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Top Overlay Header: MV badge, title, browser and close buttons
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Black.copy(alpha = 0.70f), Color.Transparent),
+                    ),
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).padding(end = 12.dp),
+            ) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .background(Color(0xFFE50914))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                 ) {
                     Text(
                         text = "MV",
@@ -140,39 +243,27 @@ fun DesktopMusicVideoView(
                         fontWeight = FontWeight.Bold,
                     )
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(10.dp))
                 if (!title.isNullOrBlank()) {
                     Text(
                         text = title,
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Native Floating PiP Window (mpv)
+                // Floating PiP Button
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.16f))
-                        .clickable {
-                            runCatching {
-                                ProcessBuilder(
-                                    "mpv",
-                                    "--ontop",
-                                    "--no-terminal",
-                                    "--geometry=640x360-24+24",
-                                    "--title=BitMusic MV - ${title ?: "Video"}",
-                                    "--ytdl-path=/home/azzar/.local/bin/yt-dlp",
-                                    "https://www.youtube.com/watch?v=$videoId",
-                                    "--start=$startAtSec",
-                                ).start()
-                            }
-                        },
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .clickable { onLaunchPip?.invoke() },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -188,9 +279,9 @@ fun DesktopMusicVideoView(
                 // Open in External Browser
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.16f))
+                        .background(Color.White.copy(alpha = 0.18f))
                         .clickable {
                             runCatching {
                                 if (Desktop.isDesktopSupported()) {
@@ -212,9 +303,9 @@ fun DesktopMusicVideoView(
                     Spacer(Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.16f))
+                            .background(Color.White.copy(alpha = 0.18f))
                             .clickable(onClick = onClose),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -226,6 +317,32 @@ fun DesktopMusicVideoView(
                         )
                     }
                 }
+            }
+        }
+
+        // Bottom Overlay: Live audio sync indicator
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.GraphicEq,
+                    contentDescription = null,
+                    tint = if (isPlaying) Color(0xFF1DB954) else Color.White.copy(alpha = 0.60f),
+                    modifier = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (isPlaying) "Playing Music Video Audio" else "Paused",
+                    color = Color.White.copy(alpha = 0.80f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }
