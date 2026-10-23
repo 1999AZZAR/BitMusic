@@ -4419,7 +4419,7 @@ private fun DesktopTopBar(
                 Image(
                     painter = painterResource(Res.drawable.logo_mark),
                     contentDescription = "BitMusic",
-                    modifier = Modifier.size(width = 28.dp, height = 18.dp),
+                    modifier = Modifier.size(20.dp),
                 )
                 Spacer(Modifier.width(14.dp))
                 DesktopToolbarButton(onClick = onBack, enabled = canGoBack, size = 32.dp) {
