@@ -580,6 +580,9 @@ fun BitChordDesktopApp() {
     var moodGenreReloads by remember { mutableStateOf(0) }
     var moodGenreShelves by remember { mutableStateOf<UiState<List<HomeShelf>>>(UiState.Loading) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
+    var showMusicVideo by remember { mutableStateOf(false) }
+    var isResolvingMv by remember { mutableStateOf(false) }
+    var activeMusicVideoId by remember { mutableStateOf<String?>(null) }
     // The live queue: what is playing, what played before it, what is next.
     var liveQueue by remember {
         mutableStateOf(
@@ -824,9 +827,90 @@ fun BitChordDesktopApp() {
         history = (listOf(song) + history.filterNot { it.videoId == song.videoId }).take(50)
         saveQueue()
         persistence.saveHistory(history)
-        playbackEngine.load(song, startPlaying)
+        if (showMusicVideo) {
+            activeMusicVideoId = song.videoId
+            playbackEngine.load(song, playWhenReady = false)
+        } else {
+            playbackEngine.load(song, startPlaying)
+        }
         partySyncHolder[0]?.onLocalIntent(song.videoId)
         scope.launch { DesktopScrobbling.updateNowPlaying(song) }
+    }
+
+    fun switchToVideo() {
+        val current = selectedSong ?: return
+        if (showMusicVideo) return
+        if (current.isVideo) {
+            activeMusicVideoId = current.videoId
+            showMusicVideo = true
+            playbackEngine.pause()
+            overlays.nowPlaying = true
+            return
+        }
+
+        isResolvingMv = true
+        scope.launch {
+            try {
+                val resolved = runCatching { YtMusicRepository.resolveVideo(current) }.getOrNull()
+                val targetVideo = resolved ?: current
+                activeMusicVideoId = targetVideo.videoId
+                if (resolved != null && resolved.videoId != current.videoId) {
+                    val target = resolved.copy(
+                        queueTier = current.queueTier,
+                        queueEntryId = current.queueEntryId,
+                        radioName = current.radioName,
+                        playbackSource = current.playbackSource,
+                        playbackSourceType = current.playbackSourceType,
+                        playbackSourceId = current.playbackSourceId,
+                    )
+                    liveQueue = liveQueue.withReplaced(current.videoId, target)
+                    selectedSong = target
+                    saveQueue()
+                }
+                playbackEngine.pause()
+                showMusicVideo = true
+                overlays.nowPlaying = true
+            } finally {
+                isResolvingMv = false
+            }
+        }
+    }
+
+    fun switchToSong() {
+        val current = selectedSong ?: return
+        val currentPosMs = playbackEngine.state.value.positionMs
+        showMusicVideo = false
+
+        if (!current.isVideo) {
+            playbackEngine.play()
+            return
+        }
+
+        isResolvingMv = true
+        scope.launch {
+            try {
+                val resolved = runCatching { YtMusicRepository.resolveAudio(current) }.getOrNull()
+                if (resolved != null && resolved.videoId != current.videoId) {
+                    val target = resolved.copy(
+                        isVideoOrigin = true,
+                        queueTier = current.queueTier,
+                        queueEntryId = current.queueEntryId,
+                        radioName = current.radioName,
+                        playbackSource = current.playbackSource,
+                        playbackSourceType = current.playbackSourceType,
+                        playbackSourceId = current.playbackSourceId,
+                    )
+                    liveQueue = liveQueue.withReplaced(current.videoId, target)
+                    selectedSong = target
+                    saveQueue()
+                    playbackEngine.load(target, playWhenReady = true, startAtMs = currentPosMs)
+                } else {
+                    playbackEngine.play()
+                }
+            } finally {
+                isResolvingMv = false
+            }
+        }
     }
 
     fun partyTrackChangeBlocked(): Boolean {
@@ -1582,6 +1666,9 @@ fun BitChordDesktopApp() {
                     liveQueue = liveQueue.afterHandoffTo(song.videoId)
                     saveQueue()
                     selectedSong = song
+                    if (showMusicVideo) {
+                        activeMusicVideoId = song.videoId
+                    }
                     history = (listOf(song) + history.filterNot { it.videoId == song.videoId }).take(50)
                     persistence.saveHistory(history)
                     DesktopScrobbling.updateNowPlaying(song)
@@ -3225,6 +3312,10 @@ fun BitChordDesktopApp() {
                         volume = playback.volume,
                         shuffle = shuffle,
                         repeatMode = repeatMode,
+                        isVideo = showMusicVideo || (selectedSong?.isVideo == true),
+                        isResolvingMv = isResolvingMv,
+                        onSelectSong = ::switchToSong,
+                        onSelectVideo = ::switchToVideo,
                         onPlayPause = { if (selectedSong != null) togglePlayPauseFromUser() },
                         onPrevious = ::playPrevious,
                         onNext = ::playNext,
@@ -3348,7 +3439,7 @@ fun BitChordDesktopApp() {
                             isLoading = playback.isLoading,
                             position = playerPosition,
                             durationMs = playback.durationMs,
-                            audioVersionSwitching = false,
+                            audioVersionSwitching = isResolvingMv,
                             qualityUpgraded = false,
                             queue = liveQueue.songs,
                             queueIndex = liveQueue.index,
@@ -3447,6 +3538,47 @@ fun BitChordDesktopApp() {
                             playerTranslateToggle = playerTranslateToggle,
                             playerShowingTranslation = playerShowingTranslation,
                         )
+
+                        // Floating YouTube Music Song | Video pill
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 16.dp),
+                        ) {
+                            DesktopSongVideoToggle(
+                                isVideo = showMusicVideo || playerSong.isVideo,
+                                isResolving = isResolvingMv,
+                                onSelectSong = ::switchToSong,
+                                onSelectVideo = ::switchToVideo,
+                            )
+                        }
+
+                        // Floating Music Video playback view
+                        if (showMusicVideo) {
+                            val maxW = (windowWidth - 80.dp).coerceAtLeast(320.dp)
+                            val maxH = (windowHeight - 240.dp).coerceAtLeast(180.dp)
+                            val targetW = minOf(maxW, maxH * 16f / 9f)
+                            val targetH = targetW * 9f / 16f
+
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .padding(bottom = 70.dp)
+                                    .width(targetW)
+                                    .height(targetH),
+                            ) {
+                                DesktopMusicVideoView(
+                                    videoId = activeMusicVideoId ?: playerSong.videoId,
+                                    title = playerSong.title,
+                                    startAtSec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L),
+                                    onClose = {
+                                        showMusicVideo = false
+                                        playbackEngine.play()
+                                    },
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
                         // The sheet's own origin in the window, so the menu below can be
                         // placed on the "…" button the player reports in window terms.
                         val sheetOrigin = remember { mutableStateOf(Offset.Zero) }
@@ -4360,6 +4492,10 @@ private fun DesktopTopBar(
     volume: Float,
     shuffle: Boolean,
     repeatMode: DesktopRepeatMode,
+    isVideo: Boolean = false,
+    isResolvingMv: Boolean = false,
+    onSelectSong: () -> Unit = {},
+    onSelectVideo: () -> Unit = {},
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -4592,6 +4728,15 @@ private fun DesktopTopBar(
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (song != null && !compact) {
+                        DesktopSongVideoToggle(
+                            isVideo = isVideo,
+                            isResolving = isResolvingMv,
+                            onSelectSong = onSelectSong,
+                            onSelectVideo = onSelectVideo,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     Icon(
                         Icons.Rounded.VolumeUp,
                         DesktopStrings["d_volume", "Volume"],
