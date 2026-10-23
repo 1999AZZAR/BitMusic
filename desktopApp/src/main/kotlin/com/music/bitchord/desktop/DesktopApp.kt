@@ -829,21 +829,20 @@ fun BitChordDesktopApp() {
         persistence.saveHistory(history)
         if (showMusicVideo) {
             activeMusicVideoId = song.videoId
-            playbackEngine.load(song, playWhenReady = false)
-        } else {
-            playbackEngine.load(song, startPlaying)
         }
+        playbackEngine.load(song, startPlaying)
         partySyncHolder[0]?.onLocalIntent(song.videoId)
         scope.launch { DesktopScrobbling.updateNowPlaying(song) }
     }
 
     fun switchToVideo() {
         val current = selectedSong ?: return
-        if (showMusicVideo) return
+        val currentPos = playbackEngine.state.value.positionMs
+        val wasPlaying = playbackEngine.state.value.isPlaying
+
         if (current.isVideo) {
             activeMusicVideoId = current.videoId
             showMusicVideo = true
-            playbackEngine.pause()
             overlays.nowPlaying = true
             return
         }
@@ -854,20 +853,19 @@ fun BitChordDesktopApp() {
                 val resolved = runCatching { YtMusicRepository.resolveVideo(current) }.getOrNull()
                 val targetVideo = resolved ?: current
                 activeMusicVideoId = targetVideo.videoId
-                if (resolved != null && resolved.videoId != current.videoId) {
-                    val target = resolved.copy(
-                        queueTier = current.queueTier,
-                        queueEntryId = current.queueEntryId,
-                        radioName = current.radioName,
-                        playbackSource = current.playbackSource,
-                        playbackSourceType = current.playbackSourceType,
-                        playbackSourceId = current.playbackSourceId,
-                    )
-                    liveQueue = liveQueue.withReplaced(current.videoId, target)
-                    selectedSong = target
-                    saveQueue()
-                }
-                playbackEngine.pause()
+                val target = targetVideo.copy(
+                    queueTier = current.queueTier,
+                    queueEntryId = current.queueEntryId,
+                    radioName = current.radioName,
+                    playbackSource = current.playbackSource,
+                    playbackSourceType = current.playbackSourceType,
+                    playbackSourceId = current.playbackSourceId,
+                )
+                liveQueue = liveQueue.withReplaced(current.videoId, target)
+                selectedSong = target
+                saveQueue()
+                // Seamlessly swap the playing audio stream to the music video version at current timestamp
+                playbackEngine.load(target, playWhenReady = wasPlaying, startAtMs = currentPos)
                 showMusicVideo = true
                 overlays.nowPlaying = true
             } finally {
@@ -878,35 +876,32 @@ fun BitChordDesktopApp() {
 
     fun switchToSong() {
         val current = selectedSong ?: return
-        val currentPosMs = playbackEngine.state.value.positionMs
+        val currentPos = playbackEngine.state.value.positionMs
+        val wasPlaying = playbackEngine.state.value.isPlaying
         showMusicVideo = false
 
         if (!current.isVideo) {
-            playbackEngine.play()
             return
         }
 
         isResolvingMv = true
         scope.launch {
             try {
-                val resolved = runCatching { YtMusicRepository.resolveAudio(current) }.getOrNull()
-                if (resolved != null && resolved.videoId != current.videoId) {
-                    val target = resolved.copy(
-                        isVideoOrigin = true,
-                        queueTier = current.queueTier,
-                        queueEntryId = current.queueEntryId,
-                        radioName = current.radioName,
-                        playbackSource = current.playbackSource,
-                        playbackSourceType = current.playbackSourceType,
-                        playbackSourceId = current.playbackSourceId,
-                    )
-                    liveQueue = liveQueue.withReplaced(current.videoId, target)
-                    selectedSong = target
-                    saveQueue()
-                    playbackEngine.load(target, playWhenReady = true, startAtMs = currentPosMs)
-                } else {
-                    playbackEngine.play()
-                }
+                val resolved = runCatching { YtMusicRepository.resolveAudio(current) }.getOrNull() ?: current
+                val target = resolved.copy(
+                    isVideoOrigin = true,
+                    queueTier = current.queueTier,
+                    queueEntryId = current.queueEntryId,
+                    radioName = current.radioName,
+                    playbackSource = current.playbackSource,
+                    playbackSourceType = current.playbackSourceType,
+                    playbackSourceId = current.playbackSourceId,
+                )
+                liveQueue = liveQueue.withReplaced(current.videoId, target)
+                selectedSong = target
+                saveQueue()
+                // Seamlessly swap the playing audio stream back to the album song version at current timestamp
+                playbackEngine.load(target, playWhenReady = wasPlaying, startAtMs = currentPos)
             } finally {
                 isResolvingMv = false
             }
@@ -3572,8 +3567,7 @@ fun BitChordDesktopApp() {
                                     title = playerSong.title,
                                     startAtSec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L),
                                     onClose = {
-                                        showMusicVideo = false
-                                        playbackEngine.play()
+                                        switchToSong()
                                     },
                                     modifier = Modifier.fillMaxSize(),
                                 )

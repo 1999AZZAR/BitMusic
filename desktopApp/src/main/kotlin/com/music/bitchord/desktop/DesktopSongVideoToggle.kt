@@ -118,7 +118,7 @@ private fun SegmentItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            if (isLoading && selected) {
+            if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(13.dp),
                     strokeWidth = 2.dp,
