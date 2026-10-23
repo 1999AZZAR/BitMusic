@@ -15,9 +15,9 @@ dpkg-deb -R "$in" "$root"
 sed -i "s/^Version: .*/Version: $version/" "$root/DEBIAN/control"
 # [Application] holds jvm-args in jpackage's cfg grammar.
 sed -i "/^\[Application\]/a app.options=-Dbitchord.version=$version" \
-    "$root/opt/bitchord/lib/app/BitChord.cfg"
+    "$root/opt/BitMusic/lib/app/BitMusic.cfg"
 # jpackage ships Categories=Audio; a menu needs the whole multimedia family.
-for desktop in "$root"/opt/bitchord/lib/*.desktop; do
+for desktop in "$root"/opt/BitMusic/lib/*.desktop; do
     sed -i "s/^Categories=.*/Categories=AudioVideo;Audio;Player;Multimedia;/" "$desktop"
 done
 dpkg-deb -b "$root" "$out"

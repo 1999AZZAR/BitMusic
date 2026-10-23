@@ -59,7 +59,7 @@ object DesktopScrobbling {
         get() = apiKey != null && apiSecret != null
 
     /**
-     * Whether this build carries BitChord's own Last.fm app credentials (a release
+     * Whether this build carries BitMusic's own Last.fm app credentials (a release
      * build does). Then signing in needs only the account; a build without them
      * asks the listener for their own key and secret as well.
      */
@@ -280,7 +280,7 @@ object DesktopScrobbling {
                                     put("track_name", song.title)
                                     song.albumName?.let { put("release_name", it) }
                                     putJsonObject("additional_info") {
-                                        put("submission_client", "BitChord")
+                                        put("submission_client", "BitMusic")
                                         if (isPlayingNow) {
                                             put("position_ms", 0L)
                                             if (durationMs > 0) put("duration_ms", durationMs)

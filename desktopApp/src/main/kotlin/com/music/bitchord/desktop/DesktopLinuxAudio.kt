@@ -58,10 +58,10 @@ internal object DesktopLinuxAudio {
         val error = intArrayOf(0)
         val opened = bindings.pa_simple_new(
             null,
-            "BitChord",
+            "BitMusic",
             PA_STREAM_PLAYBACK,
             null,
-            "BitChord desktop playback",
+            "BitMusic desktop playback",
             spec,
             null,
             null,

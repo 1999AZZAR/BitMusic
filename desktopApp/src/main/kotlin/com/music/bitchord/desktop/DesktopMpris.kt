@@ -128,7 +128,7 @@ internal class DesktopMprisController(
 ) {
     private val lock = Any()
     private val worker: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "BitChord-MPRIS").apply { isDaemon = true }
+        Thread(runnable, "BitMusic-MPRIS").apply { isDaemon = true }
     }
     private var connection: DBusConnection? = null
     private var started = false
@@ -161,7 +161,7 @@ internal class DesktopMprisController(
                     connection = null
                     started = false
                 }
-                System.err.println("BitChord MPRIS unavailable: ${failure.message}")
+                System.err.println("BitMusic MPRIS unavailable: ${failure.message}")
             }
         }
     }
@@ -247,7 +247,7 @@ internal class DesktopMprisController(
             "CanQuit" to variant(false),
             "CanRaise" to variant(false),
             "HasTrackList" to variant(false),
-            "Identity" to variant("BitChord"),
+            "Identity" to variant("BitMusic"),
             "DesktopEntry" to variant("bitchord"),
             "SupportedUriSchemes" to variant(listOf("file", "http", "https"), "as"),
             "SupportedMimeTypes" to variant(
