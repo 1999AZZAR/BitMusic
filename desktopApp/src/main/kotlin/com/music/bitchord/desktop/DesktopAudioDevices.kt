@@ -19,7 +19,7 @@ internal data class DesktopAudioDevice(val id: String, val name: String, val des
  */
 internal object DesktopAudioDevices {
 
-    /** Follows whatever the system calls the default. */
+    /** Follows the best hardware mixer currently able to play, analog before HDMI. */
     const val SYSTEM_DEFAULT = ""
 
     private val _selected = MutableStateFlow(DesktopPersistence().string(KEY_DEVICE))
@@ -79,13 +79,33 @@ internal object DesktopAudioDevices {
      * headphones get unplugged, and that should not stop playback.
      */
     fun mixerFor(id: String): Mixer? {
-        if (id == SYSTEM_DEFAULT) return null
-        return runCatching {
-            AudioSystem.getMixerInfo()
-                .firstOrNull { it.name == id }
-                ?.let(AudioSystem::getMixer)
-        }.getOrNull()
+        if (id != SYSTEM_DEFAULT) {
+            return runCatching {
+                AudioSystem.getMixerInfo()
+                    .firstOrNull { it.name == id }
+                    ?.let(AudioSystem::getMixer)
+            }.getOrNull()
+        }
+        return defaultMixer()
     }
+
+    /**
+     * The blank choice, resolved at every open: OpenJDK's Java Sound cannot open the virtual
+     * ALSA/PipeWire "default", and its stock default can land on a dead HDMI port, so pick the
+     * best hardware mixer that answers right now — analog before HDMI — so a device hogged by
+     * another app or a monitor with no speakers never becomes the default.
+     */
+    private fun defaultMixer(): Mixer? = runCatching {
+        val playable = AudioSystem.getMixerInfo().filter { info ->
+            runCatching {
+                AudioSystem.getMixer(info).isLineSupported(DataLine.Info(SourceDataLine::class.java, null))
+            }.getOrDefault(false)
+        }
+        val chosen = playable.firstOrNull { !it.name.contains("HDMI", ignoreCase = true) }
+            ?: playable.firstOrNull()
+            ?: return@runCatching null
+        AudioSystem.getMixer(chosen)
+    }.getOrNull()
 
     /** What Settings shows for the stored choice. */
     fun label(): String {
