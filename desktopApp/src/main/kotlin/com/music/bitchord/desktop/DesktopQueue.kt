@@ -94,15 +94,6 @@ internal data class DesktopQueue(
         )
     }
 
-    /** Replaces a song in the queue (e.g. version swap between audio and video), keeping the current index. */
-    fun withReplaced(oldSongId: String, newSong: Song): DesktopQueue {
-        val at = songs.indexOfFirst { it.videoId == oldSongId }
-        if (at < 0) return this
-        val list = songs.toMutableList()
-        list[at] = newSong
-        return copy(songs = list)
-    }
-
     /** Moves one row, keeping [index] on the song that is playing. */
     fun move(from: Int, to: Int): DesktopQueue {
         if (from !in songs.indices || to !in songs.indices || from == to) return this

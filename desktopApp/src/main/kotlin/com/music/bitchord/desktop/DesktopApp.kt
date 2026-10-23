@@ -580,9 +580,6 @@ fun BitChordDesktopApp() {
     var moodGenreReloads by remember { mutableStateOf(0) }
     var moodGenreShelves by remember { mutableStateOf<UiState<List<HomeShelf>>>(UiState.Loading) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
-    var showMusicVideo by remember { mutableStateOf(false) }
-    var isResolvingMv by remember { mutableStateOf(false) }
-    var activeMusicVideoId by remember { mutableStateOf<String?>(null) }
     // The live queue: what is playing, what played before it, what is next.
     var liveQueue by remember {
         mutableStateOf(
@@ -827,89 +824,9 @@ fun BitChordDesktopApp() {
         history = (listOf(song) + history.filterNot { it.videoId == song.videoId }).take(50)
         saveQueue()
         persistence.saveHistory(history)
-        if (showMusicVideo) {
-            activeMusicVideoId = song.videoId
-            DesktopMpvPlayer.stop()
-        }
         playbackEngine.load(song, startPlaying)
         partySyncHolder[0]?.onLocalIntent(song.videoId)
         scope.launch { DesktopScrobbling.updateNowPlaying(song) }
-    }
-
-    fun switchToVideo() {
-        val current = selectedSong ?: return
-        val currentPos = playbackEngine.state.value.positionMs
-        val wasPlaying = playbackEngine.state.value.isPlaying
-
-        if (current.isVideo) {
-            activeMusicVideoId = current.videoId
-            showMusicVideo = true
-            overlays.nowPlaying = true
-            return
-        }
-
-        isResolvingMv = true
-        scope.launch {
-            try {
-                val resolved = runCatching { YtMusicRepository.resolveVideo(current) }.getOrNull()
-                val targetVideo = resolved ?: current
-                activeMusicVideoId = targetVideo.videoId
-                val target = targetVideo.copy(
-                    queueTier = current.queueTier,
-                    queueEntryId = current.queueEntryId,
-                    radioName = current.radioName,
-                    playbackSource = current.playbackSource,
-                    playbackSourceType = current.playbackSourceType,
-                    playbackSourceId = current.playbackSourceId,
-                )
-                liveQueue = liveQueue.withReplaced(current.videoId, target)
-                selectedSong = target
-                saveQueue()
-                // Seamlessly swap the playing audio stream to the music video version at current timestamp
-                playbackEngine.load(target, playWhenReady = wasPlaying, startAtMs = currentPos)
-                showMusicVideo = true
-                overlays.nowPlaying = true
-            } finally {
-                isResolvingMv = false
-            }
-        }
-    }
-
-    fun switchToSong() {
-        val current = selectedSong ?: return
-        val videoPosMs = DesktopMpvPlayer.currentPositionMs().coerceAtLeast(0L)
-        val currentPos = if (showMusicVideo && videoPosMs > 0) videoPosMs else playbackEngine.state.value.positionMs
-        val wasPlaying = DesktopMpvPlayer.isPlaying() || playbackEngine.state.value.isPlaying
-        showMusicVideo = false
-        DesktopMpvPlayer.stop()
-
-        if (!current.isVideo) {
-            playbackEngine.load(current, playWhenReady = wasPlaying, startAtMs = currentPos)
-            return
-        }
-
-        isResolvingMv = true
-        scope.launch {
-            try {
-                val resolved = runCatching { YtMusicRepository.resolveAudio(current) }.getOrNull() ?: current
-                val target = resolved.copy(
-                    isVideoOrigin = true,
-                    queueTier = current.queueTier,
-                    queueEntryId = current.queueEntryId,
-                    radioName = current.radioName,
-                    playbackSource = current.playbackSource,
-                    playbackSourceType = current.playbackSourceType,
-                    playbackSourceId = current.playbackSourceId,
-                )
-                liveQueue = liveQueue.withReplaced(current.videoId, target)
-                selectedSong = target
-                saveQueue()
-                // Seamlessly swap the playing audio stream back to the album song version at current timestamp
-                playbackEngine.load(target, playWhenReady = wasPlaying, startAtMs = currentPos)
-            } finally {
-                isResolvingMv = false
-            }
-        }
     }
 
     fun partyTrackChangeBlocked(): Boolean {
@@ -1665,9 +1582,6 @@ fun BitChordDesktopApp() {
                     liveQueue = liveQueue.afterHandoffTo(song.videoId)
                     saveQueue()
                     selectedSong = song
-                    if (showMusicVideo) {
-                        activeMusicVideoId = song.videoId
-                    }
                     history = (listOf(song) + history.filterNot { it.videoId == song.videoId }).take(50)
                     persistence.saveHistory(history)
                     DesktopScrobbling.updateNowPlaying(song)
@@ -3311,10 +3225,6 @@ fun BitChordDesktopApp() {
                         volume = playback.volume,
                         shuffle = shuffle,
                         repeatMode = repeatMode,
-                        isVideo = showMusicVideo || (selectedSong?.isVideo == true),
-                        isResolvingMv = isResolvingMv,
-                        onSelectSong = ::switchToSong,
-                        onSelectVideo = ::switchToVideo,
                         onPlayPause = { if (selectedSong != null) togglePlayPauseFromUser() },
                         onPrevious = ::playPrevious,
                         onNext = ::playNext,
@@ -3438,7 +3348,7 @@ fun BitChordDesktopApp() {
                             isLoading = playback.isLoading,
                             position = playerPosition,
                             durationMs = playback.durationMs,
-                            audioVersionSwitching = isResolvingMv,
+                            audioVersionSwitching = false,
                             qualityUpgraded = false,
                             queue = liveQueue.songs,
                             queueIndex = liveQueue.index,
@@ -3537,59 +3447,6 @@ fun BitChordDesktopApp() {
                             playerTranslateToggle = playerTranslateToggle,
                             playerShowingTranslation = playerShowingTranslation,
                         )
-
-                        // Floating YouTube Music Song | Video pill
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 16.dp),
-                        ) {
-                            DesktopSongVideoToggle(
-                                isVideo = showMusicVideo || playerSong.isVideo,
-                                isResolving = isResolvingMv,
-                                onSelectSong = ::switchToSong,
-                                onSelectVideo = ::switchToVideo,
-                            )
-                        }
-
-                        // Floating Music Video playback view
-                        if (showMusicVideo) {
-                            val maxW = (windowWidth - 80.dp).coerceAtLeast(320.dp)
-                            val maxH = (windowHeight - 240.dp).coerceAtLeast(180.dp)
-                            val targetW = minOf(maxW, maxH * 16f / 9f)
-                            val targetH = targetW * 9f / 16f
-
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .padding(bottom = 70.dp)
-                                    .width(targetW)
-                                    .height(targetH),
-                            ) {
-                                DesktopMusicVideoView(
-                                    videoId = activeMusicVideoId ?: playerSong.videoId,
-                                    title = playerSong.title,
-                                    startAtSec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L),
-                                    isPlaying = playback.isPlaying,
-                                    volume = volume,
-                                    onStartVideo = {
-                                        playbackEngine.pause()
-                                    },
-                                    onExitVideo = {
-                                        if (showMusicVideo) {
-                                            playNext()
-                                        }
-                                    },
-                                    onTogglePlayPause = {
-                                        togglePlayPauseFromUser()
-                                    },
-                                    onClose = {
-                                        switchToSong()
-                                    },
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                        }
                         // The sheet's own origin in the window, so the menu below can be
                         // placed on the "…" button the player reports in window terms.
                         val sheetOrigin = remember { mutableStateOf(Offset.Zero) }
@@ -4503,10 +4360,6 @@ private fun DesktopTopBar(
     volume: Float,
     shuffle: Boolean,
     repeatMode: DesktopRepeatMode,
-    isVideo: Boolean = false,
-    isResolvingMv: Boolean = false,
-    onSelectSong: () -> Unit = {},
-    onSelectVideo: () -> Unit = {},
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -4739,15 +4592,6 @@ private fun DesktopTopBar(
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (song != null && !compact) {
-                        DesktopSongVideoToggle(
-                            isVideo = isVideo,
-                            isResolving = isResolvingMv,
-                            onSelectSong = onSelectSong,
-                            onSelectVideo = onSelectVideo,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
                     Icon(
                         Icons.Rounded.VolumeUp,
                         DesktopStrings["d_volume", "Volume"],
