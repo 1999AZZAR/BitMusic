@@ -52,10 +52,12 @@ import androidx.compose.runtime.SideEffect
 import com.music.bitchord.data.model.QueueTier
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -129,6 +131,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -347,9 +350,9 @@ import org.jetbrains.compose.resources.painterResource
  */
 internal val DesktopPageGutter = PAGE_GUTTER
 
-internal val DesktopBackground = Color(0xFF202020)
-internal val DesktopSurface = Color(0xFF0D0D0F)
-private val DesktopSurfaceRaised = Color(0xFF1C1C1E)
+internal val DesktopBackground = Color(0xFF121212)
+internal val DesktopSurface = Color(0xFF181818)
+private val DesktopSurfaceRaised = Color(0xFF242424)
 internal val DesktopGlass = Color(0x661C1C1E)
 internal val DesktopGlassStrong = Color(0xCC0D0D0F)
 
@@ -365,6 +368,9 @@ private val LocalDesktopBottomInset = staticCompositionLocalOf { 0.dp }
 /** Android's own edge on these bars: `Color.White.copy(alpha = 0.10f)`. */
 private val DesktopBarEdge = Color(0x1AFFFFFF)
 internal val DesktopAccent = Color.White
+
+/** Spotify's green: the one signal that reads "this is playing, not merely selected". */
+internal val DesktopPlaying = Color(0xFF1DB954)
 
 /** Deleting, signing out, and anything that failed — the one place a colour survives, as on Android. */
 internal val DesktopDestructive = Color(0xFFFF453A)
@@ -4380,6 +4386,7 @@ private fun DesktopTopBar(
     val reduceAnimation by DesktopPlayerSettings.reduceAnimation.collectAsState()
     val mixPulse = rememberMixPulse({ mixBlend.value }, enabled = !reduceAnimation, slow = true)
     val currentProgress by rememberUpdatedState(progress)
+    val isPlayingProgress by rememberUpdatedState(isPlaying)
 
     // Apple Music uses one calm strip for both player controls and window furniture. The left
     // sidebar owns the traffic lights; the rest is a balanced transport / now-playing / utility
@@ -4445,20 +4452,29 @@ private fun DesktopTopBar(
                                 modifier = Modifier.size(21.dp),
                             )
                         }
-                        DesktopToolbarButton(onClick = onPlayPause, size = 32.dp) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                Icon(
-                                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                    if (isPlaying) "Pause" else "Play",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(23.dp),
-                                )
+                        DesktopToolbarButton(onClick = onPlayPause, size = 34.dp) {
+                            // Spotify's play control: a green disc with the glyph in black.
+                            Box(
+                                Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(DesktopPlaying),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        color = Color.Black,
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                        if (isPlaying) "Pause" else "Play",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
                             }
                         }
                         DesktopToolbarButton(onClick = onNext, size = 32.dp) {
@@ -4559,7 +4575,7 @@ private fun DesktopTopBar(
                                                 val base = currentProgress.coerceIn(0f, 1f)
                                                 val fraction = base + (1f - base) * mixPulse.cover
                                                 drawRect(
-                                                    color = Color.White.copy(alpha = mixPulse.alpha(0.48f)),
+                                                    color = if (isPlayingProgress) DesktopPlaying.copy(alpha = mixPulse.alpha(0.95f)) else Color.White.copy(alpha = mixPulse.alpha(0.48f)),
                                                     size = Size(size.width * fraction, size.height),
                                                 )
                                             },
@@ -4695,9 +4711,15 @@ private fun DesktopSidebar(
     val inlineCaption = DesktopPlatform.drawsOwnWindowFrame && !titleBarEnabled
     // Rows the listener has tucked away; keyed the same way the sidebar lists them.
     val hiddenSidebar by DesktopSidebarVisibility.hidden.collectAsState()
+    val collapsed by DesktopSidebarCollapse.collapsed.collectAsState()
+    val sidebarWidth by animateDpAsState(
+        targetValue = if (collapsed) 64.dp else 220.dp,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "sidebarWidth",
+    )
     Box(
         Modifier
-            .width(220.dp)
+            .width(sidebarWidth)
             .fillMaxHeight()
             .desktopWindowGlass(DesktopChromeEdge.END, fade = 0.07f),
     ) {
@@ -4719,34 +4741,53 @@ private fun DesktopSidebar(
         Column(
             Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = if (inlineCaption) 4.dp else 16.dp, bottom = 16.dp),
         ) {
-            DesktopSearchField(
-                query = query,
-                onQueryChange = onQueryChange,
-                onSearch = onSearch,
-                focusRequester = searchFocusRequester,
-                onFocusChanged = { searchFocused = it },
-            )
-            Spacer(Modifier.height(20.dp))
-            DesktopSidebarItem(BitChordIcons.Home, DesktopStrings["home", "Home"], destination == DesktopDestination.LISTEN_NOW) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.Start) {
+                DesktopToolbarButton(
+                    onClick = { DesktopSidebarCollapse.toggle() },
+                    size = 26.dp,
+                ) {
+                    Icon(
+                        if (collapsed) Icons.Rounded.ChevronRight else Icons.Rounded.ChevronLeft,
+                        contentDescription = DesktopStrings["collapse_sidebar", "Collapse sidebar"],
+                        tint = DesktopSecondary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(if (collapsed) 8.dp else 12.dp))
+            if (!collapsed) {
+                DesktopSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onSearch = onSearch,
+                    focusRequester = searchFocusRequester,
+                    onFocusChanged = { searchFocused = it },
+                )
+                Spacer(Modifier.height(20.dp))
+            }
+            DesktopSidebarItem(BitChordIcons.Home, DesktopStrings["home", "Home"], destination == DesktopDestination.LISTEN_NOW, collapsed = collapsed) {
                 onDestinationSelected(DesktopDestination.LISTEN_NOW)
             }
-            DesktopSidebarItem(BitChordIcons.Explore, "Explore", destination == DesktopDestination.EXPLORE) {
+            DesktopSidebarItem(BitChordIcons.Explore, "Explore", destination == DesktopDestination.EXPLORE, collapsed = collapsed) {
                 onDestinationSelected(DesktopDestination.EXPLORE)
             }
-            DesktopSidebarItem(BitChordIcons.Library, "Library", destination == DesktopDestination.LIBRARY) {
+            DesktopSidebarItem(BitChordIcons.Library, "Library", destination == DesktopDestination.LIBRARY, collapsed = collapsed) {
                 onDestinationSelected(DesktopDestination.LIBRARY)
             }
-            DesktopSidebarItem(BitChordIcons.Search, "Search", destination == DesktopDestination.SEARCH) {
+            DesktopSidebarItem(BitChordIcons.Search, "Search", destination == DesktopDestination.SEARCH, collapsed = collapsed) {
                 onDestinationSelected(DesktopDestination.SEARCH)
             }
-            Spacer(Modifier.height(6.dp))
-            HorizontalDivider(color = desktopChromeDivider())
-            Spacer(Modifier.height(12.dp))
+            if (!collapsed) {
+                Spacer(Modifier.height(6.dp))
+                HorizontalDivider(color = desktopChromeDivider())
+                Spacer(Modifier.height(12.dp))
+            }
             if (HISTORY_KEY !in hiddenSidebar) {
                 DesktopSidebarItem(
                     BitChordIcons.Clock,
                     "History",
                     destination == DesktopDestination.HISTORY,
+                    collapsed = collapsed,
                     onClick = { onDestinationSelected(DesktopDestination.HISTORY) },
                     onHide = { DesktopSidebarVisibility.hide(HISTORY_KEY, "History") },
                 )
@@ -4757,6 +4798,7 @@ private fun DesktopSidebar(
                     BitChordIcons.Download,
                     if (queued.isEmpty()) "Downloads" else "Downloads · ${queued.size}",
                     destination == DesktopDestination.DOWNLOADS,
+                    collapsed = collapsed,
                     onClick = { onDestinationSelected(DesktopDestination.DOWNLOADS) },
                     onHide = { DesktopSidebarVisibility.hide(DOWNLOADS_KEY, "Downloads") },
                 )
@@ -4766,13 +4808,16 @@ private fun DesktopSidebar(
                     BitChordIcons.Library,
                     "Local Music",
                     destination == DesktopDestination.LOCAL_MUSIC,
+                    collapsed = collapsed,
                     onClick = { onDestinationSelected(DesktopDestination.LOCAL_MUSIC) },
                     onHide = { DesktopSidebarVisibility.hide(LOCAL_MUSIC_KEY, "Local Music") },
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            HorizontalDivider(color = desktopChromeDivider())
-            Spacer(Modifier.height(12.dp))
+            if (!collapsed) {
+                Spacer(Modifier.height(6.dp))
+                HorizontalDivider(color = desktopChromeDivider())
+                Spacer(Modifier.height(12.dp))
+            }
             val visibleAccount = accountPlaylists.filterNot { "account:${it.browseId}" in hiddenSidebar }
             val visibleLocal = localPlaylists.filterNot { "local:${it.id}" in hiddenSidebar }
             LazyColumn(
@@ -4784,6 +4829,7 @@ private fun DesktopSidebar(
                         Icons.AutoMirrored.Rounded.PlaylistPlay,
                         playlist.title,
                         openedCollectionId == playlist.browseId,
+                        collapsed = collapsed,
                         onClick = { onOpenAccountPlaylist(playlist) },
                         onHide = {
                             DesktopSidebarVisibility.hide("account:${playlist.browseId}", playlist.title)
@@ -4795,11 +4841,12 @@ private fun DesktopSidebar(
                         Icons.AutoMirrored.Rounded.PlaylistPlay,
                         playlist.title,
                         openedCollectionId == playlist.id,
+                        collapsed = collapsed,
                         onClick = { onOpenLocalPlaylist(playlist) },
                         onHide = { DesktopSidebarVisibility.hide("local:${playlist.id}", playlist.title) },
                     )
                 }
-                if (visibleAccount.isEmpty() && visibleLocal.isEmpty()) {
+                if (!collapsed && visibleAccount.isEmpty() && visibleLocal.isEmpty()) {
                     item {
                         Text(
                             "Your playlists will appear here",
@@ -4810,12 +4857,14 @@ private fun DesktopSidebar(
                     }
                 }
             }
-            HorizontalDivider(color = desktopChromeDivider())
-            Spacer(Modifier.height(8.dp))
-            if (hiddenSidebar.isNotEmpty()) {
-                DesktopSidebarRestoreRow(hiddenSidebar)
+            if (!collapsed) {
+                HorizontalDivider(color = desktopChromeDivider())
+                Spacer(Modifier.height(8.dp))
+                if (hiddenSidebar.isNotEmpty()) {
+                    DesktopSidebarRestoreRow(hiddenSidebar)
+                }
             }
-            DesktopSidebarItem(Icons.Rounded.Settings, "Settings", settingsOpen) {
+            DesktopSidebarItem(Icons.Rounded.Settings, "Settings", settingsOpen, collapsed = collapsed) {
                 onOpenSettings()
             }
         }
@@ -4837,8 +4886,30 @@ private fun DesktopSidebarItem(
     selected: Boolean,
     /** When set, a right-click offers to hide the row — see [DesktopSidebarVisibility]. */
     onHide: (() -> Unit)? = null,
+    /** Riding in the folded rail: a centered icon alone, tinted when selected. */
+    collapsed: Boolean = false,
     onClick: () -> Unit,
 ) {
+    if (collapsed) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clip(CircleShape)
+                .background(if (selected) Color.White.copy(alpha = 0.14f) else Color.Transparent)
+                .desktopHoverFill()
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                label,
+                tint = if (selected) DesktopAccent else DesktopSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        return
+    }
     var menuOpen by remember { mutableStateOf(false) }
     Box {
         Row(

@@ -186,6 +186,31 @@ internal object DesktopSidebarVisibility {
 }
 
 /**
+ * Whether the left sidebar rides expanded or folded down to an icon rail.
+ *
+ * Spotify keeps its library one chevron away from a slim rail of icons; the
+ * desktop remembers which of the two the listener last chose across launches.
+ */
+internal object DesktopSidebarCollapse {
+
+    private val persistence = DesktopPersistence()
+    private val _collapsed = MutableStateFlow(load())
+
+    val collapsed: StateFlow<Boolean> = _collapsed
+
+    fun toggle() = save(!_collapsed.value)
+
+    private fun save(value: Boolean) {
+        _collapsed.value = value
+        persistence.saveString(KEY, if (value) "1" else "0")
+    }
+
+    private fun load(): Boolean = persistence.string(KEY, "0") == "1"
+
+    private const val KEY = "sidebar_collapsed"
+}
+
+/**
  * Opens a page's menus where the pointer is.
  *
  * The shared pages say "this row was held" — a long press on the phone, a
