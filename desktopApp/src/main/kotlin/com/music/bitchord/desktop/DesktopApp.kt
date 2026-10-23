@@ -877,12 +877,14 @@ fun BitChordDesktopApp() {
 
     fun switchToSong() {
         val current = selectedSong ?: return
-        val currentPos = playbackEngine.state.value.positionMs
-        val wasPlaying = playbackEngine.state.value.isPlaying
+        val videoPosMs = DesktopMpvPlayer.currentPositionMs().coerceAtLeast(0L)
+        val currentPos = if (showMusicVideo && videoPosMs > 0) videoPosMs else playbackEngine.state.value.positionMs
+        val wasPlaying = DesktopMpvPlayer.isPlaying() || playbackEngine.state.value.isPlaying
         showMusicVideo = false
         DesktopMpvPlayer.stop()
 
         if (!current.isVideo) {
+            playbackEngine.load(current, playWhenReady = wasPlaying, startAtMs = currentPos)
             return
         }
 
@@ -3569,16 +3571,17 @@ fun BitChordDesktopApp() {
                                     title = playerSong.title,
                                     startAtSec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L),
                                     isPlaying = playback.isPlaying,
-                                    onLaunchPip = {
-                                        val vId = activeMusicVideoId ?: playerSong.videoId
-                                        val sec = (playbackEngine.state.value.positionMs / 1000L).coerceAtLeast(0L)
-                                        DesktopMpvPlayer.play(
-                                            videoId = vId,
-                                            startAtSec = sec,
-                                            title = playerSong.title,
-                                            onStart = { playbackEngine.pause() },
-                                            onExit = { playbackEngine.play() },
-                                        )
+                                    volume = volume,
+                                    onStartVideo = {
+                                        playbackEngine.pause()
+                                    },
+                                    onExitVideo = {
+                                        if (showMusicVideo) {
+                                            playNext()
+                                        }
+                                    },
+                                    onTogglePlayPause = {
+                                        togglePlayPauseFromUser()
                                     },
                                     onClose = {
                                         switchToSong()
