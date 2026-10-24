@@ -37,6 +37,16 @@ internal class DesktopAudioSink {
 
     val isOpen: Boolean get() = windowsOutput || pulseOutput || line != null
 
+    /**
+     * Whether the native route is dead and needs reopening. Only the Linux sink reports it: the
+     * Windows one moves its own stream when its endpoint changes, and Java Sound lines fail by
+     * throwing instead. The engine reopens the output when it sees this.
+     */
+    val isBroken: Boolean get() = pulseOutput && DesktopLinuxAudio.isBroken
+
+    /** Whether the output has already been told it is paused; [pause] is called every step. */
+    private var pauseAnnounced = false
+
     /** Whether the live line already belongs to the choice currently shown in the player. */
     fun isUsingSelection(id: String): Boolean = isOpen && openedForSelection == id
 
@@ -56,6 +66,7 @@ internal class DesktopAudioSink {
                 openedForSelection = selectedDevice
                 format = requested
                 diagnosticBlocks = 0
+                pauseAnnounced = false
                 closeLine(previous)
                 DesktopTrackLog.log(
                     "audio output opened: ${deviceName ?: "Windows system default"} · " +
@@ -76,6 +87,7 @@ internal class DesktopAudioSink {
                 openedForSelection = selectedDevice
                 format = requested
                 diagnosticBlocks = 0
+                pauseAnnounced = false
                 closeLine(previous)
                 DesktopTrackLog.log(
                     "audio output opened: ${DesktopLinuxAudio.deviceName()} · " +
@@ -147,6 +159,7 @@ internal class DesktopAudioSink {
         openedForSelection = selectedDevice
         format = accepted
         diagnosticBlocks = 0
+        pauseAnnounced = false
         closeLine(previous)
         DesktopTrackLog.log(
             "audio output opened: ${deviceName ?: "system default"} · " +
@@ -258,13 +271,22 @@ internal class DesktopAudioSink {
         else if (pulseOutput) DesktopLinuxAudio.framesPlayed()
         else line?.longFramePosition ?: 0L
 
+    /**
+     * Announces a pause once per pause, not once per step: the engine calls this every 20 ms
+     * while it has nothing to play, and each PulseAudio pause is a `pa_simple_flush` — a native
+     * round-trip to a server that may be wedged, on a thread with nothing else to do.
+     */
     fun pause() {
+        if (pauseAnnounced) return
+        pauseAnnounced = true
         if (windowsOutput) DesktopWindowsAudio.pause()
         else if (pulseOutput) DesktopLinuxAudio.pause()
         else line?.stop()
     }
 
     fun resume() {
+        if (!pauseAnnounced) return
+        pauseAnnounced = false
         if (windowsOutput) DesktopWindowsAudio.resume()
         else if (pulseOutput) DesktopLinuxAudio.resume()
         else line?.start()

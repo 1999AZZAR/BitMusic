@@ -802,6 +802,7 @@ class DesktopPlaybackEngine(
 
     private fun step() {
         drainCommands()
+        recoverSinkIfNeeded()
         val track = current
         if (track == null || paused) {
             if (paused) sink.pause()
@@ -1437,10 +1438,33 @@ class DesktopPlaybackEngine(
                 // A reopened line counts frames from zero again, so the clock has to be rebased
                 // onto wherever the track had got to.
                 resetPlayhead(track, positionUs)
+                // Whatever "No audio output" was last said about, this output answered.
+                if (_state.value.error != null) _state.update { it.copy(error = null) }
             }
             .onFailure { failure ->
                 _state.update { it.copy(error = "No audio output: ${failure.message}") }
             }
+    }
+
+    /** When a dead output may next be reopened; sooner than this and the retry just spins. */
+    private var nextSinkRecoveryNanos = 0L
+
+    /**
+     * Reopens an output that died mid-track. A PulseAudio/PipeWire restart leaves the native
+     * stream failing every write — the sink reports it broken — and a sink that failed to open
+     * at all leaves writes going nowhere; both meant permanent silence until the next track
+     * change happened to reopen the output. [reconfigureSink] takes over from the newest frame
+     * the playhead knows, so the position skips the audio lost while the output was dead, the
+     * same way a flush after a seek skips what was queued.
+     */
+    private fun recoverSinkIfNeeded() {
+        if (current == null) return
+        if (sink.isOpen && !sink.isBroken) return
+        val now = System.nanoTime()
+        if (now < nextSinkRecoveryNanos) return
+        nextSinkRecoveryNanos = now + SINK_RECOVERY_RETRY_MS * 1_000_000
+        DesktopTrackLog.log("audio output lost mid-track; reopening it")
+        reconfigureSink()
     }
 
     private fun buildChain() {
@@ -1909,6 +1933,13 @@ class DesktopPlaybackEngine(
 
         /** Avoid a decoder seek for sub-tick drift while an upgraded rendition is opening. */
         private const val UPGRADE_RESEEK_THRESHOLD_MS = 250L
+
+        /**
+         * How long a dead output waits before the engine tries to reopen it — long enough that a
+         * server still restarting is not hammered twice a block, short enough that the gap in the
+         * music is a hiccup rather than a stopped track.
+         */
+        private const val SINK_RECOVERY_RETRY_MS = 2_000L
 
         /** Enough of a measurement on the incoming track to cue into it. */
         val MEASURED_ENOUGH_TO_ENTER_ON = setOf(

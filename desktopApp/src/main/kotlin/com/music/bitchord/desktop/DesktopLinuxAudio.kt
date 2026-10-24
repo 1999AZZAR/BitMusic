@@ -46,9 +46,17 @@ internal object DesktopLinuxAudio {
 
     private var broken = false
 
+    /**
+     * Whether the server-side stream is dead after a failed write. The engine watches this and
+     * reopens the output: without it, a PulseAudio/PipeWire restart mid-track left every later
+     * write failing silently until the next track change or device switch happened to reopen.
+     */
+    val isBroken: Boolean get() = broken
+
     /** Opens the default sink for [requested]; on Linux the system route outranks per-device picks. */
     fun open(device: String, requested: DesktopPcmFormat): Result<Int> = runCatching {
         val bindings = available.let { native } ?: error("libpulse-simple is not installed")
+        val recovering = broken
         close()
         val spec = PaSampleSpec().apply {
             rate = requested.sampleRate
@@ -72,7 +80,9 @@ internal object DesktopLinuxAudio {
         sampleRate = requested.sampleRate
         channels = requested.channels
         writtenFrames = 0
+        lastQueuedFrames = 0
         broken = false
+        if (recovering) DesktopTrackLog.log("PulseAudio stream re-opened after a failure")
         requested.byteRate / 5
     }
 
@@ -101,16 +111,25 @@ internal object DesktopLinuxAudio {
         return count
     }
 
-    /** Frames the server has actually finished — everything written, minus what it still holds. */
+    /** The last latency reading that answered, held for the query's bad days; see [framesPlayed]. */
+    private var lastQueuedFrames = 0L
+
+    /**
+     * Frames the server has actually finished — everything written, minus what it still holds.
+     *
+     * A failed query used to read as "nothing queued", which leapt the playhead a queue's length
+     * ahead of the music. A query that fails while the stream itself still answers is a hiccup,
+     * not a queue that emptied, so the last good reading is held instead.
+     */
     fun framesPlayed(): Long {
         val handle = stream
         val bindings = native
         if (handle == null || bindings == null) return 0
         val usec = runCatching {
             bindings.pa_simple_get_playback_latency(handle, null).toLong()
-        }.getOrDefault(0L).coerceAtLeast(0)
-        val queued = usec * sampleRate / 1_000_000
-        return (writtenFrames - queued).coerceAtLeast(0)
+        }.getOrNull()?.takeIf { it >= 0 }
+        if (usec != null) lastQueuedFrames = usec * sampleRate / 1_000_000
+        return (writtenFrames - lastQueuedFrames).coerceAtLeast(0)
     }
 
     /** What the server is still holding, in bytes — a live read, not a constant. */
@@ -147,6 +166,7 @@ internal object DesktopLinuxAudio {
         val bindings = native
         stream = null
         writtenFrames = 0
+        lastQueuedFrames = 0
         broken = false
         if (handle != null && bindings != null) runCatching { bindings.pa_simple_free(handle) }
     }
