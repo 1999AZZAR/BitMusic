@@ -1,23 +1,34 @@
-# BitChord Desktop
+# BitMusic Desktop
 
-BitChord has a Kotlin Multiplatform shared module and a Compose Multiplatform
-desktop application for macOS, Linux, and Windows. Desktop uses the JVM target, which is
+BitMusic features a Kotlin Multiplatform shared core and a Compose Multiplatform
+desktop application for Linux, macOS, and Windows, specifically tuned for Big Screens and high-fidelity audio playback. Desktop uses the JVM target, which is
 the supported Compose Multiplatform desktop model.
 
 The desktop target uses Java 21.
 
-On macOS (Apple Silicon or Intel), run it with a Java 21 JDK available in your environment:
+### Linux Audio Architecture
+On Linux, BitMusic features high-performance native audio output:
+- Low-latency PulseAudio and PipeWire audio stream integration with real-time spectrum analysis.
+- Gapless playback and crossfade with hardware-aligned buffer sizing.
+- MPRIS2 media controller and system notification bridge.
+- Full-screen lyrics and artwork rendering powered by Skiko (Skia for Kotlin).
 
+### Running locally
+
+On Linux, run it with the JDK and native libraries available in the shell:
 ```bash
 ./gradlew :desktopApp:run
 ```
 
-On Linux, run it with the JDK and native libraries available in the shell:
+On macOS (Apple Silicon or Intel), run it with a Java 21 JDK:
+```bash
+./gradlew :desktopApp:run
+```
 
 On NixOS:
 ```bash
-nix-shell -p jdk21 libglvnd glib gtk3 pango atk cairo cmake gdk-pixbuf libXtst libXxf86vm alsa-lib ffmpeg_6 --run '\
-  export LD_LIBRARY_PATH="$(nix eval --raw nixpkgs#libglvnd.outPath)/lib:$(nix eval --raw nixpkgs#glib.out)/lib:$(nix eval --raw nixpkgs#gtk3.outPath)/lib:$(nix eval --raw nixpkgs#pango.out)/lib:$(nix eval --raw nixpkgs#atk.outPath)/lib:$(nix eval --raw nixpkgs#cairo.outPath)/lib:$(nix eval --raw nixpkgs#gdk-pixbuf.outPath)/lib:$(nix eval --raw nixpkgs#libXtst.outPath)/lib:$(nix eval --raw nixpkgs#libXxf86vm.outPath)/lib:$(nix eval --raw nixpkgs#alsa-lib.outPath)/lib:$(nix eval --raw nixpkgs#ffmpeg_6.lib)/lib:$HOME/.openjfx/cache/21.0.6+3/amd64:/run/opengl-driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"; \
+nix-shell -p jdk21 libglvnd glib gtk3 pango atk cairo cmake gdk-pixbuf libXtst libXxf86vm alsa-lib libpulse ffmpeg_6 --run '\
+  export LD_LIBRARY_PATH="$(nix eval --raw nixpkgs#libglvnd.outPath)/lib:$(nix eval --raw nixpkgs#glib.out)/lib:$(nix eval --raw nixpkgs#gtk3.outPath)/lib:$(nix eval --raw nixpkgs#pango.out)/lib:$(nix eval --raw nixpkgs#atk.outPath)/lib:$(nix eval --raw nixpkgs#cairo.outPath)/lib:$(nix eval --raw nixpkgs#gdk-pixbuf.outPath)/lib:$(nix eval --raw nixpkgs#libXtst.outPath)/lib:$(nix eval --raw nixpkgs#libXxf86vm.outPath)/lib:$(nix eval --raw nixpkgs#alsa-lib.outPath)/lib:$(nix eval --raw nixpkgs#libpulse.outPath)/lib:$(nix eval --raw nixpkgs#ffmpeg_6.lib)/lib:$HOME/.openjfx/cache/21.0.6+3/amd64:/run/opengl-driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"; \
   bash ./gradlew :desktopApp:run
 '
 ```
@@ -27,21 +38,21 @@ running `gradlew.bat :desktopApp:run`.
 
 ## Installing a release
 
-Every download on the [releases page](https://github.com/kushagrasinghx/BitChord/releases) carries its own Java
+Every release package carries its own Java
 runtime, the FFmpeg and ONNX natives, the Automix analyser and its models.
 Nothing else has to be installed first — no JDK, no codec pack.
 
 | Platform | Download | Notes |
 |---|---|---|
-| macOS | `BitChord-<version>-macos-arm64.dmg` | For Apple Silicon Macs (M1/M2/M3/M4/later). Drag to Applications. |
-| macOS | `BitChord-<version>-macos-x64.dmg` | For Intel Macs. Drag to Applications. |
-| macOS | `BitChord-<version>-macos-*.pkg` | Standard macOS installer package for automated or managed installations. |
-| Linux | `BitChord-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. No install, works on any distribution. |
-| Linux | `BitChord-<version>-linux-amd64.deb` | `sudo apt install ./BitChord-*.deb` on Debian, Ubuntu and derivatives. |
-| Linux | `BitChord-<version>-linux-x86_64.rpm` | `sudo dnf install ./BitChord-*.rpm` on Fedora, RHEL and openSUSE. |
-| Windows | `BitChord-<version>-windows-x64-setup.exe` | The ordinary installer. Installs for the current user, so it never asks for an administrator. |
-| Windows | `BitChord-<version>-windows-x64.msi` | The same thing for anyone who deploys by MSI. |
-| Windows | `BitChord-<version>-windows-x64-portable.zip` | Unzip anywhere and run `BitChord.exe`. Writes nothing outside the folder. |
+| Linux | `BitMusic-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. No install, works on any distribution. |
+| Linux | `BitMusic-<version>-linux-amd64.deb` | `sudo apt install ./BitMusic-*.deb` on Debian, Ubuntu and derivatives. |
+| Linux | `BitMusic-<version>-linux-x86_64.rpm` | `sudo dnf install ./BitMusic-*.rpm` on Fedora, RHEL and openSUSE. |
+| macOS | `BitMusic-<version>-macos-arm64.dmg` | For Apple Silicon Macs (M1/M2/M3/M4/later). Drag to Applications. |
+| macOS | `BitMusic-<version>-macos-x64.dmg` | For Intel Macs. Drag to Applications. |
+| macOS | `BitMusic-<version>-macos-*.pkg` | Standard macOS installer package for automated or managed installations. |
+| Windows | `BitMusic-<version>-windows-x64-setup.exe` | The ordinary installer. Installs for the current user, so it never asks for an administrator. |
+| Windows | `BitMusic-<version>-windows-x64.msi` | The same thing for anyone who deploys by MSI. |
+| Windows | `BitMusic-<version>-windows-x64-portable.zip` | Unzip anywhere and run `BitMusic.exe`. Writes nothing outside the folder. |
 
 **macOS Gatekeeper.** Unsigned binaries built locally or downloaded outside the Mac App Store
 may trigger a macOS security prompt ("BitChord is damaged and can't be opened" or "unidentified developer").

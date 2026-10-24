@@ -1,10 +1,10 @@
-# BitChord TV
+# BitMusic TV
 
-Android TV / Google TV build of BitChord: a remote-first Compose-for-TV interface
+Android TV / Google TV build of BitMusic: a remote-first Compose-for-TV interface
 (home, library, search, settings, a full-screen now-playing view with synced
 lyrics, display refresh-rate switching, spatial audio, and QR-code sign-in).
 
-This module holds only what differs from the phone app. Everything else — the
+This module holds only what differs from the core Android engine. Everything else — the
 data and playback layers, resources, native code — is built straight from
 [`app/`](../app), together with the shared `:shared` and `:sharedUi` modules.
 
