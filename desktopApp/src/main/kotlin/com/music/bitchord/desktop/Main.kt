@@ -27,6 +27,12 @@ import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.painterResource
 
 fun main() {
+    // One instance at a time, before anything expensive exists: a second launch asks the
+    // running one to come forward and exits, rather than fighting it for the speakers, the
+    // settings and the tray.
+    if (!DesktopSingleInstance.acquire { DesktopWindowVisibility.show() }) {
+        DesktopSingleInstance.exitAsDuplicate()
+    }
     // Before any WebView exists, so the sign-in window can start over with an empty jar.
     DesktopWebCookies.install()
     DesktopWindowVisibility.install()
