@@ -4548,6 +4548,9 @@ private fun DesktopTopBar(
                                         )
                                     }
                                 } else {
+                                    // The visualizer rides behind everything in the capsule:
+                                    // artwork and text over it, the progress line along its base.
+                                    SpectrumPane(tint = playingTint, modifier = Modifier.matchParentSize())
                                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                                         DesktopArtwork(
                                             song.thumbnailUrl,
@@ -4676,6 +4679,38 @@ internal fun DesktopToolbarButton(
         contentAlignment = Alignment.Center,
     ) {
         content()
+    }
+}
+
+/**
+ * The visualizer: the live spectrum of what the speakers are playing, drawn as a field of thin
+ * bars in the record's own colour. Behind the now-playing pill's text at low alpha, so it reads
+ * as the glass glowing from inside rather than as a meter bolted onto the bar. Paused audio
+ * decays the bars on the analyzer's own release curve — no extra state to keep honest here.
+ */
+@Composable
+private fun SpectrumPane(tint: Color, modifier: Modifier = Modifier) {
+    val enabled by DesktopAppearanceSettings.visualizer.collectAsState()
+    if (!enabled) return
+    val bands by DesktopAudioSpectrum.bands.collectAsState()
+    Canvas(modifier) {
+        val count = bands.size
+        if (count == 0 || size.width <= 0f) return@Canvas
+        val step = size.width / count
+        val barWidth = step * 0.62f
+        val margin = (step - barWidth) / 2f
+        val floor = 2.dp.toPx()
+        val max = size.height * 0.86f
+        for (index in 0 until count) {
+            val level = bands[index]
+            val height = floor + (max - floor) * level
+            drawRoundRect(
+                color = tint.copy(alpha = 0.10f + 0.42f * level),
+                topLeft = Offset(index * step + margin, size.height - height),
+                size = Size(barWidth, height),
+                cornerRadius = CornerRadius(barWidth / 2f),
+            )
+        }
     }
 }
 
@@ -6460,6 +6495,16 @@ private fun DesktopSettingsScreen(
                             ],
                             dynamicColor,
                             DesktopAppearanceSettings::setDynamicColor,
+                        )
+                        val visualizer by DesktopAppearanceSettings.visualizer.collectAsState()
+                        SettingsToggle(
+                            DesktopStrings["d_audio_visualizer", "Audio visualizer"],
+                            DesktopStrings[
+                                "d_audio_visualizer_subtitle",
+                                "A live spectrum of the playing audio inside the now-playing bar",
+                            ],
+                            visualizer,
+                            DesktopAppearanceSettings::setVisualizer,
                         )
                     }
                     SettingsToggle(

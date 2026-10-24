@@ -859,6 +859,8 @@ class DesktopPlaybackEngine(
             )
         }
         sink.write(samples, count)
+        // The visualizer's tap: the finished mix, exactly as written to the speakers.
+        DesktopAudioSpectrum.offer(samples, count, sink.format.channels, sink.format.sampleRate)
         framesWritten += count / sink.format.channels.coerceAtLeast(1)
         if (count > 0 && _state.value.awaitingAudio) _state.update { it.copy(awaitingAudio = false) }
     }
