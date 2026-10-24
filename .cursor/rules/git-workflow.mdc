@@ -7,10 +7,10 @@ alwaysApply: true
 
 ## Branch Lifecycle & Versioning
 
-- `master`: Production release-ready code (`1.0.0` / `X.Y.Z`). Protected. Tags (`v*.*.*`) are cut from `master`. Never commit directly.
-- `staging`: Integration branch for active ongoing development (`1.0.0-beta-0`, `-beta-1`, ...).
-- `feature/<name>`: New feature branches created off `staging` (`1.0.0-beta-<name>-0`).
-- `fix/<name>`: Bug fix branches created off `staging` (`1.0.0-beta-<name>-0`).
+- `master`: Production release-ready code (`1.1.0` / `X.Y.Z`). Protected. Tags (`v*.*.*`) are cut from `master`. Never commit directly.
+- `staging`: Integration branch for active ongoing development (`1.1.0-beta-0`, `-beta-1`, ...).
+- `feature/<name>`: New feature branches created off `staging` (`1.1.0-beta-<name>-0`).
+- `fix/<name>`: Bug fix branches created off `staging` (`1.1.0-beta-<name>-0`).
 
 ## Workflow Procedure
 

@@ -6,11 +6,11 @@ This document defines how BitMusic builds, versions, and packages release artifa
 
 ## 1. Branch-Aware Versioning
 
-BitMusic uses semantic versioning based on `1.0.0`:
+BitMusic uses semantic versioning based on `1.1.0`:
 
-- **Production (`master`)**: Strict semver string (`1.0.0`, `1.0.1`, `1.1.0`). Production release tags are named `v<version>` (e.g. `v1.0.0`).
-- **Development (`staging`)**: Pre-release versions (`1.0.0-beta-0`, `1.0.0-beta-1`).
-- **Feature Branches (`feature/<name>`)**: Feature pre-releases (`1.0.0-beta-<name>-0`).
+- **Production (`master`)**: Strict semver string (`1.1.0`, `1.1.1`, `1.2.0`). Production release tags are named `v<version>` (e.g. `v1.1.0`).
+- **Development (`staging`)**: Pre-release versions (`1.1.0-beta-0`, `1.1.0-beta-1`).
+- **Feature Branches (`feature/<name>`)**: Feature pre-releases (`1.1.0-beta-<name>-0`).
 
 The Gradle build resolves the version from the active git branch automatically or reads an explicit value passed via `-Pbitchord.version=<version>`.
 

@@ -2,14 +2,14 @@
 # BitMusic local release loop: build the deb, stamp it with the branch-aware version, and install.
 #
 # Version scheme:
-#   master  -> 1.0.0
-#   staging -> 1.0.0-beta-0 (increments -1, -2... if already installed)
-#   feature -> 1.0.0-beta-<feature>-0
+#   master  -> 1.1.0
+#   staging -> 1.1.0-beta-0 (increments -1, -2... if already installed)
+#   feature -> 1.1.0-beta-<feature>-0
 set -eu
 cd "$(dirname "$0")/.."
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "staging")
-base="1.0.0"
+base="1.1.0"
 
 case "$branch" in
     master|main)
@@ -39,22 +39,26 @@ esac
 
 installed=$(dpkg-query -W -f '${Version}' bitmusic 2>/dev/null || true)
 
-case "$installed" in
-    "$prefix"-*)
-        rev=${installed##*-}
-        if echo "$rev" | grep -qE '^[0-9]+$'; then
-            next="$prefix-$((rev + 1))"
-        else
+if [ "$branch" = "master" ] || [ "$branch" = "main" ]; then
+    next="$base"
+else
+    case "$installed" in
+        "$prefix"-*)
+            rev=${installed##*-}
+            if echo "$rev" | grep -qE '^[0-9]+$'; then
+                next="$prefix-$((rev + 1))"
+            else
+                next="$default_version"
+            fi
+            ;;
+        "$default_version")
+            next="$prefix-1"
+            ;;
+        *)
             next="$default_version"
-        fi
-        ;;
-    "$default_version")
-        next="$prefix-1"
-        ;;
-    *)
-        next="$default_version"
-        ;;
-esac
+            ;;
+    esac
+fi
 
 echo "Building BitMusic $next for branch '$branch' (currently installed: ${installed:-nothing})"
 

@@ -68,11 +68,11 @@ For detailed platform guides and release packaging instructions, see:
 
 ## Branch & Release Model
 
-BitMusic uses a branch-aware versioning model with base version `1.0.0`:
+BitMusic uses a branch-aware versioning model with base version `1.1.0`:
 
-- `master`: Production release-ready code (`1.0.0`, `1.0.1`, ...).
-- `staging`: Ongoing development branch (`1.0.0-beta-0`, `-beta-1`, ...).
-- `feature/<name>`: New feature branches created off `staging` (`1.0.0-beta-<name>-0`).
+- `master`: Production release-ready code (`1.1.0`, `1.1.1`, ...).
+- `staging`: Ongoing development branch (`1.1.0-beta-0`, `-beta-1`, ...).
+- `feature/<name>`: New feature branches created off `staging` (`1.1.0-beta-<name>-0`).
 
 All contributions merge into `staging` via pull request before promotion to `master`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
