@@ -157,12 +157,15 @@ private fun desktopMain() = application {
         LaunchedEffect(composeWindow) {
             DesktopWindowVisibility.attachWindow(composeWindow)
             // AWT's default is white, and it is what shows for the frame or two a moved or resized
-            // window takes to repaint: a white band along its edges.
+            // window takes to repaint: a white band along its edges. Near-black rather than the
+            // pure thing: on a fractional-scale display the content can sit a sub-pixel short of
+            // the window's edge, and that sliver paints from here — where pure black read as a
+            // hard line across the player's tinted backdrop.
             // Not over a transparent window, whose clear background is what the material shows
             // through; DWM moves that window, so there is no band to hide.
             if (!DesktopWindowBackdrop.available) {
-                composeWindow.background = java.awt.Color.BLACK
-                composeWindow.contentPane.background = java.awt.Color.BLACK
+                composeWindow.background = java.awt.Color(0x12, 0x12, 0x12)
+                composeWindow.contentPane.background = java.awt.Color(0x12, 0x12, 0x12)
             } else {
                 composeWindow.background = java.awt.Color(0, 0, 0, 0)
                 composeWindow.contentPane.background = java.awt.Color(0, 0, 0, 0)

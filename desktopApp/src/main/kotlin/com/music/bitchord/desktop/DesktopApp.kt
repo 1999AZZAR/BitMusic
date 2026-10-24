@@ -3477,6 +3477,7 @@ fun BitChordDesktopApp() {
                             durationMs = playback.durationMs,
                             shuffle = shuffle,
                             repeatMode = repeatMode,
+                            mixing = playback.mixing,
                             hasPrevious = liveQueue.hasPrevious,
                             hasNext = liveQueue.hasNext,
                             liked = current.videoId in likedIds,
@@ -3497,7 +3498,11 @@ fun BitChordDesktopApp() {
                                 persistence.saveString("repeat_mode", repeatMode.name)
                             },
                             onOpenMenu = { openMenu(current) },
+                            // As the original did: the player steps aside first, and the artist's
+                            // page opens under it rather than behind it.
                             onOpenArtist = {
+                                DesktopWindowMode.exit()
+                                overlays.nowPlaying = false
                                 val id = playerSong.artistId
                                 if (id != null) {
                                     openArtist(id, playerSong.artist)
@@ -4825,12 +4830,19 @@ internal fun SpectrumPane(tint: Color, modifier: Modifier = Modifier) {
         for (index in 0 until count) {
             val level = bands[index]
             // Level-driven, no floor: a pause empties the field on the analyzer's release curve
-            // and the capsule goes back to plain glass until music returns.
+            // and the capsule goes back to plain glass until music returns. Each bar is a
+            // gradient — full at its base, a quarter at the tip — so the field reads lit from
+            // below rather than cut from paper.
             if (level <= 0.005f) continue
             val height = max * level
+            val top = size.height - height
             drawRoundRect(
-                color = tint.copy(alpha = 0.10f + 0.42f * level),
-                topLeft = Offset(index * step + margin, size.height - height),
+                brush = Brush.verticalGradient(
+                    colors = listOf(tint.copy(alpha = (0.10f + 0.42f * level) * 0.25f), tint.copy(alpha = 0.10f + 0.42f * level)),
+                    startY = top,
+                    endY = size.height,
+                ),
+                topLeft = Offset(index * step + margin, top),
                 size = Size(barWidth, height),
                 cornerRadius = CornerRadius(barWidth / 2f),
             )

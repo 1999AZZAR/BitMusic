@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +39,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +66,8 @@ internal fun DesktopNowPlaying(
     durationMs: Long,
     shuffle: Boolean,
     repeatMode: DesktopRepeatMode,
+    /** An Automix blend is running: the scrubber carries its travelling sheen. */
+    mixing: Boolean,
     hasPrevious: Boolean,
     hasNext: Boolean,
     liked: Boolean,
@@ -87,12 +93,14 @@ internal fun DesktopNowPlaying(
     var dragValue by remember { mutableFloatStateOf(0f) }
 
     Box(Modifier.fillMaxSize()) {
-        // The record's own colours, behind everything, sinking to black toward the floor.
+        // The record's own colours, behind everything: the mesh of the sleeve, a radial breath
+        // of its dynamic tint behind where the sleeve will sit, and a scrim that deepens toward
+        // the floor so the transport reads on near-black rather than competing with the picture.
         DesktopMesh(song.thumbnailUrl)
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    listOf(Color.Black.copy(alpha = 0.42f), Color.Black.copy(alpha = 0.78f)),
+                    listOf(Color.Black.copy(alpha = 0.38f), Color.Black.copy(alpha = 0.72f), Color.Black.copy(alpha = 0.92f)),
                 ),
             ),
         )
@@ -102,42 +110,75 @@ internal fun DesktopNowPlaying(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                DesktopArtwork(
-                    song.thumbnailUrl,
-                    Modifier.size(360.dp).clip(RoundedCornerShape(20.dp)),
-                    px = 720,
-                )
-                Spacer(Modifier.height(26.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    // The glow the sleeve seems to cast: the record's tint, wide and soft, from
+                    // behind the artwork rather than around the window.
+                    val glow = tint.copy(alpha = 0.22f)
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(glow, Color.Transparent),
+                                        center = Offset(size.width / 2, size.height / 2),
+                                        radius = size.minDimension * 0.85f,
+                                    ),
+                                )
+                            },
+                    )
+                    DesktopArtwork(
+                        song.thumbnailUrl,
+                        Modifier
+                            .size(360.dp)
+                            .shadow(28.dp, RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(20.dp))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
+                        px = 720,
+                    )
+                }
+                Spacer(Modifier.height(30.dp))
                 Text(
                     song.title,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(460.dp),
+                    modifier = Modifier.width(500.dp),
                 )
                 Text(
                     song.artist,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = tint,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .width(460.dp)
+                        .width(500.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onOpenArtist)
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
-                Spacer(Modifier.height(20.dp))
+                if (!song.albumName.isNullOrBlank()) {
+                    Text(
+                        song.albumName.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DesktopSecondary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(500.dp),
+                    )
+                }
+                Spacer(Modifier.height(22.dp))
                 SpectrumPane(
                     tint = tint,
-                    modifier = Modifier.width(420.dp).height(56.dp),
+                    modifier = Modifier.width(440.dp).height(60.dp),
                 )
                 Spacer(Modifier.height(14.dp))
                 Row(
-                    Modifier.width(420.dp),
+                    Modifier.width(440.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(timeLabel(if (dragging) dragValue else fraction, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
@@ -149,6 +190,7 @@ internal fun DesktopNowPlaying(
                             onSeek((dragValue * durationMs).toLong())
                         },
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                        mixing = isPlaying && mixing,
                         idleHeight = 5.dp,
                         activeHeight = 9.dp,
                     )
@@ -262,13 +304,14 @@ internal fun DesktopNowPlaying(
                 }
             }
             if (sidePanel != null) {
+                // No divider: the panels carry their own glass, and a rule here read as a
+                // black line over the mesh.
                 Row(
                     Modifier
                         .width(360.dp)
                         .fillMaxHeight()
                         .padding(start = 18.dp),
                 ) {
-                    Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         when (sidePanel) {
                             DesktopSidePanel.LYRICS -> lyricsPanel()
