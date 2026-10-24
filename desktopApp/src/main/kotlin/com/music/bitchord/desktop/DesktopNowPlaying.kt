@@ -85,7 +85,10 @@ internal fun DesktopNowPlaying(
     lyricsPanel: @Composable () -> Unit,
     queuePanel: @Composable () -> Unit,
 ) {
-    var sidePanel by remember { mutableStateOf<DesktopSidePanel?>(null) }
+    // The right half shows one of the two, always — the original player's split, with this
+    // player's controls: lyrics by default, the queue a tap away, no closed state to get back
+    // out of.
+    var sidePanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
     val tint = desktopPlayingTint()
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // The knob follows the drag, not the playhead: a scrub that lags behind the hand feels broken.
@@ -280,7 +283,7 @@ internal fun DesktopNowPlaying(
                         Icon(Icons.Rounded.MoreHoriz, "More options", tint = DesktopSecondary, modifier = Modifier.size(19.dp))
                     }
                     DesktopToolbarButton(
-                        onClick = { sidePanel = if (sidePanel == DesktopSidePanel.LYRICS) null else DesktopSidePanel.LYRICS },
+                        onClick = { sidePanel = DesktopSidePanel.LYRICS },
                         size = 36.dp,
                     ) {
                         Icon(
@@ -291,7 +294,7 @@ internal fun DesktopNowPlaying(
                         )
                     }
                     DesktopToolbarButton(
-                        onClick = { sidePanel = if (sidePanel == DesktopSidePanel.QUEUE) null else DesktopSidePanel.QUEUE },
+                        onClick = { sidePanel = DesktopSidePanel.QUEUE },
                         size = 36.dp,
                     ) {
                         Icon(
@@ -303,21 +306,22 @@ internal fun DesktopNowPlaying(
                     }
                 }
             }
-            if (sidePanel != null) {
-                // No divider: the panels carry their own glass, and a rule here read as a
-                // black line over the mesh.
-                Row(
-                    Modifier
-                        .width(360.dp)
-                        .fillMaxHeight()
-                        .padding(start = 18.dp),
-                ) {
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        when (sidePanel) {
-                            DesktopSidePanel.LYRICS -> lyricsPanel()
-                            DesktopSidePanel.QUEUE -> queuePanel()
-                            null -> {}
-                        }
+            // The other half of the window, as the original player split it: the lyric sheet
+            // standing on the window itself, or the queue on the sidebar's glass. No rule
+            // between the halves — the two treatments and the mesh say it for themselves.
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(top = 12.dp, bottom = 12.dp, end = 20.dp),
+            ) {
+                if (sidePanel == DesktopSidePanel.QUEUE) {
+                    Box(Modifier.fillMaxSize().desktopChromeGlass())
+                }
+                Box(Modifier.fillMaxSize()) {
+                    when (sidePanel) {
+                        DesktopSidePanel.LYRICS -> lyricsPanel()
+                        DesktopSidePanel.QUEUE -> queuePanel()
                     }
                 }
             }
