@@ -1,3 +1,4 @@
+import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
@@ -496,6 +497,15 @@ val composeMainClass = "com.music.bitchord.desktop.MainKt"
 // broke the compile. Pinned here, as desktopUi already pins its own.
 compose.resources {
     packageOfResClass = "bitchord.desktopapp.generated.resources"
+}
+
+// rpmbuild does not exist on a Debian-only machine, and its absence turned every
+// packageDistributionForCurrentOS into a BUILD FAILED over an rpm nobody asked for. The task
+// skips itself when the tool is not there; the deb is unaffected.
+tasks.matching { it.name == "packageRpm" }.configureEach {
+    onlyIf("rpmbuild is installed") {
+        System.getenv("PATH")?.split(":").orEmpty().any { File(it, "rpmbuild").canExecute() }
+    }
 }
 
 compose.desktop {
