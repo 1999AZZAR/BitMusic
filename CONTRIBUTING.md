@@ -7,12 +7,22 @@ Thank you for contributing to BitMusic. Follow these guidelines to ensure an eff
 - Substantial features, refactors, or UI redesigns should normally be discussed before implementation. Open an issue on GitHub to outline your proposal.
 - Straightforward bug fixes, documentation improvements, or minor corrections can be submitted directly as a Pull Request.
 
-## Branch and Pull Request Workflow
-- Fork the repository and create a descriptive branch from `main` (e.g., `fix/streaming-buffer`, `feature/desktop-shortcut`).
-- Keep pull requests focused on a single change or bug fix. Avoid mixing unrelated refactors, cosmetic tweaks, or mass reformatting with functional changes.
-- Provide a clear PR description explaining what was changed and why.
-- Include relevant testing and validation details with your PR.
-- Address review feedback promptly and keep discussions focused on technical merits.
+## Branch and Development Workflow
+BitMusic enforces a structured branch lifecycle:
+
+| Branch | Purpose | Rules |
+|---|---|---|
+| `master` | **Final Production Version** | Protected branch representing release-ready code. Tags (`v*.*.*`) are cut from `master`. Changes arrive strictly via promotion from `staging`. |
+| `staging` | **Ongoing Development & Integration** | Active development branch where new features and bug fixes land and undergo testing before production release. |
+| `feature/<name>` | **New Features & Improvements** | Created off `staging`. Work is promoted via Pull Request (`PR -> review -> acceptance -> merge`) into `staging`. |
+| `fix/<name>` | **Bug Fixes** | Created off `staging`, promoted via Pull Request into `staging`. |
+
+### Development Lifecycle
+1. Branch off `staging`: `git checkout staging && git checkout -b feature/my-cool-feature`
+2. Implement, test locally (`./gradlew :desktopApp:test`), and commit.
+3. Open a Pull Request targeting `staging`.
+4. Once reviewed and CI checks pass, merge into `staging`.
+5. Production releases are promoted from `staging` to `master` and tagged.
 
 ## Development Setup
 The project requires the following tools:
