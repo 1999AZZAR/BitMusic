@@ -61,6 +61,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 
 /**
  * The desktop's own full player. The phone's screen, shared, played the role until now; this is
@@ -372,14 +374,30 @@ internal fun DesktopNowPlaying(
                     when (sidePanel) {
                         // The lyric sheet stands on the window itself, as the original's does.
                         DesktopSidePanel.LYRICS -> Box(Modifier.fillMaxSize()) { lyricsPanel() }
-                        // The queue floats: a rounded card of the bar's own frosted glass over
-                        // the mesh, not a square pane bolted to the window's edge.
+                        // The queue floats: a rounded card of lighter glass than the bars use —
+                        // the mesh is meant to breathe through it — with a hairline edge and a
+                        // fade that lets the last row dissolve instead of stopping mid-picture.
                         DesktopSidePanel.QUEUE -> Box(
                             Modifier
                                 .fillMaxSize()
-                                .desktopBarGlass(RoundedCornerShape(18.dp)),
+                                .clip(RoundedCornerShape(20.dp))
+                                .playerQueueGlass()
+                                .border(0.5.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(20.dp)),
                         ) {
                             queuePanel()
+                            // The dissolve: the list's last rows wash out into the card rather
+                            // than being cut by its rounded floor.
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .height(40.dp)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                                        ),
+                                    ),
+                            )
                         }
                     }
                 }
@@ -401,6 +419,29 @@ private fun timeLabel(fraction: Float, durationMs: Long): String {
 }
 
 /**
+ * The queue card's own glass: lighter than the bars' — a wide blur with a shallow tint, so the
+ * mesh behind it colourises the card instead of a near-black slab sitting on it — and, when
+ * dynamic blur is off, a translucent fill in the same spirit.
+ */
+@Composable
+private fun Modifier.playerQueueGlass(): Modifier {
+    val haze = LocalDesktopHaze.current
+    val reduceDynamicBlur by DesktopAppearanceSettings.reduceDynamicBlur.collectAsState()
+    val surface = MaterialTheme.colorScheme.surface
+    return if (haze == null || reduceDynamicBlur) {
+        background(surface.copy(alpha = 0.82f))
+    } else {
+        hazeEffect(state = haze) {
+            blurEnabled = true
+            backgroundColor = surface
+            blurRadius = 40.dp
+            tints = listOf(HazeTint(surface.copy(alpha = 0.30f)))
+            noiseFactor = 0.03f
+        }
+    }
+}
+
+/**
  * The queue, drawn for a window rather than a phone column: artwork big enough to read,
  * a head that names the queue and counts what is left, the playing row in a pill of the
  * record's tint with the equalizer glyph beside it, and a remove that appears where the
@@ -416,9 +457,9 @@ internal fun PlayerQueuePane(
     tint: Color,
 ) {
     val upcoming = (queue.size - index - 1).coerceAtLeast(0)
-    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -432,8 +473,12 @@ internal fun PlayerQueuePane(
                 "$upcoming next",
                 color = DesktopSecondary,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
             )
+            Spacer(Modifier.weight(1f))
             if (upcoming > 0) {
                 Text(
                     DesktopStrings["clear", "Clear"],
@@ -448,7 +493,7 @@ internal fun PlayerQueuePane(
         }
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(bottom = 12.dp),
+            contentPadding = PaddingValues(bottom = 28.dp),
         ) {
             val current = queue.getOrNull(index)
             if (current != null) {
@@ -504,7 +549,7 @@ private fun PlayerQueueRow(
             .clip(RoundedCornerShape(10.dp))
             .background(
                 when {
-                    isCurrent -> tint.copy(alpha = 0.14f)
+                    isCurrent -> tint.copy(alpha = 0.18f)
                     hovered -> Color.White.copy(alpha = 0.05f)
                     else -> Color.Transparent
                 },
@@ -520,7 +565,7 @@ private fun PlayerQueueRow(
                     }
                 }
             }
-            .padding(horizontal = 6.dp, vertical = 6.dp),
+            .padding(horizontal = 6.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DesktopArtwork(
