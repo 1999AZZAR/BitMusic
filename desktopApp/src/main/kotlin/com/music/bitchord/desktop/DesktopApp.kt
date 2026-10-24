@@ -3122,7 +3122,7 @@ fun BitChordDesktopApp() {
     }
 
     MaterialTheme(
-        colorScheme = desktopColorScheme(),
+        colorScheme = rememberDynamicDesktopColorScheme(selectedSong?.thumbnailUrl),
         typography = desktopTypography(),
     ) {
         val ambientBackdrop by DesktopAppearanceSettings.ambientBackdrop.collectAsState()
@@ -3132,8 +3132,9 @@ fun BitChordDesktopApp() {
             LocalNowPlaying provides selectedSong,
         ) {
             DesktopFrame(
-                // The phone's page is black, not the near-black of its cards.
-                containerColor = DesktopBackground,
+                // The phone's page is black, not the near-black of its cards — or, with Dynamic
+                // colour on, the near-black the playing record tints.
+                containerColor = MaterialTheme.colorScheme.background,
                 // Only Replay dresses itself unless ambient backdrop is on; everywhere else the chrome sits on the plain surface.
                 backdrop = { transparentBase ->
                     val ambientArtworkUrl = replaySummary.songs.firstOrNull()?.song?.thumbnailUrl
@@ -3270,7 +3271,9 @@ fun BitChordDesktopApp() {
                         onOpenAccountPlaylist = { openShelfItem(it, PLAYLISTS_SHELF) },
                         onOpenLocalPlaylist = ::openPlaylist,
                         onOpenSettings = ::openSettings,
-                        focusSearch = searchFocusRequested,
+                        // On the Search page the field there owns the focus; this box is the
+                        // shortcut from every other page, so it takes the request only there.
+                        focusSearch = searchFocusRequested && destination != DesktopDestination.SEARCH,
                         onSearchFocused = { searchFocusRequested = false },
                     )
                 },
@@ -4227,8 +4230,11 @@ fun BitChordDesktopApp() {
                             onHistoryClear = DesktopSearchHistory::clear,
                             onTypeaheadLongPress = ::openMenu,
                             contentPadding = sharedPagePadding,
-                            topPadding = 0.dp,
-                            showField = false,
+                            // The page carries its own search bar, Spotify-style; the sidebar's
+                            // box stays the shortcut from every other page. A little top room so
+                            // the pill clears the player bar above it.
+                            topPadding = 10.dp,
+                            showField = true,
                         )
                         destination == DesktopDestination.LIBRARY && libraryShowAll != null -> Column(Modifier.fillMaxSize()) {
                             // The phone keeps the grid's sort beside it, in the bar above; here it sits
@@ -4387,6 +4393,9 @@ private fun DesktopTopBar(
     val mixPulse = rememberMixPulse({ mixBlend.value }, enabled = !reduceAnimation, slow = true)
     val currentProgress by rememberUpdatedState(progress)
     val isPlayingProgress by rememberUpdatedState(isPlaying)
+    // Read in composition, drawn in the draw scope: the tint follows the record's own colour
+    // while Dynamic colour is on, and the bar must not recompose to redraw it.
+    val playingTint by rememberUpdatedState(desktopPlayingTint())
 
     // Apple Music uses one calm strip for both player controls and window furniture. The left
     // sidebar owns the traffic lights; the rest is a balanced transport / now-playing / utility
@@ -4453,12 +4462,13 @@ private fun DesktopTopBar(
                             )
                         }
                         DesktopToolbarButton(onClick = onPlayPause, size = 34.dp) {
-                            // Spotify's play control: a green disc with the glyph in black.
+                            // Spotify's play control: a coloured disc with the glyph in black —
+                            // green until Dynamic colour dresses it in the record's own accent.
                             Box(
                                 Modifier
                                     .size(28.dp)
                                     .clip(CircleShape)
-                                    .background(DesktopPlaying),
+                                    .background(playingTint),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (isLoading) {
@@ -4513,15 +4523,18 @@ private fun DesktopTopBar(
                         Modifier.weight(1f).padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        // Liquid glass: a pill of translucent, tinted glass with a specular
+                        // hairline, sitting in the frosted bar the way a watch face sits in its
+                        // crystal — not a flat slab with a corner radius.
                         Surface(
                             modifier = Modifier
                                 .widthIn(min = 300.dp, max = 520.dp)
                                 .fillMaxWidth()
                                 .height(46.dp)
-                                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(4.dp))
-                                .clip(RoundedCornerShape(4.dp))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(percent = 50))
+                                .clip(RoundedCornerShape(percent = 50))
                                 .clickable(onClick = onOpenNowPlaying),
-                            color = Color(0xFF323236),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                             tonalElevation = 0.dp,
                         ) {
                             Box(Modifier.fillMaxSize()) {
@@ -4538,7 +4551,7 @@ private fun DesktopTopBar(
                                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                                         DesktopArtwork(
                                             song.thumbnailUrl,
-                                            Modifier.size(44.dp).clip(RoundedCornerShape(3.dp)),
+                                            Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)),
                                             px = ROW_ART_PX,
                                         )
                                         Column(
@@ -4575,7 +4588,7 @@ private fun DesktopTopBar(
                                                 val base = currentProgress.coerceIn(0f, 1f)
                                                 val fraction = base + (1f - base) * mixPulse.cover
                                                 drawRect(
-                                                    color = if (isPlayingProgress) DesktopPlaying.copy(alpha = mixPulse.alpha(0.95f)) else Color.White.copy(alpha = mixPulse.alpha(0.48f)),
+                                                    color = if (isPlayingProgress) playingTint.copy(alpha = mixPulse.alpha(0.95f)) else Color.White.copy(alpha = mixPulse.alpha(0.48f)),
                                                     size = Size(size.width * fraction, size.height),
                                                 )
                                             },
@@ -4896,7 +4909,9 @@ private fun DesktopSidebarItem(
                 .fillMaxWidth()
                 .height(40.dp)
                 .clip(CircleShape)
-                .background(if (selected) Color.White.copy(alpha = 0.14f) else Color.Transparent)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent,
+                )
                 .desktopHoverFill()
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
@@ -4904,7 +4919,7 @@ private fun DesktopSidebarItem(
             Icon(
                 icon,
                 label,
-                tint = if (selected) DesktopAccent else DesktopSecondary,
+                tint = if (selected) MaterialTheme.colorScheme.primary else DesktopSecondary,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -4916,8 +4931,12 @@ private fun DesktopSidebarItem(
             Modifier
                 .fillMaxWidth()
                 .desktopHoverFill()
-                .clip(RoundedCornerShape(7.dp))
-                .background(if (selected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                // Material You's pill: a selected destination is a capsule of the scheme's own
+                // colour, not a grey slab.
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent,
+                )
                 .clickable(onClick = onClick)
                 .then(
                     if (onHide == null) Modifier
@@ -4936,7 +4955,7 @@ private fun DesktopSidebarItem(
                 .padding(horizontal = 9.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, label, tint = if (selected) DesktopAccent else DesktopSecondary, modifier = Modifier.size(18.dp))
+            Icon(icon, label, tint = if (selected) MaterialTheme.colorScheme.primary else DesktopSecondary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(10.dp))
             Text(
                 label,
@@ -5315,7 +5334,7 @@ private fun DesktopPageBackdrop(artworkUrl: String?, transparentBase: Boolean) {
     Box(
         Modifier
             .fillMaxSize()
-            .then(if (transparentBase) Modifier else Modifier.background(DesktopBackground)),
+            .then(if (transparentBase) Modifier else Modifier.background(MaterialTheme.colorScheme.background)),
     ) {
         if (artworkUrl == null) return@Box
         DesktopMesh(artworkUrl)
@@ -6432,6 +6451,16 @@ private fun DesktopSettingsScreen(
                             ambientBackdrop,
                             DesktopAppearanceSettings::setAmbientBackdrop,
                         )
+                        val dynamicColor by DesktopAppearanceSettings.dynamicColor.collectAsState()
+                        SettingsToggle(
+                            DesktopStrings["d_dynamic_color", "Dynamic colour"],
+                            DesktopStrings[
+                                "d_dynamic_color_subtitle",
+                                "Material You: tint the app with the colors of the playing artwork",
+                            ],
+                            dynamicColor,
+                            DesktopAppearanceSettings::setDynamicColor,
+                        )
                     }
                     SettingsToggle(
                         DesktopStrings["full_screen_cover_art", "Full-screen cover art"],
@@ -7434,12 +7463,17 @@ internal enum class DesktopChromeEdge { NONE, BOTTOM, END }
 internal fun Modifier.desktopChromeGlass(
     edge: DesktopChromeEdge = DesktopChromeEdge.NONE,
     fade: Float = 0.2f,
-): Modifier = desktopFrosted(
-    opaque = DesktopSurface.copy(alpha = 0.88f),
-    tintAlpha = 0.46f,
-    edge = edge,
-    fade = fade,
-)
+): Modifier {
+    // The scheme's surface, not the flat constant: with Dynamic colour on the pane the sidebar
+    // and top bar are made of follows the playing record's tint with everything else.
+    val surface = MaterialTheme.colorScheme.surface
+    return desktopFrosted(
+        opaque = surface.copy(alpha = 0.88f),
+        tintAlpha = 0.46f,
+        edge = edge,
+        fade = fade,
+    )
+}
 
 /**
  * The window's own chrome — title bar, top bar, sidebar. Over Windows 11's Mica or Acrylic
@@ -7459,9 +7493,9 @@ internal fun Modifier.desktopWindowGlass(
         desktopChromeGlass(edge, fade)
     } else {
         val base = background(Color.Black.copy(alpha = WINDOW_GLASS_TINT))
-        if (DesktopPlatform.isMac && edge == DesktopChromeEdge.BOTTOM) {
+        if (edge == DesktopChromeEdge.BOTTOM) {
+            // Subtle liquid glass specular highlight along the top edge
             base.drawBehind {
-                // Subtle liquid glass specular highlight along the top edge
                 drawLine(
                     color = Color.White.copy(alpha = 0.08f),
                     start = Offset(0f, 0f),
@@ -7506,14 +7540,17 @@ private fun Modifier.desktopFrosted(
         return this.background(edge.dissolve(opaque, fade) ?: SolidColor(opaque))
     }
     val dissolve = edge.dissolve(Color.Black, fade)
+    // The scheme's surface rather than the constant, so a Dynamic-colour pane tints what it
+    // frosts rather than frosting back to flat grey.
+    val surface = MaterialTheme.colorScheme.surface
     return this.hazeEffect(state = haze) {
         // Spelled out rather than taken from a preset.
         blurEnabled = true
-        backgroundColor = DesktopSurface
+        backgroundColor = surface
         blurRadius = 30.dp
         // Dark enough that white text on the pane always wins, translucent enough that the
         // colour of what is behind it still comes through.
-        tints = listOf(HazeTint(DesktopSurface.copy(alpha = tintAlpha)))
+        tints = listOf(HazeTint(surface.copy(alpha = tintAlpha)))
         noiseFactor = 0.04f
         // Assigned either way: the scope belongs to the node and outlives the draw, so a pane that
         // stops dissolving — the leading stretch of the top bar, when the window grows back out of
