@@ -6917,15 +6917,19 @@ private fun DesktopSettingsFooter(onLicenses: () -> Unit) {
     )
     Text(
         text = buildAnnotatedString {
-            append("BitMusic $version  ")
+            append("BitMusic $version  •  ")
+            withLink(LinkAnnotation.Url("https://github.com/1999AZZAR/BitMusic", linkStyles)) {
+                append("GitHub")
+            }
+            append("  •  ")
             withLink(LinkAnnotation.Url("https://github.com/kushagrasinghx/BitChord", linkStyles)) {
                 append("Based on BitChord")
             }
-            append("  ")
+            append("  •  ")
             withLink(LinkAnnotation.Clickable("licenses", linkStyles) { onLicenses() }) {
                 append("Licenses")
             }
-            append("\n~YouTube Music Backend")
+            append("\nYouTube Music Backend  •  Big Screen Edition")
         },
         style = MaterialTheme.typography.labelSmall,
         color = DesktopSecondary,

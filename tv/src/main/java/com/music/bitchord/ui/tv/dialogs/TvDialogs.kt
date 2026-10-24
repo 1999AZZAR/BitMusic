@@ -1210,16 +1210,17 @@ fun TvScrobbleDialog(onDismiss: () -> Unit) {
 
 @Composable
 fun TvAboutDialog(onDismiss: () -> Unit) {
-    TvDialog(title = "BitMusic", message = "Version ${BuildConfig.VERSION_NAME}", onDismissRequest = onDismiss) {
+    TvDialog(title = "BitMusic TV", message = "Version ${BuildConfig.VERSION_NAME}", onDismissRequest = onDismiss) {
         TvAppMark(size = 77.dp, modifier = Modifier.padding(bottom = 21.dp))
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            TvListRow(title = "Kushagra Singh", value = "Original Creator", enabled = false, onClick = {})
-            TvListRow(title = "Nithyanantha", value = "Original TV UI", enabled = false, onClick = {})
-            TvListRow(title = "BitMusic", value = "Big Screen Fork", enabled = false, onClick = {})
+            TvListRow(title = "Edition", value = "Big Screen (TV & Desktop)", enabled = false, onClick = {})
+            TvListRow(title = "Original Base", value = "BitChord (Kushagra Singh)", enabled = false, onClick = {})
+            TvListRow(title = "TV UI Design", value = "Nithyanantha", enabled = false, onClick = {})
+            TvListRow(title = "License", value = "GNU GPL v3.0", enabled = false, onClick = {})
         }
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "Free software under the GNU GPL v3. Based on BitChord.",
+            text = "Free & open source. Not affiliated with YouTube or Google.\nhttps://github.com/1999AZZAR/BitMusic",
             style = TvType.Caption,
             color = TvGlass.TextTertiary,
             textAlign = TextAlign.Center,

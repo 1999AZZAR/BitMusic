@@ -23,8 +23,20 @@ internal object DesktopLicenses {
                 DesktopLicense(
                     "BitMusic",
                     "GPL-3.0-or-later",
-                    "https://www.gnu.org/licenses/gpl-3.0.html",
-                    "Your music, your way.",
+                    "https://github.com/1999AZZAR/BitMusic",
+                    "Aesthetic YouTube Music client for Big Screens (Linux Desktop & Android TV).",
+                ),
+                DesktopLicense(
+                    "BitChord (Upstream)",
+                    "GPL-3.0-or-later",
+                    "https://github.com/kushagrasinghx/BitChord",
+                    "Original base project by Kushagra Singh and contributors.",
+                ),
+                DesktopLicense(
+                    "Linux Audio Architecture",
+                    "GPL-3.0-or-later",
+                    "https://github.com/1999AZZAR/BitMusic",
+                    "Native low-latency PulseAudio & PipeWire integration with real-time spectrum analysis.",
                 ),
             ),
         ),
