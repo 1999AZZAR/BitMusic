@@ -20,6 +20,9 @@
 > [!IMPORTANT]
 > BitMusic is a community-focused fork optimized for large screen experiences: Linux Desktop, Android TV, and desktop workstations. It is not affiliated with, endorsed by, or connected to YouTube or Google in any way.
 
+> [!NOTE]
+> **Credits & Origin:** BitMusic is an independent fork based on [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh and contributors, licensed under the GNU General Public License v3.0 (GPLv3). BitMusic decouples the codebase and redirects development specifically towards large display devices (Linux Desktop & Android TV), featuring a native low-latency Linux PulseAudio/PipeWire audio pipeline, decoupled native libraries, and streamlined TV packaging.
+
 ---
 
 <div align="center">
