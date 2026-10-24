@@ -6922,10 +6922,6 @@ private fun DesktopSettingsFooter(onLicenses: () -> Unit) {
                 append("GitHub")
             }
             append("  •  ")
-            withLink(LinkAnnotation.Url("https://github.com/kushagrasinghx/BitChord", linkStyles)) {
-                append("Upstream")
-            }
-            append("  •  ")
             withLink(LinkAnnotation.Clickable("licenses", linkStyles) { onLicenses() }) {
                 append("Licenses")
             }
