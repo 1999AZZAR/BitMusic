@@ -1,31 +1,39 @@
 # BitMusic Desktop
 
-BitMusic features a Kotlin Multiplatform shared core and a Compose Multiplatform
-desktop application for Linux, macOS, and Windows, specifically tuned for Big Screens and high-fidelity audio playback. Desktop uses the JVM target, which is
-the supported Compose Multiplatform desktop model.
+BitMusic Desktop is built with Compose Multiplatform on the JVM target, running on Linux, macOS, and Windows.
 
-The desktop target uses Java 21.
+---
 
-### Linux Audio Architecture
-On Linux, BitMusic features high-performance native audio output:
-- Low-latency PulseAudio and PipeWire audio stream integration with real-time spectrum analysis.
-- Gapless playback and crossfade with hardware-aligned buffer sizing.
-- MPRIS2 media controller and system notification bridge.
-- Full-screen lyrics and artwork rendering powered by Skiko (Skia for Kotlin).
+## Prerequisites
 
-### Running locally
+- **Java Development Kit**: JDK 21 (Eclipse Temurin 21 recommended).
+- **Linux Build Dependencies**:
+  - Audio: PulseAudio or PipeWire headers (`libpulse-dev` / `pipewire-pulse`), ALSA (`libasound2-dev`).
+  - Graphics & UI: GTK 3 (`libgtk-3-dev`), GL (`libgl1-mesa-dev`), Pango, Cairo.
+  - Native Toolchain: CMake 3.22+, `gcc`/`clang`, `binutils`.
 
-On Linux, run it with the JDK and native libraries available in the shell:
+---
+
+## Running Locally
+
+### Linux
+Ensure system audio libraries and JDK 21 are on `PATH`, then run:
 ```bash
 ./gradlew :desktopApp:run
 ```
 
-On macOS (Apple Silicon or Intel), run it with a Java 21 JDK:
+### macOS (Apple Silicon & Intel)
 ```bash
 ./gradlew :desktopApp:run
 ```
 
-On NixOS:
+### Windows
+From PowerShell or Command Prompt with JDK 21:
+```bat
+gradlew.bat :desktopApp:run
+```
+
+### NixOS
 ```bash
 nix-shell -p jdk21 libglvnd glib gtk3 pango atk cairo cmake gdk-pixbuf libXtst libXxf86vm alsa-lib libpulse ffmpeg_6 --run '\
   export LD_LIBRARY_PATH="$(nix eval --raw nixpkgs#libglvnd.outPath)/lib:$(nix eval --raw nixpkgs#glib.out)/lib:$(nix eval --raw nixpkgs#gtk3.outPath)/lib:$(nix eval --raw nixpkgs#pango.out)/lib:$(nix eval --raw nixpkgs#atk.outPath)/lib:$(nix eval --raw nixpkgs#cairo.outPath)/lib:$(nix eval --raw nixpkgs#gdk-pixbuf.outPath)/lib:$(nix eval --raw nixpkgs#libXtst.outPath)/lib:$(nix eval --raw nixpkgs#libXxf86vm.outPath)/lib:$(nix eval --raw nixpkgs#alsa-lib.outPath)/lib:$(nix eval --raw nixpkgs#libpulse.outPath)/lib:$(nix eval --raw nixpkgs#ffmpeg_6.lib)/lib:$HOME/.openjfx/cache/21.0.6+3/amd64:/run/opengl-driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"; \
@@ -33,96 +41,102 @@ nix-shell -p jdk21 libglvnd glib gtk3 pango atk cairo cmake gdk-pixbuf libXtst l
 '
 ```
 
-On Windows, use a Java 21 shell or install and select a Java 21 JDK before
-running `gradlew.bat :desktopApp:run`.
+---
 
-## Installing a release
+## Running Unit Tests
 
-Every release package carries its own Java
-runtime, the FFmpeg and ONNX natives, the Automix analyser and its models.
-Nothing else has to be installed first — no JDK, no codec pack.
+Run the desktop test suite:
+```bash
+./gradlew :desktopApp:test
+```
 
-| Platform | Download | Notes |
+To run only the audio spectrum test:
+```bash
+./gradlew :desktopApp:test --tests "com.music.bitchord.desktop.DesktopAudioSpectrumTest"
+```
+
+---
+
+## Release Packaging
+
+Pre-packaged desktop builds bundle their own Java runtime, native FFmpeg libraries, and ONNX models via `jpackage`.
+
+| Platform | Format | Installation Command |
 |---|---|---|
-| Linux | `BitMusic-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. No install, works on any distribution. |
-| Linux | `BitMusic-<version>-linux-amd64.deb` | `sudo apt install ./BitMusic-*.deb` on Debian, Ubuntu and derivatives. |
-| Linux | `BitMusic-<version>-linux-x86_64.rpm` | `sudo dnf install ./BitMusic-*.rpm` on Fedora, RHEL and openSUSE. |
-| macOS | `BitMusic-<version>-macos-arm64.dmg` | For Apple Silicon Macs (M1/M2/M3/M4/later). Drag to Applications. |
-| macOS | `BitMusic-<version>-macos-x64.dmg` | For Intel Macs. Drag to Applications. |
-| macOS | `BitMusic-<version>-macos-*.pkg` | Standard macOS installer package for automated or managed installations. |
-| Windows | `BitMusic-<version>-windows-x64-setup.exe` | The ordinary installer. Installs for the current user, so it never asks for an administrator. |
-| Windows | `BitMusic-<version>-windows-x64.msi` | The same thing for anyone who deploys by MSI. |
-| Windows | `BitMusic-<version>-windows-x64-portable.zip` | Unzip anywhere and run `BitMusic.exe`. Writes nothing outside the folder. |
+| **Linux** | `.AppImage` | `chmod +x BitMusic-*.AppImage && ./BitMusic-*.AppImage` |
+| **Linux** | `.deb` | `sudo dpkg -i BitMusic-*.deb` or `sudo apt install ./BitMusic-*.deb` |
+| **Linux** | `.rpm` | `sudo dnf install ./BitMusic-*.rpm` |
+| **macOS** | `.dmg` | Open disk image, drag `BitMusic.app` to `/Applications` |
+| **macOS** | `.pkg` | Standard macOS package installer |
+| **Windows** | `.exe` | User-level installer (no administrator privileges required) |
+| **Windows** | `.msi` | System-wide MSI installer |
+| **Windows** | `.zip` | Portable archive; unpack and run `BitMusic.exe` |
 
-**macOS Gatekeeper.** Unsigned binaries built locally or downloaded outside the Mac App Store
-may trigger a macOS security prompt ("BitMusic is damaged and can't be opened" or "unidentified developer").
-To clear the quarantine flag, run:
+---
 
+## Building Packages from Source
+
+Each platform-specific package is built on its target operating system:
+
+### Linux
+Requirements: `rpm`, `fakeroot`, `binutils`, and `file` (for AppImage):
 ```bash
-xattr -cr /Applications/BitMusic.app
-```
+# Build Debian package (.deb)
+./gradlew :desktopApp:packageDeb
 
-The Linux packages are built on Ubuntu 22.04 against its glibc, so they install
-on that release and anything newer.
+# Build Red Hat package (.rpm)
+./gradlew :desktopApp:packageRpm
 
-**Linux system libraries.** The packages carry their own Java runtime and codecs
-but not the desktop's own graphics stack, and jpackage cannot derive that list —
-so the deb and rpm declare only `xdg-utils`. Any machine running a desktop
-session already has what is needed (GTK 3, X11 or XWayland, GL, ALSA); a minimal
-or headless install does not, and will fail at startup rather than at install
-time.
-
-**Windows and the Visual C++ runtime.** The Automix analyser is linked against a
-static C runtime, so on almost every machine there is nothing to install. If
-BitMusic starts but Automix never analyses anything, install the
-[Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-and restart it — that is the one dependency the bundled runtime cannot carry
-itself, because Windows expects it to be a system component.
-
-## Building the packages yourself
-
-jpackage builds a package by driving the target platform's own tooling, so each
-one has to be built on the platform it is for. This is what CI does; see
-[`.github/workflows/release.yml`](.github/workflows/release.yml).
-
-On macOS:
-
-```bash
-# Builds the disk image (.dmg) installer
-./gradlew :desktopApp:packageDmg
-
-# Builds the .pkg installer
-./gradlew :desktopApp:packagePkg
-
-# Standalone BitMusic.app bundle
+# Build AppImage
 ./gradlew :desktopApp:createDistributable
-# Output is at: desktopApp/build/compose/binaries/main/app/BitMusic.app
-```
-
-On Linux — `rpm`, `fakeroot` and `binutils` must be installed for the packages,
-and `file` for the AppImage:
-
-```bash
-bash ./gradlew :desktopApp:packageDeb
-bash ./gradlew :desktopApp:packageRpm
-
-# The AppImage is wrapped around the app image jpackage produces.
-bash ./gradlew :desktopApp:createDistributable
 desktopApp/packaging/appimage.sh \
   desktopApp/build/compose/binaries/main/app/BitMusic \
   dist/BitMusic-linux-x86_64.AppImage
 ```
 
-On Windows — [WiX Toolset 3](https://github.com/wixtoolset/wix3/releases) must
-be on `PATH`, which is what jpackage builds both the `.exe` and the `.msi` with:
+For quick local builds and immediate installation on Debian/Ubuntu/Mint:
+```bash
+./scripts/local-release.sh
+```
 
+### macOS
+```bash
+# Build .dmg disk image
+./gradlew :desktopApp:packageDmg
+
+# Build .pkg installer
+./gradlew :desktopApp:packagePkg
+
+# Build standalone .app bundle
+./gradlew :desktopApp:createDistributable
+# Output: desktopApp/build/compose/binaries/main/app/BitMusic.app
+```
+
+### Windows
+Requirements: [WiX Toolset 3](https://github.com/wixtoolset/wix3/releases) on `PATH`:
 ```bat
+REM Build EXE installer
 gradlew.bat :desktopApp:packageExe
+
+REM Build MSI package
 gradlew.bat :desktopApp:packageMsi
 
-REM The portable build is the app image, zipped.
+REM Build portable archive
 gradlew.bat :desktopApp:createDistributable
 ```
 
-Pass `-Pbitchord.version=1.2.3` to stamp a version other than the one in
-`desktopApp/build.gradle.kts`; a release build takes it from the tag.
+---
+
+## Troubleshooting
+
+### macOS Gatekeeper
+Self-built or unsigned binaries on macOS may trigger a quarantine alert. Clear the quarantine attribute with:
+```bash
+xattr -cr /Applications/BitMusic.app
+```
+
+### Linux Graphics and Audio Dependencies
+Packaged `.deb` and `.rpm` files bundle the runtime and audio decoders, but rely on desktop system graphics libraries (GTK 3, X11 or Wayland, GL, ALSA). Minimal server environments without an active display session will fail at startup.
+
+### Windows Visual C++ Redistributable
+The native audio analyzer links against a static C runtime. If Automix analysis fails to initialize on Windows, install the [Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe).

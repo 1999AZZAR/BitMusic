@@ -1,11 +1,11 @@
 # Contributing to BitMusic
 
-Thank you for contributing to BitMusic. Follow these guidelines to ensure an efficient development and review process.
+Guidelines for contributing to BitMusic, covering branch workflows, development setup, testing, and licensing.
 
-## Proposing Contributions
-- BitMusic is focused specifically on large-screen experiences (Linux Desktop & Android TV).
-- Substantial features, refactors, or UI redesigns should normally be discussed before implementation. Open an issue on GitHub to outline your proposal.
-- Straightforward bug fixes, documentation improvements, or minor corrections can be submitted directly as a Pull Request.
+## Proposing Changes
+- BitMusic focuses exclusively on large displays: Linux Desktop, Android TV, Windows, and macOS.
+- For non-trivial features, architectural refactors, or UI redesigns, open an issue to discuss requirements before submitting code.
+- Bug fixes, documentation updates, and test additions can be submitted directly as Pull Requests.
 
 ## Branch and Development Workflow
 BitMusic enforces a structured branch lifecycle:

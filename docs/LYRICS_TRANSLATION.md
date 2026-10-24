@@ -124,12 +124,10 @@ settings.
 
 ## Files
 
-- `app/src/main/java/com/music/bitchord/data/lyrics/LyricsTranslation.kt`
-  contains batching, source detection, timing reconstruction and bounded caching.
-- `app/src/main/java/com/music/bitchord/ui/player/NowPlayingScreen.kt`
-  contains the toggle, state handling and motion response.
-- `app/src/main/res/values-*/strings.xml` localizes the new UI messages for every
-  language currently offered by BitMusic.
+- `shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/lyrics/LyricsTranslation.kt`
+  Contains batching, language detection, timestamp preservation, and bounded caching.
+- `desktopUi/src/jvmMain/kotlin/com/music/bitchord/ui/player/NowPlayingScreen.kt`
+  Contains the translation toggle, state handling, and UI transition.
 
 ## Manual verification checklist
 

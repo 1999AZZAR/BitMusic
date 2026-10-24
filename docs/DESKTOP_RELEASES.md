@@ -1,53 +1,57 @@
-# Desktop & Big Screen Releases Protocol
+# Desktop and TV Releases Protocol
 
-How BitMusic releases are versioned, named, and distributed across platforms (Linux, Windows, macOS, and Android TV).
-
----
-
-## 1. Versioning Specification
-BitMusic follows branch-aware semantic versioning with base version `1.0.0`:
-
-- **`master` (Production)**: Clean semver release string `1.0.0` (or `X.Y.Z`). Tags follow `v1.0.0`.
-- **`staging` (Development)**: Pre-release versioning: `1.0.0-beta-0` (incremented as `-beta-1`, `-beta-2`, etc.).
-- **`feature/<name>` (Feature)**: Feature-scoped pre-release: `1.0.0-beta-<feature>-0`.
-- `desktopApp/build.gradle.kts` dynamically computes the version from the active git branch or accepts an explicit version via `-Pbitchord.version=...`.
-- The desktop runtime reads `System.getProperty("bitchord.version")`.
-- The installer package version (`nativePackageVersion`) converts to strict numeric `major.minor.patch` (e.g. `1.0.0`) for jpackage compatibility.
+This document defines how BitMusic builds, versions, and packages release artifacts for Linux, Android TV, Windows, and macOS.
 
 ---
 
-## 2. Release Artifacts Naming Convention
+## 1. Branch-Aware Versioning
 
-Every GitHub Release attached to tag `v<version>` packages the following canonical artifacts:
+BitMusic uses semantic versioning based on `1.0.0`:
 
-| Platform | Artifact | Target / Role |
-|---|---|---|
-| **Linux Desktop** | `BitMusic-<v>-linux-x86_64.AppImage` | Standalone zero-install executable (all distros) |
-| **Linux Desktop** | `BitMusic-<v>-linux-amd64.deb` | Debian, Ubuntu, Linux Mint, Pop!_OS |
-| **Linux Desktop** | `BitMusic-<v>-linux-x86_64.rpm` | Fedora, RHEL, openSUSE |
-| **Android TV** | `BitMusic-tv-prod-universal-release.apk` | Sideloadable Leanback APK for Google TV & Android TV |
-| **Windows Desktop** | `BitMusic-<v>-windows-x64-setup.exe` | Standard user installer (no admin required) |
-| **Windows Desktop** | `BitMusic-<v>-windows-x64.msi` | Managed enterprise MSI package |
-| **Windows Desktop** | `BitMusic-<v>-windows-x64-portable.zip` | Portable zero-install directory |
-| **macOS Desktop** | `BitMusic-<v>-macos-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
-| **macOS Desktop** | `BitMusic-<v>-macos-x64.dmg` | Intel Macs |
+- **Production (`master`)**: Strict semver string (`1.0.0`, `1.0.1`, `1.1.0`). Production release tags are named `v<version>` (e.g. `v1.0.0`).
+- **Development (`staging`)**: Pre-release versions (`1.0.0-beta-0`, `1.0.0-beta-1`).
+- **Feature Branches (`feature/<name>`)**: Feature pre-releases (`1.0.0-beta-<name>-0`).
+
+The Gradle build resolves the version from the active git branch automatically or reads an explicit value passed via `-Pbitchord.version=<version>`.
 
 ---
 
-## 3. Update Verification
+## 2. Release Artifacts
 
-- Update API endpoint: `https://api.github.com/repos/1999AZZAR/BitMusic/releases/latest`
-- Sideloaded Linux deb/rpm packages upgrade cleanly via package manager (`sudo apt install ./BitMusic-*.deb` / `sudo dnf upgrade ./BitMusic-*.rpm`).
-- Windows in-place upgrades rely on `upgradeUuid` (`8f3c1d24-6a2b-4f5e-9c17-2b8d54e0a913`).
+Every release build produces the following canonical binaries:
+
+| Platform | File Format | Build Command | Output Path |
+|---|---|---|---|
+| **Linux Desktop** | `.AppImage` | `./gradlew :desktopApp:createDistributable` + `appimage.sh` | `dist/BitMusic-<version>-linux-x86_64.AppImage` |
+| **Linux Desktop** | `.deb` | `./gradlew :desktopApp:packageDeb` | `desktopApp/build/compose/binaries/main/deb/` |
+| **Linux Desktop** | `.rpm` | `./gradlew :desktopApp:packageRpm` | `desktopApp/build/compose/binaries/main/rpm/` |
+| **Android TV** | `.apk` | `./gradlew :tv:assembleProdRelease` | `tv/build/outputs/apk/prod/release/` |
+| **Windows Desktop** | `.exe` | `gradlew.bat :desktopApp:packageExe` | `desktopApp/build/compose/binaries/main/exe/` |
+| **Windows Desktop** | `.msi` | `gradlew.bat :desktopApp:packageMsi` | `desktopApp/build/compose/binaries/main/msi/` |
+| **Windows Desktop** | `.zip` | `gradlew.bat :desktopApp:createDistributable` | `desktopApp/build/compose/binaries/main/app/` (zipped) |
+| **macOS Desktop** | `.dmg` | `./gradlew :desktopApp:packageDmg` | `desktopApp/build/compose/binaries/main/dmg/` |
+| **macOS Desktop** | `.pkg` | `./gradlew :desktopApp:packagePkg` | `desktopApp/build/compose/binaries/main/pkg/` |
 
 ---
 
-## 4. Local Build Commands
+## 3. Local Release Loop
+
+On Debian, Ubuntu, and Linux Mint, use the local release helper to build, stamp, and install the current working tree directly:
 
 ```bash
-# Linux Desktop distributable & packages
-./gradlew :desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable
-
-# Android TV Release APK
-./gradlew :tv:assembleProdRelease
+./scripts/local-release.sh
 ```
+
+The script determines the active branch, builds the `.deb`, updates package control metadata with the version stamp, and runs `sudo dpkg -i`.
+
+---
+
+## 4. GitHub Actions Release Workflow
+
+Release generation is automated via `.github/workflows/release.yml`. When a tag matching `v*.*.*` is pushed to `master`:
+
+1. Linux runner builds the `.deb`, `.rpm`, and `.AppImage`.
+2. Windows runner builds the `.exe`, `.msi`, and portable `.zip`.
+3. macOS runner builds the Apple Silicon and Intel `.dmg` and `.pkg`.
+4. Android runner builds the production Leanback `.apk`.
+5. GitHub Actions uploads all artifacts to the new GitHub Release.
