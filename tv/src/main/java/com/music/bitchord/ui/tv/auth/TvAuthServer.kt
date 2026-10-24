@@ -418,7 +418,7 @@ function fmtTime(ms) {
 function updateStatus() {
   fetch('/api/status').then(r => r.json()).then(data => {
     document.getElementById('trackTitle').innerText = data.title || "No Song Playing";
-    document.getElementById('trackArtist').innerText = data.artist || "BitChord TV";
+    document.getElementById('trackArtist').innerText = data.artist || "BitMusic TV";
     let art = document.getElementById('trackArt');
     if (data.artworkUrl) { art.src = data.artworkUrl; art.style.display = 'block'; } else { art.style.display = 'none'; }
     document.getElementById('playBtn').innerText = data.isPlaying ? '❚❚' : '▶';

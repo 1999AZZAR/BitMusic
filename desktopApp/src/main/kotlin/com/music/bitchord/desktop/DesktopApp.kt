@@ -6923,7 +6923,7 @@ private fun DesktopSettingsFooter(onLicenses: () -> Unit) {
             }
             append("  •  ")
             withLink(LinkAnnotation.Url("https://github.com/kushagrasinghx/BitChord", linkStyles)) {
-                append("Based on BitChord")
+                append("Upstream")
             }
             append("  •  ")
             withLink(LinkAnnotation.Clickable("licenses", linkStyles) { onLicenses() }) {
