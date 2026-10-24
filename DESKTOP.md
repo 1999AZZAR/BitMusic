@@ -55,11 +55,11 @@ Nothing else has to be installed first — no JDK, no codec pack.
 | Windows | `BitMusic-<version>-windows-x64-portable.zip` | Unzip anywhere and run `BitMusic.exe`. Writes nothing outside the folder. |
 
 **macOS Gatekeeper.** Unsigned binaries built locally or downloaded outside the Mac App Store
-may trigger a macOS security prompt ("BitChord is damaged and can't be opened" or "unidentified developer").
+may trigger a macOS security prompt ("BitMusic is damaged and can't be opened" or "unidentified developer").
 To clear the quarantine flag, run:
 
 ```bash
-xattr -cr /Applications/BitChord.app
+xattr -cr /Applications/BitMusic.app
 ```
 
 The Linux packages are built on Ubuntu 22.04 against its glibc, so they install
@@ -74,7 +74,7 @@ time.
 
 **Windows and the Visual C++ runtime.** The Automix analyser is linked against a
 static C runtime, so on almost every machine there is nothing to install. If
-BitChord starts but Automix never analyses anything, install the
+BitMusic starts but Automix never analyses anything, install the
 [Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 and restart it — that is the one dependency the bundled runtime cannot carry
 itself, because Windows expects it to be a system component.
@@ -94,9 +94,9 @@ On macOS:
 # Builds the .pkg installer
 ./gradlew :desktopApp:packagePkg
 
-# Standalone BitChord.app bundle
+# Standalone BitMusic.app bundle
 ./gradlew :desktopApp:createDistributable
-# Output is at: desktopApp/build/compose/binaries/main/app/BitChord.app
+# Output is at: desktopApp/build/compose/binaries/main/app/BitMusic.app
 ```
 
 On Linux — `rpm`, `fakeroot` and `binutils` must be installed for the packages,
@@ -109,8 +109,8 @@ bash ./gradlew :desktopApp:packageRpm
 # The AppImage is wrapped around the app image jpackage produces.
 bash ./gradlew :desktopApp:createDistributable
 desktopApp/packaging/appimage.sh \
-  desktopApp/build/compose/binaries/main/app/BitChord \
-  dist/BitChord-linux-x86_64.AppImage
+  desktopApp/build/compose/binaries/main/app/BitMusic \
+  dist/BitMusic-linux-x86_64.AppImage
 ```
 
 On Windows — [WiX Toolset 3](https://github.com/wixtoolset/wix3/releases) must

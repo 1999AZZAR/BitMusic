@@ -49,6 +49,6 @@ Build Android TV Dev Debug APK:
 - Keep diffs focused and minimal. Avoid unnecessary third-party dependencies.
 
 ## Dependencies and Licensing
-BitChord is licensed under the **GNU General Public License v3.0 (GPLv3)**.
+BitMusic is licensed under the **GNU General Public License v3.0 (GPLv3)**.
 
 All contributed code and dependencies must be strictly compatible with GPLv3. Avoid introducing external dependencies unless strictly necessary; any new dependency must be evaluated for necessity, binary size, and license compliance.

@@ -44,6 +44,7 @@ keystore.properties
 # AI agent configuration
 AGENTS.md
 /output/
+.claude/
 
 # Built packages — release APKs/bundles are handed out, never committed
 *.apk
