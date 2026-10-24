@@ -8,7 +8,23 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val appVersion: String = providers.gradleProperty("bitchord.version").orNull
     ?.removePrefix("v")
     ?.takeIf { it.isNotBlank() }
-    ?: "1.8.31"
+    ?: run {
+        val baseVersion = "1.0.0"
+        val branch = try {
+            val p = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD").redirectErrorStream(true).start()
+            val out = p.inputStream.bufferedReader().readText().trim()
+            if (p.waitFor() == 0 && out.isNotBlank()) out else "staging"
+        } catch (_: Exception) {
+            "staging"
+        }
+        when {
+            branch == "master" || branch == "main" || branch.startsWith("v") || branch == "HEAD" -> baseVersion
+            branch == "staging" -> "$baseVersion-beta-0"
+            branch.startsWith("feature/") -> "$baseVersion-beta-${branch.removePrefix("feature/").replace('/', '-')}-0"
+            branch.startsWith("fix/") -> "$baseVersion-beta-${branch.removePrefix("fix/").replace('/', '-')}-0"
+            else -> "$baseVersion-beta-${branch.replace('/', '-')}-0"
+        }
+    }
 
 /** Which platform this build is *for*, which is the host unless told otherwise. */
 val hostIsWindows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
@@ -25,10 +41,13 @@ val hostArch = System.getProperty("os.arch").lowercase()
 val isArm64 = hostArch == "aarch64" || hostArch == "arm64"
 
 // Windows installer metadata requires MAJOR.MINOR.BUILD even though the app's public version is
-// intentionally displayed without a patch number (1.7 rather than 1.7.0).
-// The build number is the desktop version code; it also keeps "-beta1" out of the numeric installer version.
-val desktopVersionCode = 31
-val nativePackageVersion = appVersion.substringBefore('-').split('.').take(2).joinToString(".") + ".$desktopVersionCode"
+// intentionally displayed without a patch number (1.0 rather than 1.0.0).
+// The build number is the desktop version code; it also keeps pre-release suffixes out of the numeric installer version.
+val desktopVersionCode = 0
+val nativePackageVersion = appVersion.substringBefore('-').let { ver ->
+    val parts = ver.split('.')
+    if (parts.size >= 3) parts.take(3).joinToString(".") else (parts + List(3 - parts.size) { "0" }).joinToString(".")
+}
 
 // FFmpeg decodes audio; see DesktopAudioDecoder.
 val javacppVersion = "1.5.12"

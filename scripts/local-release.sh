@@ -1,28 +1,67 @@
 #!/bin/sh
-# The fork's own release loop: build the deb, stamp it with the next frea number, install it.
+# BitMusic local release loop: build the deb, stamp it with the branch-aware version, and install.
 #
-# The number comes from what dpkg says is installed: $basefreaN becomes frea(N+1), anything
-# older or absent starts at frea1. Run from anywhere; it cd's to the repository root.
+# Version scheme:
+#   master  -> 1.0.0
+#   staging -> 1.0.0-beta-0 (increments -1, -2... if already installed)
+#   feature -> 1.0.0-beta-<feature>-0
 set -eu
 cd "$(dirname "$0")/.."
 
-base=$(sed -n 's/.*?: "\([0-9][0-9.]*\)"/\1/p' desktopApp/build.gradle.kts | head -1)
-if [ -z "$base" ]; then
-    echo "could not read the app version from desktopApp/build.gradle.kts" >&2
-    exit 1
-fi
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "staging")
+base="1.0.0"
+
+case "$branch" in
+    master|main)
+        prefix="$base"
+        default_version="$base"
+        ;;
+    staging)
+        prefix="$base-beta"
+        default_version="$base-beta-0"
+        ;;
+    feature/*)
+        feat_name=$(echo "${branch#feature/}" | tr '/' '-')
+        prefix="$base-beta-${feat_name}"
+        default_version="$base-beta-${feat_name}-0"
+        ;;
+    fix/*)
+        fix_name=$(echo "${branch#fix/}" | tr '/' '-')
+        prefix="$base-beta-${fix_name}"
+        default_version="$base-beta-${fix_name}-0"
+        ;;
+    *)
+        clean_branch=$(echo "$branch" | tr '/' '-')
+        prefix="$base-beta-${clean_branch}"
+        default_version="$base-beta-${clean_branch}-0"
+        ;;
+esac
 
 installed=$(dpkg-query -W -f '${Version}' bitmusic 2>/dev/null || true)
+
 case "$installed" in
-    "$base"frea*) n=${installed##*frea}; next="$base"frea$((n + 1)) ;;
-    *) next="$base"frea1 ;;
+    "$prefix"-*)
+        rev=${installed##*-}
+        if echo "$rev" | grep -qE '^[0-9]+$'; then
+            next="$prefix-$((rev + 1))"
+        else
+            next="$default_version"
+        fi
+        ;;
+    "$default_version")
+        next="$prefix-1"
+        ;;
+    *)
+        next="$default_version"
+        ;;
 esac
-echo "building $next (installed: ${installed:-nothing})"
 
-./gradlew :desktopApp:packageDeb
+echo "Building BitMusic $next for branch '$branch' (currently installed: ${installed:-nothing})"
 
-in="desktopApp/build/compose/binaries/main/deb/bitmusic_${base}_amd64.deb"
+./gradlew :desktopApp:packageDeb -Pbitchord.version="$next"
+
+in=$(ls -1 desktopApp/build/compose/binaries/main/deb/bitmusic_*_amd64.deb | tail -n 1)
 out="/tmp/bitmusic-${next}.deb"
 sh desktopApp/packaging/linux-stamp-deb.sh "$in" "$out" "$next"
-sudo dpkg -i "$out"
+sudo dpkg --force-downgrade -i "$out"
 dpkg-query -W -f 'installed: ${Package} ${Version}\n' bitmusic

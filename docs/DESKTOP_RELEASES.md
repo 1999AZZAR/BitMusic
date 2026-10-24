@@ -5,11 +5,14 @@ How BitMusic releases are versioned, named, and distributed across platforms (Li
 ---
 
 ## 1. Versioning Specification
+BitMusic follows branch-aware semantic versioning with base version `1.0.0`:
 
-- The release version is a clean semver string such as `1.8` or `1.8.0` (or `1.8-beta1` for pre-releases).
-- `desktopApp/build.gradle.kts` accepts it via `-Pbitchord.version=...` (falling back to `appVersion`). CI extracts the version directly from the git tag (`v1.8.0` -> `1.8.0`).
+- **`master` (Production)**: Clean semver release string `1.0.0` (or `X.Y.Z`). Tags follow `v1.0.0`.
+- **`staging` (Development)**: Pre-release versioning: `1.0.0-beta-0` (incremented as `-beta-1`, `-beta-2`, etc.).
+- **`feature/<name>` (Feature)**: Feature-scoped pre-release: `1.0.0-beta-<feature>-0`.
+- `desktopApp/build.gradle.kts` dynamically computes the version from the active git branch or accepts an explicit version via `-Pbitchord.version=...`.
 - The desktop runtime reads `System.getProperty("bitchord.version")`.
-- The installer package version (`nativePackageVersion`) converts to a strict numeric format: `major.minor.desktopVersionCode` (e.g. `1.8.26`). Bump `desktopVersionCode` on every release to ensure proper in-place upgrades.
+- The installer package version (`nativePackageVersion`) converts to strict numeric `major.minor.patch` (e.g. `1.0.0`) for jpackage compatibility.
 
 ---
 

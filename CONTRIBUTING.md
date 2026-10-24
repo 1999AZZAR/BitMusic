@@ -10,12 +10,12 @@ Thank you for contributing to BitMusic. Follow these guidelines to ensure an eff
 ## Branch and Development Workflow
 BitMusic enforces a structured branch lifecycle:
 
-| Branch | Purpose | Rules |
-|---|---|---|
-| `master` | **Final Production Version** | Protected branch representing release-ready code. Tags (`v*.*.*`) are cut from `master`. Changes arrive strictly via promotion from `staging`. |
-| `staging` | **Ongoing Development & Integration** | Active development branch where new features and bug fixes land and undergo testing before production release. |
-| `feature/<name>` | **New Features & Improvements** | Created off `staging`. Work is promoted via Pull Request (`PR -> review -> acceptance -> merge`) into `staging`. |
-| `fix/<name>` | **Bug Fixes** | Created off `staging`, promoted via Pull Request into `staging`. |
+| Branch | Purpose | Versioning Scheme | Rules |
+|---|---|---|---|
+| `master` | **Final Production Version** | `1.0.0` (clean semver `X.Y.Z`) | Protected branch representing release-ready code. Tags (`v*.*.*`) are cut from `master`. Changes arrive strictly via promotion from `staging`. |
+| `staging` | **Ongoing Development & Integration** | `1.0.0-beta-0` (or `-beta-N`) | Active development branch where new features and bug fixes land and undergo testing before production release. |
+| `feature/<name>` | **New Features & Improvements** | `1.0.0-beta-<name>-0` | Created off `staging`. Work is promoted via Pull Request (`PR -> review -> acceptance -> merge`) into `staging`. |
+| `fix/<name>` | **Bug Fixes** | `1.0.0-beta-<name>-0` | Created off `staging`, promoted via Pull Request into `staging`. |
 
 ### Development Lifecycle
 1. Branch off `staging`: `git checkout staging && git checkout -b feature/my-cool-feature`
