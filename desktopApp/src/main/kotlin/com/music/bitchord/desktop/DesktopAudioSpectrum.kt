@@ -60,8 +60,9 @@ internal object DesktopAudioSpectrum {
                     delay(250)
                     continue
                 }
-                // Reduce animation freezes the bars where they are rather than emptying them.
-                if (!DesktopPlayerSettings.reduceAnimation.value) analyzeSnapshot()
+                // Reduce animation settles the bars to nothing rather than freezing them
+                // mid-dance — a frozen field reads as a glitch, an emptying one as a choice.
+                if (!DesktopPlayerSettings.reduceAnimation.value) analyzeSnapshot() else decaySnapshot()
                 delay(FRAME_MS)
             }
         }
@@ -85,6 +86,32 @@ internal object DesktopAudioSpectrum {
                 at += ch
             }
         }
+    }
+
+    /** Back to a never-played state: empty ring, dark bands, the gain at its floor. */
+    internal fun reset() {
+        synchronized(lock) {
+            ring.fill(0f)
+            fed = 0L
+            sampleRate = 44_100
+        }
+        smoothed.fill(0f)
+        gain = 0.01f
+        _bands.value = FloatArray(BANDS)
+    }
+
+    /**
+     * The reduce-animation answer: no transform, just the release curve running out, so the
+     * field glides down to nothing and stays there until animation is allowed again.
+     */
+    private fun decaySnapshot(): FloatArray {
+        val out = FloatArray(BANDS)
+        for (band in 0 until BANDS) {
+            smoothed[band] *= 0.80f
+            out[band] = smoothed[band]
+        }
+        _bands.value = out
+        return out
     }
 
     /**
@@ -129,7 +156,11 @@ internal object DesktopAudioSpectrum {
                 val magnitude = sqrt(re[bin] * re[bin] + im[bin] * im[bin])
                 if (magnitude > peak) peak = magnitude
             }
-            magnitudes[band] = ln(1f + peak)
+            // Pink-noise tilt: music's energy falls ~3 dB an octave, so an honest spectrum is a
+            // ski slope with all the life at the left. Lifting the top bands threefold (+9.5 dB
+            // at the last octave pair) turns the slope into the field the ear thinks it hears.
+            val tilt = 1f + 2f * band / (BANDS - 1)
+            magnitudes[band] = ln(1f + peak * tilt)
             if (magnitudes[band] > framePeak) framePeak = magnitudes[band]
         }
 

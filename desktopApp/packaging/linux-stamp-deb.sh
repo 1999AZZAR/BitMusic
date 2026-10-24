@@ -13,9 +13,16 @@ trap 'rm -rf "$root"' EXIT
 
 dpkg-deb -R "$in" "$root"
 sed -i "s/^Version: .*/Version: $version/" "$root/DEBIAN/control"
-# [Application] holds jvm-args in jpackage's cfg grammar.
-sed -i "/^\[Application\]/a app.options=-Dbitchord.version=$version" \
-    "$root/opt/bitmusic/lib/app/BitMusic.cfg"
+# [Application] holds jvm-args in jpackage's cfg grammar. The build already bakes a
+# -Dbitchord.version option in (from jvmArgs), and appending a second one left two
+# conflicting lines whose winner depended on cfg parse order — rewrite every occurrence
+# of the property instead, and add one only when none exists.
+cfg="$root/opt/bitmusic/lib/app/BitMusic.cfg"
+if grep -q -- "-Dbitchord.version=" "$cfg"; then
+    sed -i "s|-Dbitchord.version=[^ ]*|-Dbitchord.version=$version|g" "$cfg"
+else
+    sed -i "/^\[Application\]/a app.options=-Dbitchord.version=$version" "$cfg"
+fi
 
 # Package standard desktop icon theme files into /usr/share/icons and /usr/share/pixmaps
 mkdir -p "$root/usr/share/pixmaps"

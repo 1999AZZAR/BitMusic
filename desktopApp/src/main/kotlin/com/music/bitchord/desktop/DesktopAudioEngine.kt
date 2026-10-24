@@ -807,9 +807,14 @@ class DesktopPlaybackEngine(
         if (track == null || paused) {
             if (paused) sink.pause()
             if (paused && fadeRemaining > 0) publishBlend(playing = false)
+            // Nothing is being written, so a frozen played count means nothing.
+            stallPlayedFrames = -1L
+            pumpExpected = false
             Thread.sleep(20)
             return
         }
+        pumpBeatNanos = System.nanoTime()
+        pumpExpected = true
         sink.resume()
 
         val block = readCurrent(track)
@@ -862,6 +867,7 @@ class DesktopPlaybackEngine(
         // The visualizer's tap: the finished mix, exactly as written to the speakers.
         DesktopAudioSpectrum.offer(samples, count, sink.format.channels, sink.format.sampleRate)
         framesWritten += count / sink.format.channels.coerceAtLeast(1)
+        watchSinkHealth()
         if (count > 0 && _state.value.awaitingAudio) _state.update { it.copy(awaitingAudio = false) }
     }
 
@@ -1469,6 +1475,73 @@ class DesktopPlaybackEngine(
         reconfigureSink()
     }
 
+    /** The played-frame count at the last non-stuck reading; negative until the first. */
+    private var stallPlayedFrames = -1L
+    private var stallWrittenFrames = 0L
+    private var stallSinceNanos = 0L
+
+    /**
+     * The failure a broken flag cannot see: writes answering fine while the device renders
+     * nothing — a stream the server accepted and then dropped on the floor. While blocks are
+     * being written, the played-frame count must move; a count that has not budged through a
+     * second and a half of written audio is an output lying about its health, and gets the same
+     * reopening a failed write does. A count that moves backwards is a fresh stream (a reopen),
+     * and simply resets the watch.
+     */
+    private fun watchSinkHealth() {
+        val played = sink.framesPlayed()
+        val now = System.nanoTime()
+        if (stallPlayedFrames < 0L || played != stallPlayedFrames) {
+            stallPlayedFrames = played
+            stallWrittenFrames = framesWritten
+            stallSinceNanos = now
+            return
+        }
+        val rate = sink.format.sampleRate
+        if (rate <= 0) return
+        val writtenWhileStuck = framesWritten - stallWrittenFrames
+        if (writtenWhileStuck >= rate + rate / 2 && now - stallSinceNanos >= SINK_STALL_NS) {
+            DesktopTrackLog.log(
+                "audio output stalled: ${"%.1f".format(writtenWhileStuck / rate.toFloat())}s written, none rendered; reopening",
+            )
+            stallPlayedFrames = -1L
+            nextSinkRecoveryNanos = now + SINK_RECOVERY_RETRY_MS * 1_000_000
+            reconfigureSink()
+        }
+    }
+
+    /** The pump's last lap, on the nanoTime clock; watched from off-thread — see below. */
+    @Volatile private var pumpBeatNanos = 0L
+
+    /** Whether the audio thread is expected to be advancing right now; set by the thread itself. */
+    @Volatile private var pumpExpected = false
+
+    @Volatile private var stuckReportedNanos = 0L
+
+    init {
+        // The one death this engine cannot cure, it can at least name: a native output call that
+        // never returns holds the audio thread inside it, and no flag on earth fires from inside
+        // that. This watcher only says so, loudly and rate-limited — tearing the stream down from
+        // another thread while a write is stuck in it would be a native crash, not a recovery.
+        scope.launch {
+            while (true) {
+                delay(2_000)
+                if (!pumpExpected) {
+                    stuckReportedNanos = 0L
+                    continue
+                }
+                val stuckFor = (System.nanoTime() - pumpBeatNanos) / 1_000_000
+                if (stuckFor > PUMP_STUCK_MS && System.nanoTime() - stuckReportedNanos > 10_000_000_000L) {
+                    stuckReportedNanos = System.nanoTime()
+                    DesktopTrackLog.log(
+                        "audio thread has not advanced in ${stuckFor}ms — a native output call is stuck; " +
+                            "the audio server likely needs restarting",
+                    )
+                }
+            }
+        }
+    }
+
     private fun buildChain() {
         speedProcessor = DesktopAudioSpeed(sink.format.channels, sink.format.sampleRate)
         spatial = DesktopSpatialAudio(sink.format.channels, sink.format.sampleRate)
@@ -1942,6 +2015,12 @@ class DesktopPlaybackEngine(
          * music is a hiccup rather than a stopped track.
          */
         private const val SINK_RECOVERY_RETRY_MS = 2_000L
+
+        /** How long a frozen played count is tolerated once a second and a half has been written. */
+        private const val SINK_STALL_NS = 3_000_000_000L
+
+        /** Beyond this without a pump lap, the audio thread is presumed stuck inside a native call. */
+        private const val PUMP_STUCK_MS = 5_000L
 
         /** Enough of a measurement on the incoming track to cue into it. */
         val MEASURED_ENOUGH_TO_ENTER_ON = setOf(

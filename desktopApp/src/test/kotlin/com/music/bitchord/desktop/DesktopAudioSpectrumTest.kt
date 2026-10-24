@@ -3,12 +3,18 @@ package com.music.bitchord.desktop
 import kotlin.math.PI
 import kotlin.math.sin
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
  * The visualizer's analyzer, on signals with known spectrums.
  */
 class DesktopAudioSpectrumTest {
+
+    @Before
+    fun cleanSlate() {
+        DesktopAudioSpectrum.reset()
+    }
 
     @Test
     fun `a 440 Hz tone peaks the band 440 Hz belongs to`() {
@@ -33,6 +39,23 @@ class DesktopAudioSpectrumTest {
         )
         assertTrue("the peak band should be clearly lit, not noise", bands[loudest] > 0.3f)
         assertTrue("every band stays within 0..1", bands.all { it in 0f..1f })
+    }
+
+    @Test
+    fun `an 8 kHz tone peaks the high end, tilt and all`() {
+        val rate = 44_100
+        val tone = FloatArray(rate) { sin(2.0 * PI * 8_000.0 * it / rate).toFloat() * 0.6f }
+        DesktopAudioSpectrum.offer(tone, tone.size, channels = 1, rate = rate)
+
+        val bands = DesktopAudioSpectrum.analyzeSnapshot()
+        val loudest = bands.indices.maxBy { bands[it] }
+
+        val expected = bandOf(8_000.0, rate)
+        assertTrue(
+            "8 kHz should peak band $expected ± 3 but peaked $loudest: ${bands.joinToString()}",
+            kotlin.math.abs(loudest - expected) <= 3,
+        )
+        assertTrue("the peak band should be clearly lit, not noise", bands[loudest] > 0.3f)
     }
 
     @Test

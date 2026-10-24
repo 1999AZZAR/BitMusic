@@ -4699,11 +4699,13 @@ private fun SpectrumPane(tint: Color, modifier: Modifier = Modifier) {
         val step = size.width / count
         val barWidth = step * 0.62f
         val margin = (step - barWidth) / 2f
-        val floor = 2.dp.toPx()
         val max = size.height * 0.86f
         for (index in 0 until count) {
             val level = bands[index]
-            val height = floor + (max - floor) * level
+            // Level-driven, no floor: a pause empties the field on the analyzer's release curve
+            // and the capsule goes back to plain glass until music returns.
+            if (level <= 0.005f) continue
+            val height = max * level
             drawRoundRect(
                 color = tint.copy(alpha = 0.10f + 0.42f * level),
                 topLeft = Offset(index * step + margin, size.height - height),
