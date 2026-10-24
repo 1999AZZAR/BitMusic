@@ -95,6 +95,12 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("main") {
+            assets.srcDir("../native/models")
+        }
+    }
+
 
     externalNativeBuild {
         cmake {

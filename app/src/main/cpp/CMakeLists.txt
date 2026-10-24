@@ -26,9 +26,9 @@ add_library(bitchord_analysis SHARED
     ${BITCHORD_NATIVE_DIR}/analyzer/resampler.cpp
     ${BITCHORD_NATIVE_DIR}/analyzer/mel_spectrogram.cpp
     ${BITCHORD_NATIVE_DIR}/analyzer/vocal_spectrogram.cpp
-    jni/analysis_jni.cpp
-    jni/mel_jni.cpp
-    jni/vocal_jni.cpp
+    ${BITCHORD_NATIVE_DIR}/analyzer/jni/analysis_jni.cpp
+    ${BITCHORD_NATIVE_DIR}/analyzer/jni/mel_jni.cpp
+    ${BITCHORD_NATIVE_DIR}/analyzer/jni/vocal_jni.cpp
 )
 
 target_include_directories(bitchord_analysis PRIVATE
