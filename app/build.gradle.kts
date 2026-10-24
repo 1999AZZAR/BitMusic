@@ -95,11 +95,6 @@ android {
         }
     }
 
-    // The phone <-> watch protocol, one file shared with the watch app so the
-    // two cannot drift. See wearos/protocol/.../WearProtocol.kt.
-    sourceSets {
-        getByName("main") { java.srcDir("../wearos/protocol") }
-    }
 
     externalNativeBuild {
         cmake {
