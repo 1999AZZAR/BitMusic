@@ -39,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -81,6 +82,8 @@ internal fun DesktopNowPlaying(
     repeatMode: DesktopRepeatMode,
     /** An Automix blend is running: the scrubber carries its travelling sheen. */
     mixing: Boolean,
+    /** Whether this track has lyrics at all; a track without them keeps the half folded. */
+    lyricsAvailable: Boolean,
     hasPrevious: Boolean,
     hasNext: Boolean,
     liked: Boolean,
@@ -101,8 +104,13 @@ internal fun DesktopNowPlaying(
     // The right half shows one of the two — the original player's split, with this player's
     // controls. Either button picks its panel; the button of whichever is showing puts the half
     // away again, for the times the record deserves the whole window.
+    // It also folds on its own: a track with no words does not keep an empty lyric sheet up —
+    // the half simply closes, and the lyrics button sits the verse out with it.
     var sidePanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
-    var panelShown by remember { mutableStateOf(true) }
+    var panelShown by remember { mutableStateOf(lyricsAvailable) }
+    LaunchedEffect(lyricsAvailable) {
+        if (!lyricsAvailable) panelShown = false
+    }
     val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
     val panelFraction by animateFloatAsState(
         targetValue = if (panelShown) 1f else 0f,
@@ -315,12 +323,17 @@ internal fun DesktopNowPlaying(
                                 panelShown = true
                             }
                         },
+                        enabled = lyricsAvailable,
                         size = 36.dp,
                     ) {
                         Icon(
                             BitChordIcons.LyricsQuote,
                             "Lyrics",
-                            tint = if (panelShown && sidePanel == DesktopSidePanel.LYRICS) tint else DesktopSecondary,
+                            tint = if (panelShown && sidePanel == DesktopSidePanel.LYRICS) {
+                                tint
+                            } else {
+                                DesktopSecondary.copy(alpha = if (lyricsAvailable) 1f else 0.4f)
+                            },
                             modifier = Modifier.size(19.dp),
                         )
                     }
@@ -356,13 +369,17 @@ internal fun DesktopNowPlaying(
                         .graphicsLayer { alpha = panelFraction }
                         .padding(top = 12.dp, bottom = 12.dp, end = 20.dp),
                 ) {
-                    if (sidePanel == DesktopSidePanel.QUEUE) {
-                        Box(Modifier.fillMaxSize().desktopChromeGlass())
-                    }
-                    Box(Modifier.fillMaxSize()) {
-                        when (sidePanel) {
-                            DesktopSidePanel.LYRICS -> lyricsPanel()
-                            DesktopSidePanel.QUEUE -> queuePanel()
+                    when (sidePanel) {
+                        // The lyric sheet stands on the window itself, as the original's does.
+                        DesktopSidePanel.LYRICS -> Box(Modifier.fillMaxSize()) { lyricsPanel() }
+                        // The queue floats: a rounded card of the bar's own frosted glass over
+                        // the mesh, not a square pane bolted to the window's edge.
+                        DesktopSidePanel.QUEUE -> Box(
+                            Modifier
+                                .fillMaxSize()
+                                .desktopBarGlass(RoundedCornerShape(18.dp)),
+                        ) {
+                            queuePanel()
                         }
                     }
                 }

@@ -3478,6 +3478,7 @@ fun BitChordDesktopApp() {
                             shuffle = shuffle,
                             repeatMode = repeatMode,
                             mixing = playback.mixing,
+                            lyricsAvailable = !sharedLyricsUnavailable,
                             hasPrevious = liveQueue.hasPrevious,
                             hasNext = liveQueue.hasNext,
                             liked = current.videoId in likedIds,
