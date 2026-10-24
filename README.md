@@ -7,7 +7,7 @@
 
 # BitMusic
 
-### Aesthetic YouTube Music Client for Big Screens (Linux Desktop & Android TV)
+### Aesthetic YouTube Music Client for Big Screens (Linux, Android TV, Windows, macOS)
 
 <br/>
 
