@@ -1,0 +1,36 @@
+---
+description: Git branching model and PR promotion rules for BitMusic
+alwaysApply: true
+---
+
+# Git Branching & Contribution Workflow
+
+## Branch Lifecycle
+
+- `master`: Production release-ready code. Protected. Tags (`v*.*.*`) are cut from `master`. Never commit directly.
+- `staging`: Integration branch for active ongoing development.
+- `feature/<name>`: New feature branches created off `staging`.
+- `fix/<name>`: Bug fix branches created off `staging`.
+
+## Workflow Procedure
+
+1. **Start Work**:
+   ```bash
+   git checkout staging
+   git pull origin staging
+   git checkout -b feature/<feature-name>
+   ```
+
+2. **Test Locally**:
+   ```bash
+   ./gradlew :desktopApp:test
+   ```
+
+3. **Open Pull Request**:
+   - Base branch: `staging`
+   - Compare branch: `feature/<feature-name>`
+   - Ensure all CI checks pass on GitHub Actions.
+
+4. **Production Release**:
+   - Merge `staging` into `master` via pull request once stable.
+   - Tag the release version on `master`.

@@ -1,0 +1,22 @@
+---
+description: Android TV Leanback UI and 10-foot experience rules
+globs: tv/**
+alwaysApply: false
+---
+
+# Android TV Guidelines
+
+## Scope & Constraints
+- BitMusic TV target is built strictly for Android TV / Google TV large screen displays (minSdk 26, targetSdk 36, compileSdk 36).
+- No touchscreen assumptions: all navigation must be 100% operable via D-pad remote controls.
+
+## Build Commands
+- Build Dev Debug APK:
+  ```bash
+  ./gradlew :tv:assembleDevDebug
+  ```
+
+## UI/UX Standards
+- Clear visual focus indicators on all focusable elements.
+- Support DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_CENTER / ENTER, and BACK key events.
+- Authentication should offer QR code login to avoid tedious on-screen keyboard text entry.

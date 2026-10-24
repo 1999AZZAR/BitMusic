@@ -45,6 +45,9 @@ keystore.properties
 AGENTS.md
 /output/
 .claude/
+!.cursor/
+!.cursor/rules/
+!.cursor/rules/**
 
 # Built packages — release APKs/bundles are handed out, never committed
 *.apk

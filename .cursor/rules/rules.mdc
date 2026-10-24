@@ -1,0 +1,53 @@
+---
+description: BitMusic core project rules, architecture, big-screen platform scope, git workflow, and build standards
+alwaysApply: true
+---
+
+# BitMusic Core Development Rules
+
+## 1. Target Platforms & Big Screen Focus
+BitMusic is strictly crafted for **Big Screen** devices:
+- **Linux Desktop** (PulseAudio & PipeWire low-latency native audio capture)
+- **Android TV** (Leanback UI, 10-foot remote D-pad navigation, refresh rate switching)
+- **Windows** (WASAPI loopback, Compose Multiplatform desktop)
+- **macOS** (CoreAudio, Compose Multiplatform desktop)
+
+> ⚠️ **No Mobile Devices**: Small screen / mobile phone support has been intentionally decoupled and removed. Do not introduce phone-only layouts, portrait locks, or mobile-specific workflows.
+
+## 2. Git Branch & Promotion Strategy
+All development must follow this strict branch lifecycle:
+
+| Branch | Role | Rules |
+|---|---|---|
+| `master` | **Final Production** | Protected release branch. Tags (`v*.*.*`) are cut here. Direct commits forbidden; changes enter strictly via promotion PRs from `staging`. |
+| `staging` | **Ongoing Development** | Integration branch where new features and bug fixes land and undergo validation before release. |
+| `feature/<name>` | **New Features** | Branched from `staging`. Promoted via Pull Request (`PR -> review -> CI check -> merge`) into `staging`. |
+| `fix/<name>` | **Bug Fixes** | Branched from `staging`. Promoted via Pull Request into `staging`. |
+
+## 3. Project Architecture & Modules
+- `:desktopApp` - Desktop JVM application entry point, native visualizer loader, packaging.
+- `:desktopUi` - Large viewport Compose Multiplatform UI, synchronized lyrics, frosted-glass panels, media controls.
+- `:tv` - Android TV Leanback interface, D-pad navigation, Leanback cards, QR login.
+- `:shared` - Core business logic, repositories, playback models, YouTube Music & Spotify connectors.
+- `native/` - C/C++ audio analysis engine (`cavacore`), PulseAudio loopback capture, CMake build scripts.
+- `backend/` - Optional Go 1.22+ Listen Together party synchronization server.
+
+## 4. Audio Engine & Native Visualizer
+- **Linux**: Low-latency capture via PulseAudio / PipeWire monitor sources directly into `cavacore`.
+- **Windows / macOS**: WASAPI loopback / CoreAudio capture with fallback to software FFT.
+- Native build command: `./gradlew :desktopApp:buildAnalysisNative` (or via CMake in `native/`).
+- Audio unit tests: `./gradlew :desktopApp:test --tests "com.music.bitchord.desktop.DesktopAudioSpectrumTest"`.
+- Always ensure native library fallbacks degrade gracefully if native audio monitor sources are unavailable.
+
+## 5. Build, Test & CI Standards
+- **Java Runtime**: JDK 21 (Eclipse Temurin 21 recommended for desktop development).
+- **Desktop Run**: `./gradlew :desktopApp:run`
+- **Desktop Tests**: `./gradlew :desktopApp:test`
+- **Android TV Build**: `./gradlew :tv:assembleDevDebug` (requires Android SDK compileSdk 36, minSdk 26).
+- **CI Workflows**: GitHub Actions in `.github/workflows/check.yml` run automated tests and build checks on `master` and `staging`.
+- Validate all changes with `./gradlew :desktopApp:test` before submitting PRs.
+
+## 6. Code Quality, Dependencies & Licensing
+- **License**: GNU General Public License v3.0 (GPLv3). All code and dependencies must be strictly GPLv3 compatible.
+- **Credits & Origin**: BitMusic is an independent decoupled fork based on [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh & contributors. Retain upstream licensing credits in documentation.
+- **Minimal Dependencies**: Maintain a bloat-free codebase. Avoid unnecessary external libraries; evaluate all additions for binary size and multi-platform compatibility.

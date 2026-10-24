@@ -1,0 +1,26 @@
+---
+description: Native audio analysis and visualizer architecture rules for desktop platforms
+globs: desktopApp/**,desktopUi/**,native/**
+alwaysApply: false
+---
+
+# Desktop Audio Analysis & Spectrum Rules
+
+## Platform Implementations
+- **Linux**: Low-latency monitor capture via PulseAudio / PipeWire directly feeding `cavacore`.
+- **Windows**: WASAPI loopback capture.
+- **macOS**: CoreAudio capture.
+
+## Build & Testing
+- Native build task:
+  ```bash
+  ./gradlew :desktopApp:buildAnalysisNative
+  ```
+- Spectrum unit tests:
+  ```bash
+  ./gradlew :desktopApp:test --tests "com.music.bitchord.desktop.DesktopAudioSpectrumTest"
+  ```
+
+## Quality Invariants
+- Audio processing must happen on dedicated background threads to avoid dropping UI frames.
+- If native capture devices or monitor sources are unavailable, fallback to software FFT gracefully without crashing.
