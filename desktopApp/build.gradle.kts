@@ -491,6 +491,13 @@ val windowsPortable by tasks.registering(Zip::class) {
 
 val composeMainClass = "com.music.bitchord.desktop.MainKt"
 
+// The generated Res class's package is derived from the project name unless pinned, so the
+// rootProject rename flipped it from bitchord.* to bitmusic.* under every existing import and
+// broke the compile. Pinned here, as desktopUi already pins its own.
+compose.resources {
+    packageOfResClass = "bitchord.desktopapp.generated.resources"
+}
+
 compose.desktop {
     application {
         javaHome = javaToolchains.launcherFor(java.toolchain).map {
