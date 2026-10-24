@@ -3532,15 +3532,13 @@ fun BitChordDesktopApp() {
                                 )
                             },
                             queuePanel = {
-                                QueueSidePanel(
+                                PlayerQueuePane(
                                     queue = liveQueue.songs,
-                                    queueIndex = liveQueue.index,
-                                    autoplayEnabled = DesktopAutoplay.enabled(partyState, autoplay),
+                                    index = liveQueue.index,
                                     onJumpTo = ::playQueueIndex,
                                     onRemove = ::removeFromQueue,
-                                    onMove = ::moveInQueue,
                                     onClear = ::clearQueue,
-                                    modifier = Modifier.fillMaxSize(),
+                                    tint = desktopPlayingTint(),
                                 )
                             },
                         )

@@ -2,9 +2,16 @@ package com.music.bitchord.desktop
 
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.icons.BitChordIcons
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -31,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,9 +53,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * The desktop's own full player. The phone's screen, shared, played the role until now; this is
@@ -85,10 +98,21 @@ internal fun DesktopNowPlaying(
     lyricsPanel: @Composable () -> Unit,
     queuePanel: @Composable () -> Unit,
 ) {
-    // The right half shows one of the two, always — the original player's split, with this
-    // player's controls: lyrics by default, the queue a tap away, no closed state to get back
-    // out of.
+    // The right half shows one of the two — the original player's split, with this player's
+    // controls. Either button picks its panel; the button of whichever is showing puts the half
+    // away again, for the times the record deserves the whole window.
     var sidePanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
+    var panelShown by remember { mutableStateOf(true) }
+    val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
+    val panelFraction by animateFloatAsState(
+        targetValue = if (panelShown) 1f else 0f,
+        animationSpec = if (reduceMotion) {
+            snap()
+        } else {
+            spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy)
+        },
+        label = "playerPanelFraction",
+    )
     val tint = desktopPlayingTint()
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // The knob follows the drag, not the playhead: a scrub that lags behind the hand feels broken.
@@ -133,14 +157,14 @@ internal fun DesktopNowPlaying(
                     DesktopArtwork(
                         song.thumbnailUrl,
                         Modifier
-                            .size(360.dp)
-                            .shadow(28.dp, RoundedCornerShape(20.dp))
+                            .size(324.dp)
+                            .shadow(24.dp, RoundedCornerShape(20.dp))
                             .clip(RoundedCornerShape(20.dp))
                             .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
                         px = 720,
                     )
                 }
-                Spacer(Modifier.height(30.dp))
+                Spacer(Modifier.height(24.dp))
                 Text(
                     song.title,
                     style = MaterialTheme.typography.headlineLarge,
@@ -174,14 +198,14 @@ internal fun DesktopNowPlaying(
                         modifier = Modifier.width(500.dp),
                     )
                 }
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(18.dp))
                 SpectrumPane(
                     tint = tint,
-                    modifier = Modifier.width(440.dp).height(60.dp),
+                    modifier = Modifier.width(420.dp).height(54.dp),
                 )
                 Spacer(Modifier.height(14.dp))
                 Row(
-                    Modifier.width(440.dp),
+                    Modifier.width(420.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(timeLabel(if (dragging) dragValue else fraction, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
@@ -199,7 +223,7 @@ internal fun DesktopNowPlaying(
                     )
                     Text(timeLabel(1f, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
                 }
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -212,17 +236,17 @@ internal fun DesktopNowPlaying(
                             modifier = Modifier.size(20.dp),
                         )
                     }
-                    DesktopToolbarButton(onClick = onPrevious, enabled = hasPrevious, size = 44.dp) {
+                    DesktopToolbarButton(onClick = onPrevious, enabled = hasPrevious, size = 40.dp) {
                         Icon(
                             Icons.Rounded.FastRewind,
                             "Previous",
                             tint = if (hasPrevious) Color.White else DesktopSecondary.copy(alpha = 0.4f),
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(27.dp),
                         )
                     }
                     Box(
                         Modifier
-                            .size(62.dp)
+                            .size(56.dp)
                             .clip(CircleShape)
                             .background(tint)
                             .clickable(onClick = onPlayPause),
@@ -235,11 +259,11 @@ internal fun DesktopNowPlaying(
                                 if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 if (isPlaying) "Pause" else "Play",
                                 tint = Color.Black,
-                                modifier = Modifier.size(34.dp),
+                                modifier = Modifier.size(30.dp),
                             )
                         }
                     }
-                    DesktopToolbarButton(onClick = onNext, enabled = hasNext, size = 44.dp) {
+                    DesktopToolbarButton(onClick = onNext, enabled = hasNext, size = 40.dp) {
                         Icon(
                             Icons.Rounded.FastForward,
                             "Next",
@@ -264,7 +288,7 @@ internal fun DesktopNowPlaying(
                         }
                     }
                 }
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(14.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -283,45 +307,63 @@ internal fun DesktopNowPlaying(
                         Icon(Icons.Rounded.MoreHoriz, "More options", tint = DesktopSecondary, modifier = Modifier.size(19.dp))
                     }
                     DesktopToolbarButton(
-                        onClick = { sidePanel = DesktopSidePanel.LYRICS },
+                        onClick = {
+                            if (panelShown && sidePanel == DesktopSidePanel.LYRICS) {
+                                panelShown = false
+                            } else {
+                                sidePanel = DesktopSidePanel.LYRICS
+                                panelShown = true
+                            }
+                        },
                         size = 36.dp,
                     ) {
                         Icon(
                             BitChordIcons.LyricsQuote,
                             "Lyrics",
-                            tint = if (sidePanel == DesktopSidePanel.LYRICS) tint else DesktopSecondary,
+                            tint = if (panelShown && sidePanel == DesktopSidePanel.LYRICS) tint else DesktopSecondary,
                             modifier = Modifier.size(19.dp),
                         )
                     }
                     DesktopToolbarButton(
-                        onClick = { sidePanel = DesktopSidePanel.QUEUE },
+                        onClick = {
+                            if (panelShown && sidePanel == DesktopSidePanel.QUEUE) {
+                                panelShown = false
+                            } else {
+                                sidePanel = DesktopSidePanel.QUEUE
+                                panelShown = true
+                            }
+                        },
                         size = 36.dp,
                     ) {
                         Icon(
                             BitChordIcons.Queue,
                             "Queue",
-                            tint = if (sidePanel == DesktopSidePanel.QUEUE) tint else DesktopSecondary,
+                            tint = if (panelShown && sidePanel == DesktopSidePanel.QUEUE) tint else DesktopSecondary,
                             modifier = Modifier.size(19.dp),
                         )
                     }
                 }
             }
             // The other half of the window, as the original player split it: the lyric sheet
-            // standing on the window itself, or the queue on the sidebar's glass. No rule
-            // between the halves — the two treatments and the mesh say it for themselves.
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(top = 12.dp, bottom = 12.dp, end = 20.dp),
-            ) {
-                if (sidePanel == DesktopSidePanel.QUEUE) {
-                    Box(Modifier.fillMaxSize().desktopChromeGlass())
-                }
-                Box(Modifier.fillMaxSize()) {
-                    when (sidePanel) {
-                        DesktopSidePanel.LYRICS -> lyricsPanel()
-                        DesktopSidePanel.QUEUE -> queuePanel()
+            // standing on the window itself, or the queue on the sidebar's glass. Its share of
+            // the window animates, so putting it away hands the space back to the sleeve in
+            // one motion rather than a jump.
+            if (panelFraction > 0.01f) {
+                Box(
+                    Modifier
+                        .weight(panelFraction)
+                        .fillMaxHeight()
+                        .graphicsLayer { alpha = panelFraction }
+                        .padding(top = 12.dp, bottom = 12.dp, end = 20.dp),
+                ) {
+                    if (sidePanel == DesktopSidePanel.QUEUE) {
+                        Box(Modifier.fillMaxSize().desktopChromeGlass())
+                    }
+                    Box(Modifier.fillMaxSize()) {
+                        when (sidePanel) {
+                            DesktopSidePanel.LYRICS -> lyricsPanel()
+                            DesktopSidePanel.QUEUE -> queuePanel()
+                        }
                     }
                 }
             }
@@ -339,4 +381,173 @@ internal fun DesktopNowPlaying(
 private fun timeLabel(fraction: Float, durationMs: Long): String {
     val seconds = ((fraction * durationMs) / 1000).toLong()
     return "%d:%02d".format(seconds / 60, seconds % 60)
+}
+
+/**
+ * The queue, drawn for a window rather than a phone column: artwork big enough to read,
+ * a head that names the queue and counts what is left, the playing row in a pill of the
+ * record's tint with the equalizer glyph beside it, and a remove that appears where the
+ * pointer is.
+ */
+@Composable
+internal fun PlayerQueuePane(
+    queue: List<Song>,
+    index: Int,
+    onJumpTo: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
+    onClear: () -> Unit,
+    tint: Color,
+) {
+    val upcoming = (queue.size - index - 1).coerceAtLeast(0)
+    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                DesktopStrings["queue", "Queue"],
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "$upcoming next",
+                color = DesktopSecondary,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.weight(1f),
+            )
+            if (upcoming > 0) {
+                Text(
+                    DesktopStrings["clear", "Clear"],
+                    color = DesktopSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onClear)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(bottom = 12.dp),
+        ) {
+            val current = queue.getOrNull(index)
+            if (current != null) {
+                item(key = "now-playing") {
+                    QueueSectionLabel(DesktopStrings["now_playing", "Now playing"])
+                    PlayerQueueRow(current, tint, isCurrent = true, onClick = {}, onRemove = null)
+                }
+            }
+            if (upcoming > 0) {
+                item(key = "next-up-label") {
+                    QueueSectionLabel(DesktopStrings["next_up", "Next up"])
+                }
+                itemsIndexed(
+                    queue.drop(index + 1),
+                    key = { offset, song -> "${index + 1 + offset}-${song.videoId}" },
+                ) { offset, song ->
+                    PlayerQueueRow(
+                        song,
+                        tint,
+                        isCurrent = false,
+                        onClick = { onJumpTo(index + 1 + offset) },
+                        onRemove = { onRemove(index + 1 + offset) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueueSectionLabel(label: String) {
+    Text(
+        label,
+        color = DesktopSecondary,
+        style = MaterialTheme.typography.labelSmall,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 6.dp, top = 10.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
+private fun PlayerQueueRow(
+    song: Song,
+    tint: Color,
+    isCurrent: Boolean,
+    onClick: () -> Unit,
+    onRemove: (() -> Unit)?,
+) {
+    var hovered by remember { mutableStateOf(false) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                when {
+                    isCurrent -> tint.copy(alpha = 0.14f)
+                    hovered -> Color.White.copy(alpha = 0.05f)
+                    else -> Color.Transparent
+                },
+            )
+            .clickable(onClick = onClick)
+            .pointerInput(song.videoId) {
+                awaitPointerEventScope {
+                    while (true) {
+                        when (awaitPointerEvent().type) {
+                            androidx.compose.ui.input.pointer.PointerEventType.Enter -> hovered = true
+                            androidx.compose.ui.input.pointer.PointerEventType.Exit -> hovered = false
+                        }
+                    }
+                }
+            }
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DesktopArtwork(
+            song.thumbnailUrl,
+            Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)),
+            px = 96,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                song.title,
+                color = if (isCurrent) tint else Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                song.artist,
+                color = DesktopSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (isCurrent) {
+            Icon(
+                Icons.Rounded.GraphicEq,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(16.dp),
+            )
+        } else if (hovered && onRemove != null) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = DesktopStrings["remove_from_queue", "Remove"],
+                tint = DesktopSecondary,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onRemove)
+                    .padding(3.dp),
+            )
+        } else {
+            Spacer(Modifier.size(16.dp))
+        }
+    }
 }
