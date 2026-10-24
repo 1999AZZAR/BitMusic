@@ -16,8 +16,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.window.WindowPlacement
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import bitchord.desktopapp.generated.resources.Res
 import bitchord.desktopapp.generated.resources.logo
 import java.awt.Dimension
@@ -76,7 +80,42 @@ private fun desktopMain() = application {
     // Closing puts the window away rather than ending the process, while there is a tray icon to
     // bring it back from — see [DesktopWindowVisibility].
     val visible by DesktopWindowVisibility.visible.collectAsState()
-    val state = rememberWindowState(width = 1_220.dp, height = 780.dp)
+    // The window comes back where it was left: size and place survive restarts, debounced so a
+    // drag across the desk writes one value rather than two hundred. A remembered place that
+    // is off every current screen — the monitor it lived on is gone — starts fresh instead of
+    // opening in nowhere.
+    val remembered = remember { DesktopPersistence().string(KEY_WINDOW_GEOMETRY) }
+        ?.split('|')
+        ?.mapNotNull { it.toIntOrNull() }
+        ?.takeIf { it.size == 4 }
+    val screen = remember {
+        runCatching {
+            java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+        }.getOrNull()
+    }
+    val startAt = remembered?.takeIf { rect ->
+        screen == null || (
+            rect[2] >= screen.x - 16 && rect[3] >= screen.y - 16 &&
+                rect[2] < screen.x + screen.width && rect[3] < screen.y + screen.height
+            )
+    }
+    val state = rememberWindowState(
+        width = (startAt?.get(0) ?: 1_220).dp,
+        height = (startAt?.get(1) ?: 780).dp,
+        position = startAt?.let { WindowPosition(it[2].dp, it[3].dp) } ?: WindowPosition.PlatformDefault,
+    )
+    LaunchedEffect(state) {
+        snapshotFlow { Triple(state.placement, state.size, state.position) }.collectLatest {
+            delay(600)
+            if (state.placement == WindowPlacement.Floating) {
+                DesktopPersistence().saveString(
+                    KEY_WINDOW_GEOMETRY,
+                    "${state.size.width.value.toInt()}|${state.size.height.value.toInt()}" +
+                        "|${state.position.x.value.toInt()}|${state.position.y.value.toInt()}",
+                )
+            }
+        }
+    }
     LaunchedEffect(visible) {
         if (visible && state.isMinimized) {
             state.isMinimized = false
@@ -193,3 +232,6 @@ private fun desktopMain() = application {
 
 private const val MIN_WINDOW_WIDTH_DP = 900.0
 private const val MIN_WINDOW_HEIGHT_DP = 600.0
+
+/** Where the window's size and place are remembered between runs, as "w|h|x|y". */
+private const val KEY_WINDOW_GEOMETRY = "window_geometry"

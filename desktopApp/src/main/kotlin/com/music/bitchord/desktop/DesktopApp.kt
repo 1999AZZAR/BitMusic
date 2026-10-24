@@ -142,6 +142,9 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
@@ -156,6 +159,9 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.BrightnessLow
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -232,6 +238,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -484,8 +492,7 @@ internal fun desktopTypography(): Typography {
     )
 }
 
-private enum class DesktopDestination(val id: String, val label: String) {
-    LISTEN_NOW("listen-now", "Home"),
+internal enum class DesktopDestination(val id: String, val label: String) {    LISTEN_NOW("listen-now", "Home"),
     EXPLORE("explore", "Explore"),
     LIBRARY("library", "Library"),
     SEARCH("search", "Search"),
@@ -495,7 +502,10 @@ private enum class DesktopDestination(val id: String, val label: String) {
     SETTINGS("settings", "Settings"),
 }
 
-private enum class DesktopRepeatMode {
+/** Ctrl+1..8, in [DesktopDestination]'s own order. */
+private val DESTINATION_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight)
+
+internal enum class DesktopRepeatMode {
     OFF,
     ALL,
     ONE,
@@ -536,6 +546,8 @@ fun BitChordDesktopApp() {
     var searchCommitted by remember { mutableStateOf(false) }
     var searchScrollReset by remember { mutableStateOf(0) }
     var searchFocusRequested by remember { mutableStateOf(false) }
+    // The Ctrl+K palette, over everything.
+    var paletteOpen by remember { mutableStateOf(false) }
     var searchSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     // Playable rows for the half-typed query, shown under the text completions.
     var searchTypeahead by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
@@ -3164,6 +3176,21 @@ fun BitChordDesktopApp() {
                             DesktopWindowMode.toggle()
                             true
                         }
+                        // The desktop's own keys: Ctrl on Linux and Windows, Cmd on the Mac.
+                        (event.isCtrlPressed || event.isMetaPressed) && event.key == Key.K -> {
+                            paletteOpen = !paletteOpen
+                            true
+                        }
+                        (event.isCtrlPressed || event.isMetaPressed) && event.key == Key.L -> {
+                            selectDestination(DesktopDestination.SEARCH)
+                            searchFocusRequested = true
+                            true
+                        }
+                        (event.isCtrlPressed || event.isMetaPressed) && event.key in DESTINATION_KEYS -> {
+                            DesktopDestination.entries.getOrNull(DESTINATION_KEYS.indexOf(event.key))
+                                ?.let(::selectDestination)
+                            true
+                        }
                         event.key == Key.DirectionLeft && event.isAltPressed && !overlays.nowPlaying -> {
                             goBack()
                             true
@@ -3208,6 +3235,15 @@ fun BitChordDesktopApp() {
                             else -> false
                         }
                         else -> false
+                    }
+                }.onKeyEvent { event ->
+                    // Space, once nothing else claimed it: a text field eats its own spaces and
+                    // a focused button its activation, so what bubbles this far is the listener's.
+                    if (event.type == KeyEventType.KeyUp && event.key == Key.Spacebar && selectedSong != null) {
+                        togglePlayPauseFromUser()
+                        true
+                    } else {
+                        false
                     }
                 },
                 topBar = { compact ->
@@ -3327,6 +3363,87 @@ fun BitChordDesktopApp() {
                     }
                 },
                 overlay = {
+                    // Rebuilt as it recomposes: the labels read the live state they describe.
+                    val dynamicColourOn by DesktopAppearanceSettings.dynamicColor.collectAsState()
+                    val visualizerOn by DesktopAppearanceSettings.visualizer.collectAsState()
+                    val ambientOn by DesktopAppearanceSettings.ambientBackdrop.collectAsState()
+                    val paletteCommands = buildList {
+                        val destinationIcons = mapOf(
+                            DesktopDestination.LISTEN_NOW to BitChordIcons.Home,
+                            DesktopDestination.EXPLORE to BitChordIcons.Explore,
+                            DesktopDestination.LIBRARY to BitChordIcons.Library,
+                            DesktopDestination.SEARCH to BitChordIcons.Search,
+                            DesktopDestination.HISTORY to Icons.Rounded.History,
+                            DesktopDestination.DOWNLOADS to Icons.Rounded.Download,
+                            DesktopDestination.LOCAL_MUSIC to Icons.Rounded.LibraryMusic,
+                            DesktopDestination.SETTINGS to Icons.Rounded.Settings,
+                        )
+                        DesktopDestination.entries.forEach { dest ->
+                            add(DesktopPaletteCommand(dest.label, destinationIcons[dest]) { selectDestination(dest) })
+                        }
+                        if (selectedSong != null) {
+                            add(
+                                DesktopPaletteCommand(
+                                    if (playback.isPlaying) "Pause" else "Play",
+                                    if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    ::togglePlayPauseFromUser,
+                                ),
+                            )
+                            add(DesktopPaletteCommand("Next track", Icons.Rounded.FastForward, ::playNext))
+                            add(DesktopPaletteCommand("Previous track", Icons.Rounded.FastRewind, ::playPrevious))
+                            add(
+                                DesktopPaletteCommand(
+                                    if (shuffle) "Turn shuffle off" else "Turn shuffle on",
+                                    BitChordIcons.Shuffle,
+                                ) { setShuffle(!shuffle) },
+                            )
+                            add(
+                                DesktopPaletteCommand("Repeat: ${repeatMode.label().lowercase()}", BitChordIcons.Repeat) {
+                                    val next = repeatMode.next()
+                                    repeatMode = next
+                                    persistence.saveString("repeat_mode", next.name)
+                                },
+                            )
+                            add(
+                                DesktopPaletteCommand("Open the full player", Icons.Rounded.ExpandLess) {
+                                    overlays.nowPlaying = true
+                                },
+                            )
+                            add(
+                                DesktopPaletteCommand("Lyrics panel", BitChordIcons.LyricsQuote) {
+                                    overlays.toggleSidePanel(DesktopSidePanel.LYRICS)
+                                },
+                            )
+                            add(
+                                DesktopPaletteCommand("Queue panel", BitChordIcons.Queue) {
+                                    overlays.toggleSidePanel(DesktopSidePanel.QUEUE)
+                                },
+                            )
+                        }
+                        add(
+                            DesktopPaletteCommand(
+                                if (dynamicColourOn) "Dynamic colour: off" else "Dynamic colour: on",
+                                Icons.Rounded.Palette,
+                            ) { DesktopAppearanceSettings.setDynamicColor(!dynamicColourOn) },
+                        )
+                        add(
+                            DesktopPaletteCommand(
+                                if (visualizerOn) "Audio visualizer: off" else "Audio visualizer: on",
+                                Icons.Rounded.Equalizer,
+                            ) { DesktopAppearanceSettings.setVisualizer(!visualizerOn) },
+                        )
+                        add(
+                            DesktopPaletteCommand(
+                                if (ambientOn) "Ambient artwork glow: off" else "Ambient artwork glow: on",
+                                Icons.Rounded.BrightnessLow,
+                            ) { DesktopAppearanceSettings.setAmbientBackdrop(!ambientOn) },
+                        )
+                    }
+                    DesktopCommandPalette(
+                        open = paletteOpen,
+                        onClose = { paletteOpen = false },
+                        commands = paletteCommands,
+                    )
                     DesktopPlayerSheet(
                         visible = overlays.nowPlaying && selectedSong != null,
                         onDismiss = {
@@ -3349,45 +3466,26 @@ fun BitChordDesktopApp() {
                                 )
                             }
                             ?: current
-                        NowPlayingScreen(
+                        // The desktop's own player: the record on the mesh of itself, the
+                        // visualizer in its tint, and the same lyrics and queue panels the main
+                        // window uses — beside it, as slots, so this stays out of their plumbing.
+                        DesktopNowPlaying(
                             song = playerSong,
                             isPlaying = playback.isPlaying,
                             isLoading = playback.isLoading,
-                            position = playerPosition,
+                            positionMs = playback.positionMs,
                             durationMs = playback.durationMs,
-                            audioVersionSwitching = false,
-                            qualityUpgraded = false,
-                            queue = liveQueue.songs,
-                            queueIndex = liveQueue.index,
+                            shuffle = shuffle,
+                            repeatMode = repeatMode,
                             hasPrevious = liveQueue.hasPrevious,
                             hasNext = liveQueue.hasNext,
-                            repeatMode = when (repeatMode) {
-                                DesktopRepeatMode.OFF -> RepeatModes.OFF
-                                DesktopRepeatMode.ONE -> RepeatModes.ONE
-                                DesktopRepeatMode.ALL -> RepeatModes.ALL
-                            },
-                            shuffleEnabled = shuffle,
-                            autoplayEnabled = DesktopAutoplay.enabled(partyState, autoplay),
-                            signedIn = youtubeSignedIn,
-                            accountName = activeAccount?.profiles?.firstOrNull { it.profileId == activeProfileId }?.name?.takeIf(String::isNotBlank)
-                                ?: activeAccount?.name?.takeIf(String::isNotBlank),
-                            likeStatus = when (current.videoId) {
-                                in likedIds -> LikeStatus.LIKE
-                                in dislikedIds -> LikeStatus.DISLIKE
-                                else -> LikeStatus.INDIFFERENT
-                            },
+                            liked = current.videoId in likedIds,
+                            canRate = youtubeSignedIn && current.localUri == null,
                             onToggleLike = { toggleLike(current) },
                             onPlayPause = ::togglePlayPauseFromUser,
                             onNext = ::playNext,
                             onPrevious = ::playPrevious,
-                            onBlockedControl = {
-                                DesktopPlayerHost.showMessage("Only the party host can change playback")
-                            },
                             onSeek = ::seekPlayer,
-                            onSeekFraction = { fraction ->
-                                val duration = playbackEngine.state.value.durationMs
-                                if (duration > 0) seekPlayer((fraction * duration).toLong())
-                            },
                             onToggleShuffle = { setShuffle(!shuffle) },
                             // The phone's order: off, all, one.
                             onCycleRepeat = {
@@ -3398,61 +3496,48 @@ fun BitChordDesktopApp() {
                                 }
                                 persistence.saveString("repeat_mode", repeatMode.name)
                             },
-                            onToggleAutoplay = {
-                                setAutoplay(!DesktopAutoplay.enabled(DesktopListenTogether.state.value, autoplay))
-                            },
-                            onJumpTo = ::playQueueIndex,
-                            onRemoveFromQueue = ::removeFromQueue,
-                            onMoveInQueue = ::moveInQueue,
-                            onClearQueue = ::clearQueue,
-                            onOpenMenu = { playerMenuOpen = true },
-                            onOpenAlbum = { id ->
-                                overlays.nowPlaying = false
-                                openAlbum(id)
-                            },
-                            // The lead credit carries the track's own channel
-                            // id and opens straight away; anyone else on the
-                            // line has no id, so the page is found from the
-                            // name — and only when the answer is that name
-                            // exactly, so a fragment like "2115" opens nothing
-                            // rather than White 2115.
-                            onOpenArtist = { id, name ->
-                                overlays.nowPlaying = false
+                            onOpenMenu = { openMenu(current) },
+                            onOpenArtist = {
+                                val id = playerSong.artistId
                                 if (id != null) {
-                                    openArtist(id, name)
+                                    openArtist(id, playerSong.artist)
                                 } else {
                                     scope.launch {
-                                        YtMusicRepository.findArtistPageId(name).getOrNull()
-                                            ?.let { found -> openArtist(found, name) }
+                                        YtMusicRepository.findArtistPageId(playerSong.artist).getOrNull()
+                                            ?.let { found -> openArtist(found, playerSong.artist) }
                                     }
                                 }
                             },
-                            onOpenPlaybackSource = {
-                                val id = playerSong.playbackSourceId
+                            onClose = {
+                                DesktopWindowMode.exit()
                                 overlays.nowPlaying = false
-                                if (playerSong.playbackSourceType == PlaybackSourceType.BROWSE && id != null) {
-                                    openAlbum(id)
-                                }
                             },
-                            onListenTogether = {
-                                overlays.nowPlaying = false
-                                overlays.listenTogether = true
+                            lyricsPanel = {
+                                LyricsSidePanel(
+                                    song = playerSong,
+                                    isPlaying = playback.isPlaying,
+                                    position = playerPosition,
+                                    lyrics = sharedLyrics,
+                                    lyricsSource = sharedLyricsSource,
+                                    lyricsProviderStates = providerStates,
+                                    onSelectLyricsProvider = { source -> lyricsOnly = source.label },
+                                    lyricsUnavailable = sharedLyricsUnavailable,
+                                    onSeek = ::seekPlayer,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
                             },
-                            lyrics = sharedLyrics,
-                            lyricsSource = sharedLyricsSource,
-                            lyricsProviderStates = providerStates,
-                            onSelectLyricsProvider = { source -> lyricsOnly = source.label },
-                            lyricsUnavailable = sharedLyricsUnavailable,
-                            lyricsOffsetOpen = false,
-                            onDismissLyricsOffset = {},
-                            windowWidth = windowWidth,
-                            windowHeight = windowHeight,
-                            playerOverflowOpen = playerOverflowOpen,
-                            playerQueueToggle = playerQueueToggle,
-                            playerQueueShowing = playerQueueShowing,
-                            playerMenuAnchor = playerMenuAnchor,
-                            playerTranslateToggle = playerTranslateToggle,
-                            playerShowingTranslation = playerShowingTranslation,
+                            queuePanel = {
+                                QueueSidePanel(
+                                    queue = liveQueue.songs,
+                                    queueIndex = liveQueue.index,
+                                    autoplayEnabled = DesktopAutoplay.enabled(partyState, autoplay),
+                                    onJumpTo = ::playQueueIndex,
+                                    onRemove = ::removeFromQueue,
+                                    onMove = ::moveInQueue,
+                                    onClear = ::clearQueue,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            },
                         )
                         // The sheet's own origin in the window, so the menu below can be
                         // placed on the "…" button the player reports in window terms.
@@ -4701,10 +4786,11 @@ internal fun DesktopToolbarButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     size: Dp = 36.dp,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Box(
-        Modifier
+        modifier
             .size(size)
             .clip(CircleShape)
             .desktopHoverWash()
@@ -4725,7 +4811,7 @@ internal fun DesktopToolbarButton(
  * decays the bars on the analyzer's own release curve — no extra state to keep honest here.
  */
 @Composable
-private fun SpectrumPane(tint: Color, modifier: Modifier = Modifier) {
+internal fun SpectrumPane(tint: Color, modifier: Modifier = Modifier) {
     val enabled by DesktopAppearanceSettings.visualizer.collectAsState()
     if (!enabled) return
     val bands by DesktopAudioSpectrum.bands.collectAsState()
@@ -4841,7 +4927,9 @@ private fun DesktopSidebar(
                 }
             }
             Spacer(Modifier.height(if (collapsed) 8.dp else 12.dp))
-            if (!collapsed) {
+            if (!collapsed && destination != DesktopDestination.SEARCH) {
+                // The Search page carries its own field; this box is the shortcut from every
+                // other page, and two live inputs on one screen is one too many.
                 DesktopSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
@@ -5390,6 +5478,8 @@ private fun DesktopFrame(
                         }
                     }
                     overlay()
+                    // Above everything, including whatever the overlay itself put up.
+                    DesktopToastHost()
                 }
             }
         }
@@ -6543,6 +6633,16 @@ private fun DesktopSettingsScreen(
                             ],
                             visualizer,
                             DesktopAppearanceSettings::setVisualizer,
+                        )
+                        val loudness by DesktopAppearanceSettings.loudnessNormalization.collectAsState()
+                        SettingsToggle(
+                            DesktopStrings["d_loudness", "Loudness normalization"],
+                            DesktopStrings[
+                                "d_loudness_subtitle",
+                                "Level the volume between tracks, measured from each track's opening",
+                            ],
+                            loudness,
+                            DesktopAppearanceSettings::setLoudnessNormalization,
                         )
                     }
                     SettingsToggle(

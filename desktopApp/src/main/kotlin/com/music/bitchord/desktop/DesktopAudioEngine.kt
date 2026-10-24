@@ -863,6 +863,8 @@ class DesktopPlaybackEngine(
                 skippedUs = skippedFrames.coerceAtLeast(0L) * 1_000_000.0 / rate * deck,
             )
         }
+        updateLoudness(track, samples, count)
+        sink.gain = volume * normalizationGain
         sink.write(samples, count)
         // The visualizer's tap: the finished mix, exactly as written to the speakers.
         DesktopAudioSpectrum.offer(samples, count, sink.format.channels, sink.format.sampleRate)
@@ -874,6 +876,68 @@ class DesktopPlaybackEngine(
     /** The beatmatch stretch [track] is actually rendered at — [DesktopTempoBuffer]'s clamp included. */
     private fun deckRate(track: Track): Double =
         if (track.tempo != null && !track.tempoDrained) track.tempoRate.coerceIn(1.0, 1.1) else 1.0
+
+    // ---- loudness normalization -----------------------------------------
+    // Apple's Sound Check, measured rather than tagged: the first seconds of a track set its
+    // RMS loudness, that track's plays carry the matching gain ever after, and the gain moves
+    // on a ramp so a track that starts loud is eased down rather than ducked. Everything here
+    // belongs to the audio thread.
+
+    /** RMS loudness in dB by track, from the measurements of this session. */
+    private val loudnessByTrack = HashMap<String, Double>()
+
+    /** The track being measured right now; null when the playing one is already known. */
+    private var measuringId: String? = null
+    private var measuredSquares = 0.0
+    private var measuredSamples = 0L
+
+    /** Where the gain is headed, and where it has got to on its way there. */
+    private var normalizationTarget = 1f
+    private var normalizationGain = 1f
+
+    private fun beginLoudness(track: Track) {
+        measuringId = null
+        measuredSquares = 0.0
+        measuredSamples = 0
+        normalizationTarget = gainFor(track.song.videoId)
+        if (!loudnessByTrack.containsKey(track.song.videoId)) measuringId = track.song.videoId
+    }
+
+    /** The gain a track's loudness asks for, or unity when it is not known (or the setting is off). */
+    private fun gainFor(videoId: String): Float {
+        if (!DesktopAppearanceSettings.loudnessNormalization.value) return 1f
+        val db = loudnessByTrack[videoId] ?: return 1f
+        return Math.pow(10.0, (LOUDNESS_TARGET_DB - db) / 20.0)
+            .coerceIn(LOUDNESS_MIN_GAIN, LOUDNESS_MAX_GAIN)
+            .toFloat()
+    }
+
+    private fun updateLoudness(track: Track, samples: FloatArray, count: Int) {
+        if (measuringId == track.song.videoId) {
+            for (index in 0 until count) {
+                val sample = samples[index].toDouble()
+                measuredSquares += sample * sample
+            }
+            measuredSamples += count
+            val wanted = sink.format.sampleRate.toLong() * LOUDNESS_MEASURE_SECONDS * sink.format.channels
+            if (measuredSamples >= wanted) {
+                val rms = kotlin.math.sqrt(measuredSquares / measuredSamples)
+                val db = if (rms > 1e-6) 20.0 * kotlin.math.log10(rms) else -60.0
+                if (loudnessByTrack.size > LOUDNESS_CACHE) loudnessByTrack.clear()
+                loudnessByTrack[track.song.videoId] = db
+                measuringId = null
+                normalizationTarget = gainFor(track.song.videoId)
+                DesktopTrackLog.log(
+                    "loudness: '${track.song.title.take(32)}' at ${"%.1f".format(db)} dB RMS, " +
+                        "gain ${"%.2f".format(normalizationTarget)}",
+                )
+            }
+        }
+        normalizationGain += (normalizationTarget - normalizationGain) * LOUDNESS_RAMP
+        if (kotlin.math.abs(normalizationTarget - normalizationGain) < 0.002f) {
+            normalizationGain = normalizationTarget
+        }
+    }
 
     /** Source time each output frame of [track] covers: the listener's speed times the deck's. */
     private fun usPerFrame(track: Track): Double =
@@ -1146,6 +1210,7 @@ class DesktopPlaybackEngine(
         incomingFilter.open()
         current?.decoder?.close()
         current = incoming
+        beginLoudness(incoming)
         if (incoming.tempo != null && incoming.tempoRate > 1.0) {
             val steps = ceil((incoming.tempoRate - 1.0) / TEMPO_STEP_PER_BEAT).toInt().coerceAtLeast(1)
             incoming.tempoEaseStep = (incoming.tempoRate - 1.0) / steps
@@ -1395,6 +1460,7 @@ class DesktopPlaybackEngine(
         // decoder it is about to read from.
         if (current !== track) current?.decoder?.close()
         current = track
+        beginLoudness(track)
         fadeRemaining = 0
 
         val decoded = track.decoder.outputFormat
@@ -1473,6 +1539,7 @@ class DesktopPlaybackEngine(
         nextSinkRecoveryNanos = now + SINK_RECOVERY_RETRY_MS * 1_000_000
         DesktopTrackLog.log("audio output lost mid-track; reopening it")
         reconfigureSink()
+        if (sink.isOpen) DesktopToasts.show("Audio output recovered")
     }
 
     /** The played-frame count at the last non-stuck reading; negative until the first. */
@@ -1504,6 +1571,7 @@ class DesktopPlaybackEngine(
             DesktopTrackLog.log(
                 "audio output stalled: ${"%.1f".format(writtenWhileStuck / rate.toFloat())}s written, none rendered; reopening",
             )
+            DesktopToasts.show("Audio output stalled — reopening it")
             stallPlayedFrames = -1L
             nextSinkRecoveryNanos = now + SINK_RECOVERY_RETRY_MS * 1_000_000
             reconfigureSink()
@@ -1537,6 +1605,7 @@ class DesktopPlaybackEngine(
                         "audio thread has not advanced in ${stuckFor}ms — a native output call is stuck; " +
                             "the audio server likely needs restarting",
                     )
+                    DesktopToasts.show("Playback is stuck — the audio server may need restarting")
                 }
             }
         }
@@ -2021,6 +2090,22 @@ class DesktopPlaybackEngine(
 
         /** Beyond this without a pump lap, the audio thread is presumed stuck inside a native call. */
         private const val PUMP_STUCK_MS = 5_000L
+
+        /** Where tracks are levelled to, in dB RMS — the streaming platforms' own loudness ballpark. */
+        private const val LOUDNESS_TARGET_DB = -15.0
+
+        /** Never more than ±6 dB: beyond that the cure is more audible than the disease. */
+        private const val LOUDNESS_MIN_GAIN = 0.5
+        private const val LOUDNESS_MAX_GAIN = 2.0
+
+        /** How much of a track sets its loudness. Eight seconds clears most intros' silence. */
+        private const val LOUDNESS_MEASURE_SECONDS = 8
+
+        /** How fast the gain moves to its target, per block — a couple of seconds either way. */
+        private const val LOUDNESS_RAMP = 0.02f
+
+        /** Measurements kept for a session; cleared whole when the cap is hit. */
+        private const val LOUDNESS_CACHE = 256
 
         /** Enough of a measurement on the incoming track to cue into it. */
         val MEASURED_ENOUGH_TO_ENTER_ON = setOf(

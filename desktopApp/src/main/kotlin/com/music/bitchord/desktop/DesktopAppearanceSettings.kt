@@ -20,6 +20,7 @@ internal object DesktopAppearanceSettings {
     private val _ambientBackdrop = flag(KEY_AMBIENT_BACKDROP, false)
     private val _dynamicColor = flag(KEY_DYNAMIC_COLOR, true)
     private val _visualizer = flag(KEY_VISUALIZER, true)
+    private val _loudness = flag(KEY_LOUDNESS, true)
 
     /** Freezes the main player's gradient instead of drifting. */
     val reduceAnimation: StateFlow<Boolean> = _reduceAnimation
@@ -39,6 +40,9 @@ internal object DesktopAppearanceSettings {
     /** The live spectrum in the player bar's now-playing pill. */
     val visualizer: StateFlow<Boolean> = _visualizer
 
+    /** Levels the loudness between tracks, off the first seconds of each one. */
+    val loudnessNormalization: StateFlow<Boolean> = _loudness
+
     fun setReduceAnimation(value: Boolean) = write(KEY_REDUCE_ANIMATION, value, _reduceAnimation)
 
     fun setReduceDynamicBlur(value: Boolean) = write(KEY_REDUCE_DYNAMIC_BLUR, value, _reduceDynamicBlur)
@@ -51,6 +55,8 @@ internal object DesktopAppearanceSettings {
 
     fun setVisualizer(value: Boolean) = write(KEY_VISUALIZER, value, _visualizer)
 
+    fun setLoudnessNormalization(value: Boolean) = write(KEY_LOUDNESS, value, _loudness)
+
     private fun write(key: String, value: Boolean, into: MutableStateFlow<Boolean>) {
         DesktopPersistence().saveBoolean(key, value)
         into.value = value
@@ -62,4 +68,5 @@ internal object DesktopAppearanceSettings {
     internal const val KEY_AMBIENT_BACKDROP = "ambient_backdrop"
     internal const val KEY_DYNAMIC_COLOR = "dynamic_color"
     internal const val KEY_VISUALIZER = "audio_visualizer"
+    internal const val KEY_LOUDNESS = "loudness_normalization"
 }
