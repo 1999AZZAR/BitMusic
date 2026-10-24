@@ -3226,6 +3226,10 @@ fun BitChordDesktopApp() {
                         volume = playback.volume,
                         shuffle = shuffle,
                         repeatMode = repeatMode,
+                        liked = selectedSong?.videoId?.let { it in likedIds } == true,
+                        canRate = youtubeSignedIn && selectedSong?.localUri == null,
+                        onToggleLike = { selectedSong?.let(::toggleLike) },
+                        onOpenMenu = { selectedSong?.let(::openMenu) },
                         onPlayPause = { if (selectedSong != null) togglePlayPauseFromUser() },
                         onPrevious = ::playPrevious,
                         onNext = ::playNext,
@@ -4366,6 +4370,12 @@ private fun DesktopTopBar(
     volume: Float,
     shuffle: Boolean,
     repeatMode: DesktopRepeatMode,
+    /** The now-playing song's own row — the like and the options the full player has. */
+    liked: Boolean,
+    /** An account to record a like against, and a YouTube identity to rate. */
+    canRate: Boolean,
+    onToggleLike: () -> Unit,
+    onOpenMenu: () -> Unit,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -4608,6 +4618,32 @@ private fun DesktopTopBar(
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // The full player's song actions on the bar itself, led by the song they act
+                    // on: the like in the playing tint the moment it lands, the options beside it.
+                    if (!compact && song != null && canRate) {
+                        DesktopToolbarButton(onClick = onToggleLike, size = 32.dp) {
+                            Icon(
+                                if (liked) BitChordIcons.HeartFilled else BitChordIcons.Heart,
+                                if (liked) {
+                                    DesktopStrings["remove_from_liked", "Remove from liked songs"]
+                                } else {
+                                    DesktopStrings["like", "Like"]
+                                },
+                                tint = if (liked) playingTint else DesktopSecondary,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+                    }
+                    if (!compact && song != null) {
+                        DesktopToolbarButton(onClick = onOpenMenu, size = 32.dp) {
+                            Icon(
+                                Icons.Rounded.MoreHoriz,
+                                DesktopStrings["more_options", "More options"],
+                                tint = DesktopSecondary,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+                    }
                     Icon(
                         Icons.Rounded.VolumeUp,
                         DesktopStrings["d_volume", "Volume"],
