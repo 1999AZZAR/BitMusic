@@ -54,7 +54,13 @@ class DesktopPlaybackEngine(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var persistentVideoMode: Boolean = DesktopPersistence().boolean("video_mode", false)
-    private val _state = MutableStateFlow(DesktopPlaybackState(isVideoMode = persistentVideoMode))
+    private var preferredVideoResolution: String = DesktopPersistence().string("video_resolution", "auto")
+    private val _state = MutableStateFlow(
+        DesktopPlaybackState(
+            isVideoMode = persistentVideoMode,
+            preferredVideoResolution = preferredVideoResolution,
+        )
+    )
     val state: StateFlow<DesktopPlaybackState> = _state.asStateFlow()
 
     private val sink = DesktopAudioSink()
@@ -252,10 +258,11 @@ class DesktopPlaybackEngine(
             isLoading = true,
             isVideoMode = persistentVideoMode,
             videoLoading = persistentVideoMode,
+            preferredVideoResolution = preferredVideoResolution,
         )
         if (persistentVideoMode) {
             scope.launch {
-                val videoResult = DesktopStreamClient.resolveVideo(song)
+                val videoResult = DesktopStreamClient.resolveVideo(song, targetResolution = preferredVideoResolution)
                 if (_state.value.song?.videoId == song.videoId) {
                     videoResult.fold(
                         onSuccess = { video ->
@@ -502,7 +509,7 @@ class DesktopPlaybackEngine(
         if (enabled && _state.value.videoStream == null && currentSong != null && !_state.value.videoLoading) {
             _state.update { it.copy(videoLoading = true, videoError = null) }
             scope.launch {
-                val videoResult = DesktopStreamClient.resolveVideo(currentSong)
+                val videoResult = DesktopStreamClient.resolveVideo(currentSong, targetResolution = preferredVideoResolution)
                 if (_state.value.song?.videoId == currentSong.videoId) {
                     videoResult.fold(
                         onSuccess = { video ->
@@ -510,6 +517,29 @@ class DesktopPlaybackEngine(
                         },
                         onFailure = { err ->
                             _state.update { it.copy(videoStream = null, videoLoading = false, videoError = err.message ?: "Video unavailable") }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    fun setVideoResolution(resolution: String) {
+        preferredVideoResolution = resolution
+        DesktopPersistence().saveString("video_resolution", resolution)
+        _state.update { it.copy(preferredVideoResolution = resolution) }
+        val currentSong = _state.value.song
+        if (_state.value.isVideoMode && currentSong != null) {
+            _state.update { it.copy(videoLoading = true) }
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(currentSong, targetResolution = resolution)
+                if (_state.value.song?.videoId == currentSong.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null) }
+                        },
+                        onFailure = { err ->
+                            _state.update { it.copy(videoLoading = false, videoError = err.message ?: "Failed to switch resolution") }
                         },
                     )
                 }
@@ -1797,6 +1827,7 @@ class DesktopPlaybackEngine(
             searchingBetter = track.song.videoId.let { it == searchingBetterFor || it == incomingSearchingFor },
             smartAnalysis = analysisStatus(track),
             isVideoMode = persistentVideoMode,
+            preferredVideoResolution = preferredVideoResolution,
             videoStream = existingVideo,
             videoLoading = isVideoResolving,
             videoError = existingVideoError,
@@ -1805,7 +1836,7 @@ class DesktopPlaybackEngine(
             val current = track.song
             _state.update { it.copy(videoLoading = true, videoError = null) }
             scope.launch {
-                val videoResult = DesktopStreamClient.resolveVideo(current)
+                val videoResult = DesktopStreamClient.resolveVideo(current, targetResolution = preferredVideoResolution)
                 if (_state.value.song?.videoId == current.videoId) {
                     videoResult.fold(
                         onSuccess = { video ->

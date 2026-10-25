@@ -179,7 +179,7 @@ internal class DesktopVideoDecoder {
     }.onFailure { close() }
 
     private fun windowedContext(url: String, headers: Map<String, String>): AVFormatContext {
-        val source = DesktopRangeStream(url, headers, windowBytes = 1024 * 1024)
+        val source = DesktopRangeStream(url, headers, windowBytes = 2 * 1024 * 1024)
         val read = object : Read_packet_Pointer_BytePointer_int() {
             override fun call(opaque: Pointer?, buf: BytePointer?, count: Int): Int {
                 if (buf == null || count <= 0) return 0
@@ -319,8 +319,8 @@ internal class DesktopVideoDecoder {
     }
 
     companion object {
-        const val MAX_WIDTH = 1280
-        const val MAX_HEIGHT = 720
+        const val MAX_WIDTH = 1920
+        const val MAX_HEIGHT = 1080
         const val IO_BUFFER_BYTES = 64 * 1024
         const val SEEK_CUR = 1
         const val SEEK_END = 2

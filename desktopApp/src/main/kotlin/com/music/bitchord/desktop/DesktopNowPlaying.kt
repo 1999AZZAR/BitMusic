@@ -1,6 +1,7 @@
 package com.music.bitchord.desktop
 
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.playback.PlaybackPosition
 import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -104,6 +105,9 @@ internal fun DesktopNowPlaying(
     videoStream: DesktopVideoStream? = null,
     videoLoading: Boolean = false,
     videoError: String? = null,
+    playbackPosition: PlaybackPosition? = null,
+    preferredVideoResolution: String = "auto",
+    onSelectVideoResolution: ((String) -> Unit)? = null,
     onToggleVideoMode: () -> Unit = {},
     onToggleLike: () -> Unit,
     onPlayPause: () -> Unit,
@@ -178,6 +182,9 @@ internal fun DesktopNowPlaying(
                                 videoStream = videoStream,
                                 isPlaying = isPlaying,
                                 positionMs = positionMs,
+                                playbackPosition = playbackPosition,
+                                preferredResolution = preferredVideoResolution,
+                                onSelectResolution = onSelectVideoResolution,
                                 isTheater = isTheater,
                                 onToggleTheater = {
                                     isTheater = !isTheater

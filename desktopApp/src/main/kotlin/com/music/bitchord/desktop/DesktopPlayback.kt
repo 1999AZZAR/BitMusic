@@ -65,6 +65,8 @@ data class DesktopPlaybackState(
     val videoLoading: Boolean = false,
     /** Error message if video stream resolution failed for this track. */
     val videoError: String? = null,
+    /** Preferred resolution ceiling (e.g. "auto", "1080p", "720p", "480p"). */
+    val preferredVideoResolution: String = "auto",
 )
 
 /**
@@ -78,6 +80,8 @@ data class DesktopVideoStream(
     val fps: Int = 30,
     val mimeType: String = "video/mp4",
     val headers: Map<String, String> = emptyMap(),
+    val availableResolutions: List<String> = emptyList(),
+    val activeResolution: String = resolution,
 ) {
     val aspectRatio: Float
         get() = width.toFloat() / height.coerceAtLeast(1)
@@ -232,17 +236,26 @@ internal object DesktopStreamClient {
 
     suspend fun resolveUrl(song: Song): Result<String> = resolve(song).map(DesktopStream::url)
 
-    suspend fun resolveVideo(song: Song): Result<DesktopVideoStream> = runCatching {
-        val video = StreamResolver.resolveVideoStream(song.videoId)
-            ?: error("No playable video stream found for '${song.title}'")
+    suspend fun resolveVideo(
+        song: Song,
+        targetResolution: String? = null,
+    ): Result<DesktopVideoStream> = runCatching {
+        val candidates = StreamResolver.resolveVideoCandidates(song.videoId)
+        val video = com.music.bitchord.data.innertube.VideoStreamSelector.selectStream(
+            candidates,
+            targetResolution = targetResolution,
+        ) ?: error("No playable video stream found for '${song.title}'")
+        val available = com.music.bitchord.data.innertube.VideoStreamSelector.availableResolutions(candidates)
         DesktopVideoStream(
             url = video.url,
-            resolution = video.resolution,
+            resolution = video.resolutionTier,
             width = video.width,
             height = video.height,
             fps = video.fps,
             mimeType = video.mimeType,
             headers = StreamResolver.mediaHeadersFor(video.url),
+            availableResolutions = available,
+            activeResolution = targetResolution ?: "auto",
         )
     }
 

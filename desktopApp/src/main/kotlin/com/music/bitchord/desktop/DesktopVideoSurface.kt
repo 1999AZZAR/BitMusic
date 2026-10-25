@@ -6,8 +6,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,11 +19,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,9 +45,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.music.bitchord.playback.PlaybackPosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -54,13 +65,16 @@ import kotlin.math.roundToInt
  * Dedicated Compose video surface component that decodes and renders
  * high-definition video frames synchronized to the master audio playhead.
  * Offloads all decoding and Skia image rasterization entirely onto Dispatchers.IO
- * so the main UI thread remains completely fluid.
+ * with zero-allocation double buffering so the main UI thread remains completely fluid.
  */
 @Composable
 internal fun DesktopVideoSurface(
     videoStream: DesktopVideoStream,
     isPlaying: Boolean,
     positionMs: Long,
+    playbackPosition: PlaybackPosition? = null,
+    preferredResolution: String = "auto",
+    onSelectResolution: ((String) -> Unit)? = null,
     isTheater: Boolean = false,
     onToggleTheater: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -69,6 +83,7 @@ internal fun DesktopVideoSurface(
     var isBuffering by remember(videoStream.url) { mutableStateOf(true) }
     val currentPosition by rememberUpdatedState(positionMs)
     val currentlyPlaying by rememberUpdatedState(isPlaying)
+    val currentPlaybackPos by rememberUpdatedState(playbackPosition)
 
     LaunchedEffect(videoStream.url) {
         withContext(Dispatchers.IO) {
@@ -82,14 +97,21 @@ internal fun DesktopVideoSurface(
                 return@withContext
             }
 
-            var lastAudioMs = currentPosition
+            fun currentClockMs(): Long {
+                return currentPlaybackPos?.currentPositionMs() ?: currentPosition
+            }
+
+            var lastAudioMs = currentClockMs()
             if (lastAudioMs > 1_000L) {
                 decoder.seekTo(lastAudioMs)
             }
 
             try {
-                val pixels = ByteArray(decoder.width * decoder.height * 4)
+                val bufferA = ByteArray(decoder.width * decoder.height * 4)
+                val bufferB = ByteArray(decoder.width * decoder.height * 4)
+                var useBufferA = true
                 val info = ImageInfo.makeN32(decoder.width, decoder.height, ColorAlphaType.OPAQUE)
+
                 while (isActive) {
                     // Pause handling: hold current frame without spinning CPU
                     if (!currentlyPlaying) {
@@ -97,42 +119,44 @@ internal fun DesktopVideoSurface(
                         continue
                     }
 
-                    val audioMs = currentPosition
+                    val audioMs = currentClockMs()
                     if (clock.isDiscontinuous(lastAudioMs, audioMs)) {
                         withContext(Dispatchers.Main) { isBuffering = true }
                         decoder.seekTo(audioMs)
                         lastAudioMs = audioMs
                     }
 
-                    val frameMeta = decoder.nextFrame(pixels)
+                    val currentBuffer = if (useBufferA) bufferA else bufferB
+                    val frameMeta = decoder.nextFrame(currentBuffer)
                     if (frameMeta == null) {
-                        delay(20L)
+                        delay(15L)
                         continue
                     }
 
-                    when (val action = clock.evaluate(frameMeta.ptsMs, audioMs)) {
+                    val nowAudioMs = currentClockMs()
+                    when (val action = clock.evaluate(frameMeta.ptsMs, nowAudioMs)) {
                         is DesktopVideoSyncAction.DROP -> {
                             yield()
                             continue
                         }
                         is DesktopVideoSyncAction.WAIT -> {
-                            delay(action.delayMs.coerceIn(5L, 60L))
-                            val newBitmap = Image.makeRaster(info, pixels.copyOf(), decoder.width * 4).toComposeImageBitmap()
+                            delay((action.delayMs - 2L).coerceIn(2L, 45L))
+                            val newBitmap = Image.makeRaster(info, currentBuffer, decoder.width * 4).toComposeImageBitmap()
                             withContext(Dispatchers.Main) {
                                 frameBitmap = newBitmap
                                 isBuffering = false
                             }
-                            lastAudioMs = audioMs
+                            useBufferA = !useBufferA
+                            lastAudioMs = currentClockMs()
                         }
                         DesktopVideoSyncAction.RENDER -> {
-                            val newBitmap = Image.makeRaster(info, pixels.copyOf(), decoder.width * 4).toComposeImageBitmap()
+                            val newBitmap = Image.makeRaster(info, currentBuffer, decoder.width * 4).toComposeImageBitmap()
                             withContext(Dispatchers.Main) {
                                 frameBitmap = newBitmap
                                 isBuffering = false
                             }
-                            lastAudioMs = audioMs
-                            val frameInterval = (1000L / decoder.fps).coerceIn(16L, 66L)
-                            delay(frameInterval / 2)
+                            useBufferA = !useBufferA
+                            lastAudioMs = currentClockMs()
                         }
                     }
                 }
@@ -209,21 +233,88 @@ internal fun DesktopVideoSurface(
                 }
             }
 
-            if (onToggleTheater != null) {
-                IconButton(
-                    onClick = onToggleTheater,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(36.dp)
-                        .background(Color.Black.copy(alpha = 0.45f), CircleShape),
-                ) {
-                    Icon(
-                        imageVector = if (isTheater) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                        contentDescription = if (isTheater) "Exit theater mode" else "Theater mode",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
+            // Top-right controls: Resolution selector & Theater mode
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onSelectResolution != null && videoStream.availableResolutions.isNotEmpty()) {
+                    var menuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.55f))
+                                .clickable { menuOpen = true }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = if (preferredResolution == "auto") "Auto (${videoStream.resolution})" else videoStream.resolution,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "Select resolution",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text("Auto (${videoStream.resolution})")
+                                },
+                                trailingIcon = if (preferredResolution == "auto") {
+                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
+                                } else null,
+                                onClick = {
+                                    onSelectResolution("auto")
+                                    menuOpen = false
+                                },
+                            )
+                            videoStream.availableResolutions.forEach { res ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(res)
+                                    },
+                                    trailingIcon = if (preferredResolution.equals(res, ignoreCase = true) || (preferredResolution == "auto" && videoStream.resolution == res)) {
+                                        { Icon(Icons.Rounded.Check, contentDescription = null) }
+                                    } else null,
+                                    onClick = {
+                                        onSelectResolution(res)
+                                        menuOpen = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (onToggleTheater != null) {
+                    IconButton(
+                        onClick = onToggleTheater,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), CircleShape),
+                    ) {
+                        Icon(
+                            imageVector = if (isTheater) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                            contentDescription = if (isTheater) "Exit theater mode" else "Theater mode",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
         }

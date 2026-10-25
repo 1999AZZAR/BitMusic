@@ -67,12 +67,21 @@ class DesktopVideoPlaybackTest {
         assertEquals(null, initial.videoError)
 
         val resolved = initial.copy(
-            videoStream = DesktopVideoStream("https://example.com/v.mp4", "1080p", 1920, 1080),
+            videoStream = DesktopVideoStream(
+                url = "https://example.com/v.mp4",
+                resolution = "1080p",
+                width = 1920,
+                height = 1080,
+                availableResolutions = listOf("1080p", "720p", "480p"),
+            ),
+            preferredVideoResolution = "1080p",
             videoLoading = false,
         )
         assertTrue(resolved.isVideoMode)
         assertFalse(resolved.videoLoading)
         assertEquals("1080p", resolved.videoStream?.resolution)
+        assertEquals(listOf("1080p", "720p", "480p"), resolved.videoStream?.availableResolutions)
+        assertEquals("1080p", resolved.preferredVideoResolution)
 
         val failed = initial.copy(
             videoStream = null,

@@ -70,4 +70,14 @@ class PlaybackPosition {
         this.positionMs = positionMs
         this.sampledAtNanos = sampledAtNanos
     }
+
+    /**
+     * Continuous playhead time in milliseconds, computed from the last sampled reading
+     * and the monotonic [System.nanoTime] clock. Prevents stepped staircasing jitter.
+     */
+    fun currentPositionMs(): Long {
+        if (!advancing || sampledAtNanos == 0L) return positionMs
+        val elapsedMs = (System.nanoTime() - sampledAtNanos) / 1_000_000L
+        return (positionMs + elapsedMs).coerceAtLeast(0L)
+    }
 }
