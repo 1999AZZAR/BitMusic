@@ -74,7 +74,10 @@ data class DesktopVideoStream(
     val fps: Int = 30,
     val mimeType: String = "video/mp4",
     val headers: Map<String, String> = emptyMap(),
-)
+) {
+    val aspectRatio: Float
+        get() = width.toFloat() / height.coerceAtLeast(1)
+}
 
 internal data class DesktopStream(
     val url: String,

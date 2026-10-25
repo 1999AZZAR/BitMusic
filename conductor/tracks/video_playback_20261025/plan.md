@@ -13,26 +13,26 @@
 - [x] Task: Phase 1 Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Video Player Engine & Playhead Synchronization
-- [~] Task: Video Playback Surface & Decoding Pipeline
-  - [ ] Create hardware-accelerated Compose video surface adapter for desktop
-  - [ ] Implement playhead clock synchronization (A/V sync) between video presentation and audio output
-  - [ ] Add buffering and seek handling for windowed video stream reads
-- [ ] Task: Phase 2 Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Video Playback Surface & Decoding Pipeline
+  - [x] Create hardware-accelerated Compose video surface adapter for desktop
+  - [x] Implement playhead clock synchronization (A/V sync) between video presentation and audio output
+  - [x] Add buffering and seek handling for windowed video stream reads
+- [x] Task: Phase 2 Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: Now Playing UI Integration (Song / Video Switch & Viewport)
-- [ ] Task: Implement Song / Video Toggle
-  - [ ] Add animated "Song / Video" mode switch pill in `DesktopNowPlaying.kt`
-  - [ ] Wire state preservation (retaining timestamp and play state during mode switches)
-- [ ] Task: Integrate 16:9 Video Viewport in Desktop Now Playing
-  - [ ] Render responsive 16:9 video container replacing artwork and spectrum visualizer when in Video mode
-  - [ ] Add double-click to toggle expanded theater presentation
-  - [ ] Maintain scrubber and transport controls below the video container
-- [ ] Task: Phase 3 Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Implement Song / Video Toggle
+  - [x] Add animated "Song / Video" mode switch pill in `DesktopNowPlaying.kt`
+  - [x] Wire state preservation (retaining timestamp and play state during mode switches)
+- [x] Task: Integrate 16:9 Video Viewport in Desktop Now Playing
+  - [x] Render responsive 16:9 video container replacing artwork and spectrum visualizer when in Video mode
+  - [x] Add double-click to toggle expanded theater presentation
+  - [x] Maintain scrubber and transport controls below the video container
+- [x] Task: Phase 3 Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: Verification, Local Packaging & Release
-- [ ] Task: Full Regression Testing & Verification
-  - [ ] Run `:shared:jvmTest` and `:desktopApp:test`
-  - [ ] Verify zero audio pipeline degradation when Video mode is idle
-- [ ] Task: Package and Test Local Release
-  - [ ] Run `./scripts/local-release.sh` on feature branch
-  - [ ] Verify local installation and end-to-end playback
+- [x] Task: Full Regression Testing & Verification
+  - [x] Run `:shared:jvmTest` and `:desktopApp:test`
+  - [x] Verify zero audio pipeline degradation when Video mode is idle
+- [x] Task: Package and Test Local Release
+  - [x] Run `./scripts/local-release.sh` on feature branch
+  - [x] Verify local installation and end-to-end playback

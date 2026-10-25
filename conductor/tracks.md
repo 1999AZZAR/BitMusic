@@ -12,5 +12,5 @@
 
 ---
 
-- [ ] **Track: Dedicated Desktop Video Playback & Now Playing Switch**
+- [x] **Track: Dedicated Desktop Video Playback & Now Playing Switch**
   *Link: [./tracks/video_playback_20261025/index.md](./tracks/video_playback_20261025/index.md)*
