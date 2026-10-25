@@ -57,7 +57,31 @@ data class DesktopPlaybackState(
     /** How far Automix has got on this track and the next — see the player's line. */
     val smartAnalysis: com.music.bitchord.data.settings.SmartAnalysis =
         com.music.bitchord.data.settings.SmartAnalysis(),
+    /** Active video rendition, if available and resolved for the current track. */
+    val videoStream: DesktopVideoStream? = null,
+    /** Whether the user has toggled into the dedicated video viewport in Now Playing. */
+    val isVideoMode: Boolean = false,
+    /** Whether a video stream is actively resolving. */
+    val videoLoading: Boolean = false,
+    /** Error message if video stream resolution failed for this track. */
+    val videoError: String? = null,
 )
+
+/**
+ * Metadata and playback stream descriptor for dedicated desktop video playback.
+ */
+data class DesktopVideoStream(
+    val url: String,
+    val resolution: String,
+    val width: Int,
+    val height: Int,
+    val fps: Int = 30,
+    val mimeType: String = "video/mp4",
+    val headers: Map<String, String> = emptyMap(),
+) {
+    val aspectRatio: Float
+        get() = width.toFloat() / height.coerceAtLeast(1)
+}
 
 internal data class DesktopStream(
     val url: String,
@@ -207,6 +231,20 @@ internal object DesktopStreamClient {
     }
 
     suspend fun resolveUrl(song: Song): Result<String> = resolve(song).map(DesktopStream::url)
+
+    suspend fun resolveVideo(song: Song): Result<DesktopVideoStream> = runCatching {
+        val video = StreamResolver.resolveVideoStream(song.videoId)
+            ?: error("No playable video stream found for '${song.title}'")
+        DesktopVideoStream(
+            url = video.url,
+            resolution = video.resolution,
+            width = video.width,
+            height = video.height,
+            fps = video.fps,
+            mimeType = video.mimeType,
+            headers = StreamResolver.mediaHeadersFor(video.url),
+        )
+    }
 
     /**
      * The ceiling a resolve on this thread was asked for, read by

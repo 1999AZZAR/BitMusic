@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Videocam
 import com.music.bitchord.data.AudioQualityBadgeFormatter
 import com.music.bitchord.data.AudioQualityTier
 import com.music.bitchord.data.NerdStats
@@ -98,6 +100,11 @@ internal fun DesktopNowPlaying(
     hasNext: Boolean,
     liked: Boolean,
     canRate: Boolean,
+    isVideoMode: Boolean = false,
+    videoStream: DesktopVideoStream? = null,
+    videoLoading: Boolean = false,
+    videoError: String? = null,
+    onToggleVideoMode: () -> Unit = {},
     onToggleLike: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -111,15 +118,25 @@ internal fun DesktopNowPlaying(
     lyricsPanel: @Composable () -> Unit,
     queuePanel: @Composable () -> Unit,
 ) {
-    // The right half shows one of the two — the original player's split, with this player's
-    // controls. Either button picks its panel; the button of whichever is showing puts the half
-    // away again, for the times the record deserves the whole window.
-    // It also folds on its own: a track with no words does not keep an empty lyric sheet up —
-    // the half simply closes, and the lyrics button sits the verse out with it.
-    var sidePanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
-    var panelShown by remember { mutableStateOf(lyricsAvailable) }
-    LaunchedEffect(lyricsAvailable) {
-        if (!lyricsAvailable) panelShown = false
+    // The right half shows one of the two: lyrics or queue.
+    // In music mode, when lyrics are unavailable, we seamlessly fall back to queue.
+    var userPreferredPanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
+    var sidePanel by remember { mutableStateOf(if (lyricsAvailable) DesktopSidePanel.LYRICS else DesktopSidePanel.QUEUE) }
+    var panelShown by remember { mutableStateOf(!isVideoMode) }
+    var isTheater by remember { mutableStateOf(false) }
+    LaunchedEffect(song.videoId, lyricsAvailable, isVideoMode) {
+        if (isVideoMode) {
+            panelShown = false
+        } else {
+            isTheater = false
+            if (!lyricsAvailable) {
+                sidePanel = DesktopSidePanel.QUEUE
+                panelShown = true
+            } else if (userPreferredPanel == DesktopSidePanel.LYRICS) {
+                sidePanel = DesktopSidePanel.LYRICS
+                panelShown = true
+            }
+        }
     }
     val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
     val panelFraction by animateFloatAsState(
@@ -155,34 +172,104 @@ internal fun DesktopNowPlaying(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    // The glow the sleeve seems to cast: the record's tint, wide and soft, from
-                    // behind the artwork rather than around the window.
-                    val glow = tint.copy(alpha = 0.22f)
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .drawBehind {
-                                drawCircle(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(glow, Color.Transparent),
-                                        center = Offset(size.width / 2, size.height / 2),
-                                        radius = size.minDimension * 0.85f,
-                                    ),
-                                )
-                            },
-                    )
-                    DesktopArtwork(
-                        song.thumbnailUrl,
-                        Modifier
-                            .size(324.dp)
-                            .shadow(24.dp, RoundedCornerShape(20.dp))
-                            .clip(RoundedCornerShape(20.dp))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
-                        px = 720,
-                    )
+                if (isVideoMode) {
+                        if (videoStream != null) {
+                            DesktopVideoSurface(
+                                videoStream = videoStream,
+                                isPlaying = isPlaying,
+                                positionMs = positionMs,
+                                isTheater = isTheater,
+                                onToggleTheater = {
+                                    isTheater = !isTheater
+                                    if (isTheater) panelShown = false
+                                },
+                                modifier = if (isTheater) {
+                                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
+                                } else {
+                                    Modifier.width(520.dp)
+                                },
+                            )
+                        } else {
+                            Box(
+                                modifier = if (isTheater) {
+                                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
+                                } else {
+                                    Modifier.width(520.dp).aspectRatio(16f / 9f)
+                                }
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (videoError != null) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(16.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Videocam,
+                                            contentDescription = null,
+                                            tint = DesktopSecondary.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(32.dp),
+                                        )
+                                        Text(
+                                            videoError,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DesktopSecondary,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                } else {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(28.dp),
+                                            strokeWidth = 2.dp,
+                                            color = tint,
+                                        )
+                                        Text(
+                                            "Loading video...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DesktopSecondary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        // The glow the sleeve seems to cast: the record's tint, wide and soft, from
+                        // behind the artwork rather than around the window.
+                        val glow = tint.copy(alpha = 0.22f)
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .drawBehind {
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(glow, Color.Transparent),
+                                            center = Offset(size.width / 2, size.height / 2),
+                                            radius = size.minDimension * 0.85f,
+                                        ),
+                                    )
+                                },
+                        )
+                        DesktopArtwork(
+                            song.thumbnailUrl,
+                            Modifier
+                                .size(324.dp)
+                                .shadow(24.dp, RoundedCornerShape(20.dp))
+                                .clip(RoundedCornerShape(20.dp))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
+                            px = 720,
+                        )
+                    }
                 }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(if (isVideoMode) 14.dp else 24.dp))
+                val titleWidth = if (isTheater && isVideoMode) 640.dp else 500.dp
                 Text(
                     song.title,
                     style = MaterialTheme.typography.headlineLarge,
@@ -190,7 +277,7 @@ internal fun DesktopNowPlaying(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(500.dp),
+                    modifier = Modifier.width(titleWidth),
                 )
                 Text(
                     song.artist,
@@ -200,12 +287,12 @@ internal fun DesktopNowPlaying(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .width(500.dp)
+                        .width(titleWidth)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onOpenArtist)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
-                if (!song.albumName.isNullOrBlank()) {
+                if (!song.albumName.isNullOrBlank() && !isTheater) {
                     Text(
                         song.albumName.orEmpty(),
                         style = MaterialTheme.typography.bodyMedium,
@@ -216,14 +303,17 @@ internal fun DesktopNowPlaying(
                         modifier = Modifier.width(500.dp),
                     )
                 }
-                Spacer(Modifier.height(18.dp))
-                SpectrumPane(
-                    tint = tint,
-                    modifier = Modifier.width(420.dp).height(54.dp),
-                )
+                if (!isVideoMode) {
+                    Spacer(Modifier.height(18.dp))
+                    SpectrumPane(
+                        tint = tint,
+                        modifier = Modifier.width(420.dp).height(54.dp),
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
+                val controlWidth = if (isTheater && isVideoMode) 640.dp else 420.dp
                 Row(
-                    Modifier.width(420.dp),
+                    Modifier.width(controlWidth),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(timeLabel(if (dragging) dragValue else fraction, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
@@ -324,11 +414,30 @@ internal fun DesktopNowPlaying(
                     DesktopToolbarButton(onClick = onOpenMenu, size = 36.dp) {
                         Icon(Icons.Rounded.MoreHoriz, "More options", tint = DesktopSecondary, modifier = Modifier.size(19.dp))
                     }
+                    val canToggleVideo = song.videoId.isNotBlank() && (song.localUri == null || videoStream != null)
+                    DesktopToolbarButton(
+                        onClick = onToggleVideoMode,
+                        enabled = canToggleVideo,
+                        size = 36.dp,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Videocam,
+                            if (isVideoMode) "Switch to song" else "Switch to video",
+                            tint = if (isVideoMode) {
+                                tint
+                            } else {
+                                DesktopSecondary.copy(alpha = if (canToggleVideo) 1f else 0.4f)
+                            },
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                     DesktopToolbarButton(
                         onClick = {
                             if (panelShown && sidePanel == DesktopSidePanel.LYRICS) {
                                 panelShown = false
                             } else {
+                                isTheater = false
+                                userPreferredPanel = DesktopSidePanel.LYRICS
                                 sidePanel = DesktopSidePanel.LYRICS
                                 panelShown = true
                             }
@@ -352,6 +461,8 @@ internal fun DesktopNowPlaying(
                             if (panelShown && sidePanel == DesktopSidePanel.QUEUE) {
                                 panelShown = false
                             } else {
+                                isTheater = false
+                                userPreferredPanel = DesktopSidePanel.QUEUE
                                 sidePanel = DesktopSidePanel.QUEUE
                                 panelShown = true
                             }
@@ -717,3 +828,6 @@ private fun QueueQualityBadge(
         }
     }
 }
+
+
+

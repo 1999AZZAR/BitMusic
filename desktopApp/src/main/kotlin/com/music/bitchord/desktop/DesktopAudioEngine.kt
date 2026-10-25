@@ -53,7 +53,8 @@ class DesktopPlaybackEngine(
     private val onCrossfaded: (Song) -> Unit = {},
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val _state = MutableStateFlow(DesktopPlaybackState())
+    private var persistentVideoMode: Boolean = DesktopPersistence().boolean("video_mode", false)
+    private val _state = MutableStateFlow(DesktopPlaybackState(isVideoMode = persistentVideoMode))
     val state: StateFlow<DesktopPlaybackState> = _state.asStateFlow()
 
     private val sink = DesktopAudioSink()
@@ -245,7 +246,28 @@ class DesktopPlaybackEngine(
         commands += Command.Flush
         searchingBetterFor = null
         incomingSearchingFor = null
-        _state.value = DesktopPlaybackState(song = song, volume = volume, isLoading = true)
+        _state.value = DesktopPlaybackState(
+            song = song,
+            volume = volume,
+            isLoading = true,
+            isVideoMode = persistentVideoMode,
+            videoLoading = persistentVideoMode,
+        )
+        if (persistentVideoMode) {
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(song)
+                if (_state.value.song?.videoId == song.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null) }
+                        },
+                        onFailure = { err ->
+                            _state.update { it.copy(videoStream = null, videoLoading = false, videoError = err.message ?: "Video unavailable") }
+                        },
+                    )
+                }
+            }
+        }
         resolveJob = scope.launch {
             // Only when the file is really there: a download record can outlive the file it names,
             // and handing the decoder a path that is not there fails as "could not open stream"
@@ -274,6 +296,7 @@ class DesktopPlaybackEngine(
                     _state.value = DesktopPlaybackState(
                         song = song,
                         volume = volume,
+                        isVideoMode = persistentVideoMode,
                         error = reported.message ?: "Playback failed",
                     )
                 },
@@ -321,6 +344,7 @@ class DesktopPlaybackEngine(
             _state.value = DesktopPlaybackState(
                 song = song,
                 volume = volume,
+                isVideoMode = persistentVideoMode,
                 error = "Could not play this track: ${failure.message}",
             )
         }
@@ -468,6 +492,33 @@ class DesktopPlaybackEngine(
         volume = value.coerceIn(0f, 1f)
         sink.gain = volume
         _state.update { it.copy(volume = volume) }
+    }
+
+    fun setVideoMode(enabled: Boolean) {
+        persistentVideoMode = enabled
+        DesktopPersistence().saveBoolean("video_mode", enabled)
+        val currentSong = _state.value.song
+        _state.update { it.copy(isVideoMode = enabled) }
+        if (enabled && _state.value.videoStream == null && currentSong != null && !_state.value.videoLoading) {
+            _state.update { it.copy(videoLoading = true, videoError = null) }
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(currentSong)
+                if (_state.value.song?.videoId == currentSong.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null) }
+                        },
+                        onFailure = { err ->
+                            _state.update { it.copy(videoStream = null, videoLoading = false, videoError = err.message ?: "Video unavailable") }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleVideoMode() {
+        setVideoMode(!persistentVideoMode)
     }
 
     /** Sets the source quality ceiling used the next time a track is resolved. */
@@ -1724,6 +1775,11 @@ class DesktopPlaybackEngine(
     }
 
     private fun publishTrack(track: Track, isPlaying: Boolean, positionUs: Long = track.startUs) {
+        val sameSong = _state.value.song?.videoId == track.song.videoId
+        val existingVideo = if (persistentVideoMode && sameSong) _state.value.videoStream else null
+        val isVideoResolving = persistentVideoMode && sameSong && _state.value.videoLoading
+        val existingVideoError = if (persistentVideoMode && sameSong) _state.value.videoError else null
+
         _state.value = DesktopPlaybackState(
             song = track.song,
             isPlaying = isPlaying,
@@ -1740,7 +1796,28 @@ class DesktopPlaybackEngine(
             streamSourceId = track.stream.sourceId,
             searchingBetter = track.song.videoId.let { it == searchingBetterFor || it == incomingSearchingFor },
             smartAnalysis = analysisStatus(track),
+            isVideoMode = persistentVideoMode,
+            videoStream = existingVideo,
+            videoLoading = isVideoResolving,
+            videoError = existingVideoError,
         )
+        if (persistentVideoMode && existingVideo == null && !isVideoResolving) {
+            val current = track.song
+            _state.update { it.copy(videoLoading = true, videoError = null) }
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(current)
+                if (_state.value.song?.videoId == current.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null) }
+                        },
+                        onFailure = { err ->
+                            _state.update { it.copy(videoStream = null, videoLoading = false, videoError = err.message ?: "Video unavailable") }
+                        },
+                    )
+                }
+            }
+        }
     }
 
     /** Position from what the device has actually rendered, not from what has been decoded. */
