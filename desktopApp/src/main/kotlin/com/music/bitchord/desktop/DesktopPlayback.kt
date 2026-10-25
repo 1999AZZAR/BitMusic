@@ -61,6 +61,10 @@ data class DesktopPlaybackState(
     val videoStream: DesktopVideoStream? = null,
     /** Whether the user has toggled into the dedicated video viewport in Now Playing. */
     val isVideoMode: Boolean = false,
+    /** Whether a video stream is actively resolving. */
+    val videoLoading: Boolean = false,
+    /** Error message if video stream resolution failed for this track. */
+    val videoError: String? = null,
 )
 
 /**

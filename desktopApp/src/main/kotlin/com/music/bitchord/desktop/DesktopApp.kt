@@ -3485,6 +3485,8 @@ fun BitChordDesktopApp() {
                             canRate = youtubeSignedIn && current.localUri == null,
                             isVideoMode = playback.isVideoMode,
                             videoStream = playback.videoStream,
+                            videoLoading = playback.videoLoading,
+                            videoError = playback.videoError,
                             onToggleVideoMode = { playbackEngine.toggleVideoMode() },
                             onToggleLike = { toggleLike(current) },
                             onPlayPause = ::togglePlayPauseFromUser,

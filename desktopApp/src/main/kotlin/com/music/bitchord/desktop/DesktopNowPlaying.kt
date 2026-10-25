@@ -2,10 +2,12 @@ package com.music.bitchord.desktop
 
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.icons.BitChordIcons
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.aspectRatio
@@ -36,6 +38,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Videocam
 import com.music.bitchord.data.AudioQualityBadgeFormatter
 import com.music.bitchord.data.AudioQualityTier
 import com.music.bitchord.data.NerdStats
@@ -101,6 +104,8 @@ internal fun DesktopNowPlaying(
     canRate: Boolean,
     isVideoMode: Boolean = false,
     videoStream: DesktopVideoStream? = null,
+    videoLoading: Boolean = false,
+    videoError: String? = null,
     onToggleVideoMode: () -> Unit = {},
     onToggleLike: () -> Unit,
     onPlayPause: () -> Unit,
@@ -115,22 +120,24 @@ internal fun DesktopNowPlaying(
     lyricsPanel: @Composable () -> Unit,
     queuePanel: @Composable () -> Unit,
 ) {
-    // The right half shows one of the two — the original player's split, with this player's
-    // controls. Either button picks its panel; the button of whichever is showing puts the half
-    // away again, for the times the record deserves the whole window.
-    // It also folds on its own: a track with no words does not keep an empty lyric sheet up —
-    // the half simply closes, and the lyrics button sits the verse out with it.
-    var sidePanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
-    var panelShown by remember { mutableStateOf(lyricsAvailable) }
+    // The right half shows one of the two: lyrics or queue.
+    // In music mode, when lyrics are unavailable, we seamlessly fall back to queue.
+    var userPreferredPanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
+    var sidePanel by remember { mutableStateOf(if (lyricsAvailable) DesktopSidePanel.LYRICS else DesktopSidePanel.QUEUE) }
+    var panelShown by remember { mutableStateOf(!isVideoMode) }
     var isTheater by remember { mutableStateOf(false) }
-    LaunchedEffect(lyricsAvailable) {
-        if (!lyricsAvailable) panelShown = false
-    }
-    LaunchedEffect(isVideoMode) {
+    LaunchedEffect(song.videoId, lyricsAvailable, isVideoMode) {
         if (isVideoMode) {
             panelShown = false
         } else {
             isTheater = false
+            if (!lyricsAvailable) {
+                sidePanel = DesktopSidePanel.QUEUE
+                panelShown = true
+            } else if (userPreferredPanel == DesktopSidePanel.LYRICS) {
+                sidePanel = DesktopSidePanel.LYRICS
+                panelShown = true
+            }
         }
     }
     val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
@@ -161,69 +168,100 @@ internal fun DesktopNowPlaying(
                 ),
             ),
         )
-        Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp)) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 20.dp)) {
             Column(
                 Modifier.weight(1f).fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
             ) {
                 val canToggleVideo = song.videoId.isNotBlank() && (song.localUri == null || videoStream != null)
-                if (canToggleVideo && !isTheater) {
-                    DesktopSongVideoToggle(
-                        isVideoMode = isVideoMode,
-                        onToggle = onToggleVideoMode,
-                        tint = tint,
-                        modifier = Modifier.padding(bottom = 16.dp),
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (isTheater) 36.dp else 44.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (canToggleVideo) {
+                        DesktopSongVideoToggle(
+                            isVideoMode = isVideoMode,
+                            onToggle = onToggleVideoMode,
+                            tint = tint,
+                        )
+                    }
                 }
 
-                if (isVideoMode) {
-                    if (videoStream != null) {
-                        DesktopVideoSurface(
-                            videoStream = videoStream,
-                            isPlaying = isPlaying,
-                            positionMs = positionMs,
-                            isTheater = isTheater,
-                            onToggleTheater = {
-                                isTheater = !isTheater
-                                if (isTheater) panelShown = false
-                            },
-                            modifier = if (isTheater) {
-                                Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
-                            } else {
-                                Modifier.width(520.dp)
-                            },
-                        )
-                    } else {
-                        Box(
-                            modifier = if (isTheater) {
-                                Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
-                            } else {
-                                Modifier.width(520.dp).aspectRatio(16f / 9f)
-                            }
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.Black.copy(alpha = 0.5f))
-                                .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                Column(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    if (isVideoMode) {
+                        if (videoStream != null) {
+                            DesktopVideoSurface(
+                                videoStream = videoStream,
+                                isPlaying = isPlaying,
+                                positionMs = positionMs,
+                                isTheater = isTheater,
+                                onToggleTheater = {
+                                    isTheater = !isTheater
+                                    if (isTheater) panelShown = false
+                                },
+                                modifier = if (isTheater) {
+                                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
+                                } else {
+                                    Modifier.width(520.dp)
+                                },
+                            )
+                        } else {
+                            Box(
+                                modifier = if (isTheater) {
+                                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
+                                } else {
+                                    Modifier.width(520.dp).aspectRatio(16f / 9f)
+                                }
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(28.dp),
-                                    strokeWidth = 2.dp,
-                                    color = tint,
-                                )
-                                Text(
-                                    "Loading video...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = DesktopSecondary,
-                                )
+                                if (videoError != null) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(16.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Videocam,
+                                            contentDescription = null,
+                                            tint = DesktopSecondary.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(32.dp),
+                                        )
+                                        Text(
+                                            videoError,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DesktopSecondary,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                } else {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(28.dp),
+                                            strokeWidth = 2.dp,
+                                            color = tint,
+                                        )
+                                        Text(
+                                            "Loading video...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DesktopSecondary,
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
-                } else {
+                    } else {
                     Box(contentAlignment = Alignment.Center) {
                         // The glow the sleeve seems to cast: the record's tint, wide and soft, from
                         // behind the artwork rather than around the window.
@@ -404,6 +442,7 @@ internal fun DesktopNowPlaying(
                                 panelShown = false
                             } else {
                                 isTheater = false
+                                userPreferredPanel = DesktopSidePanel.LYRICS
                                 sidePanel = DesktopSidePanel.LYRICS
                                 panelShown = true
                             }
@@ -428,6 +467,7 @@ internal fun DesktopNowPlaying(
                                 panelShown = false
                             } else {
                                 isTheater = false
+                                userPreferredPanel = DesktopSidePanel.QUEUE
                                 sidePanel = DesktopSidePanel.QUEUE
                                 panelShown = true
                             }
@@ -443,6 +483,7 @@ internal fun DesktopNowPlaying(
                     }
                 }
             }
+        }
             // The other half of the window, as the original player split it: the lyric sheet
             // standing on the window itself, or the queue on the sidebar's glass. Its share of
             // the window animates, so putting it away hands the space back to the sleeve in
@@ -795,7 +836,7 @@ private fun QueueQualityBadge(
 }
 
 /**
- * Animated "Song / Video" segmented toggle pill.
+ * Modern icon-rich "Song / Video" segmented toggle pill.
  */
 @Composable
 private fun DesktopSongVideoToggle(
@@ -804,40 +845,80 @@ private fun DesktopSongVideoToggle(
     tint: Color,
     modifier: Modifier = Modifier,
 ) {
+    val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
+    val songSelected = !isVideoMode
+    val videoSelected = isVideoMode
+
+    val songBg by animateColorAsState(
+        targetValue = if (songSelected) tint else Color.Transparent,
+        animationSpec = if (reduceMotion) snap() else tween(180),
+        label = "songToggleBg",
+    )
+    val songContent by animateColorAsState(
+        targetValue = if (songSelected) Color.Black else Color.White.copy(alpha = 0.72f),
+        animationSpec = if (reduceMotion) snap() else tween(180),
+        label = "songToggleContent",
+    )
+    val videoBg by animateColorAsState(
+        targetValue = if (videoSelected) tint else Color.Transparent,
+        animationSpec = if (reduceMotion) snap() else tween(180),
+        label = "videoToggleBg",
+    )
+    val videoContent by animateColorAsState(
+        targetValue = if (videoSelected) Color.Black else Color.White.copy(alpha = 0.72f),
+        animationSpec = if (reduceMotion) snap() else tween(180),
+        label = "videoToggleContent",
+    )
+
     Row(
         modifier = modifier
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.08f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+            .border(0.5.dp, Color.White.copy(alpha = 0.14f), CircleShape)
             .padding(3.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .clip(CircleShape)
-                .background(if (!isVideoMode) tint else Color.Transparent)
+                .background(songBg)
                 .clickable(enabled = isVideoMode, onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            contentAlignment = Alignment.Center,
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            Icon(
+                imageVector = BitChordIcons.MusicNote,
+                contentDescription = "Song mode",
+                tint = songContent,
+                modifier = Modifier.size(15.dp),
+            )
             Text(
                 text = "Song",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = if (!isVideoMode) Color.Black else Color.White.copy(alpha = 0.7f),
+                color = songContent,
             )
         }
-        Box(
+        Row(
             modifier = Modifier
                 .clip(CircleShape)
-                .background(if (isVideoMode) tint else Color.Transparent)
+                .background(videoBg)
                 .clickable(enabled = !isVideoMode, onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            contentAlignment = Alignment.Center,
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            Icon(
+                imageVector = Icons.Rounded.Videocam,
+                contentDescription = "Video mode",
+                tint = videoContent,
+                modifier = Modifier.size(16.dp),
+            )
             Text(
                 text = "Video",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = if (isVideoMode) Color.Black else Color.White.copy(alpha = 0.7f),
+                color = videoContent,
             )
         }
     }

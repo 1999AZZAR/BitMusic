@@ -55,4 +55,32 @@ class DesktopVideoPlaybackTest {
         // Jump backward -> discontinuous (seek)
         assertTrue(clock.isDiscontinuous(lastAudioMs = 5_000, currentAudioMs = 2_000))
     }
+
+    @Test
+    fun `playback state preserves video mode and tracks loading and error states`() {
+        val initial = DesktopPlaybackState(
+            isVideoMode = true,
+            videoLoading = true,
+        )
+        assertTrue(initial.isVideoMode)
+        assertTrue(initial.videoLoading)
+        assertEquals(null, initial.videoError)
+
+        val resolved = initial.copy(
+            videoStream = DesktopVideoStream("https://example.com/v.mp4", "1080p", 1920, 1080),
+            videoLoading = false,
+        )
+        assertTrue(resolved.isVideoMode)
+        assertFalse(resolved.videoLoading)
+        assertEquals("1080p", resolved.videoStream?.resolution)
+
+        val failed = initial.copy(
+            videoStream = null,
+            videoLoading = false,
+            videoError = "Video unavailable",
+        )
+        assertTrue(failed.isVideoMode)
+        assertFalse(failed.videoLoading)
+        assertEquals("Video unavailable", failed.videoError)
+    }
 }
