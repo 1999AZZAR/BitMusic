@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.media3.common.Player
+import com.music.bitchord.data.AudioQualityBadgeFormatter
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
@@ -586,42 +587,35 @@ internal fun formatClock(ms: Long): String {
 private fun TvQualityLine(showStats: Boolean, modifier: Modifier = Modifier) {
     val snapshot by NerdStats.current.collectAsState()
     val stats = snapshot ?: return
-    val label = when {
-        stats.isDolbyAtmos -> "Dolby Atmos"
-        stats.isHiRes -> "Hi-Res Lossless"
-        stats.isLossless -> "Lossless"
-        else -> null
-    }
-    val detail = if (showStats) streamDetail(stats) else null
-    if (label == null && detail.isNullOrBlank()) return
+    val badge = AudioQualityBadgeFormatter.formatBadge(stats) ?: return
+    val detail = if (showStats) streamDetail(stats) else badge.details
+
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (label != null) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color.White.copy(alpha = 0.16f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                if (stats.isDolbyAtmos) {
-                    Icon(
-                        painter = painterResource(Res.drawable.ic_dolby_atmos),
-                        contentDescription = null,
-                        tint = TvGlass.TextPrimary.copy(alpha = 0.85f),
-                        modifier = Modifier.height(9.dp),
-                    )
-                }
-                Text(
-                    text = label,
-                    style = TvType.Caption.copy(fontSize = 11.sp, fontWeight = FontWeight.W600),
-                    color = TvGlass.TextPrimary.copy(alpha = 0.85f),
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(if (badge.isLossless) Color(0xFF26C6DA).copy(alpha = 0.25f) else Color.White.copy(alpha = 0.16f))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (stats.isDolbyAtmos) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_dolby_atmos),
+                    contentDescription = null,
+                    tint = TvGlass.TextPrimary.copy(alpha = 0.85f),
+                    modifier = Modifier.height(9.dp),
                 )
             }
+            Text(
+                text = badge.title,
+                style = TvType.Caption.copy(fontSize = 11.sp, fontWeight = FontWeight.W600),
+                color = TvGlass.TextPrimary.copy(alpha = 0.85f),
+            )
         }
         if (!detail.isNullOrBlank()) {
             Text(text = detail, style = TvType.Caption, color = TvGlass.TextTertiary, maxLines = 1)

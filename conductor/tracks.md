@@ -7,5 +7,5 @@
 
 ---
 
-- [~] **Track: Audio Quality Indicators on Now Playing UI**
+- [x] **Track: Audio Quality Indicators on Now Playing UI**
   *Link: [./tracks/audio_quality_indicator_20261025/index.md](./tracks/audio_quality_indicator_20261025/index.md)*
