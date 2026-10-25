@@ -22,11 +22,10 @@ class DesktopVideoSyncClock(
     val toleranceEarlyMs: Long = 4L,
     val toleranceLateMs: Long = 120L,
     /**
-     * Compensates for display presentation latency (display refresh/VSync cadence,
-     * compositor buffer swaps, and UI frame scheduling), bringing video forward to match audio.
-     * Tuned for standard 60 Hz desktop displays (~14 ms pipeline latency).
+     * Offset applied to align video presentation with physical acoustic output.
+     * Negative value delays video rendering to allow buffered audio to exit physical speakers.
      */
-    val displayLeadMs: Long = 14L,
+    val displayLeadMs: Long = -30L,
 ) {
     /**
      * Determines whether the decoded frame with presentation timestamp [framePtsMs]

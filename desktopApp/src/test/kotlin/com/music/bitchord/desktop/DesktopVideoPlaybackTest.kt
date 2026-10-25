@@ -21,14 +21,14 @@ class DesktopVideoPlaybackTest {
 
     @Test
     fun `video clock renders frame when presentation timestamp matches audio clock`() {
-        val clock = DesktopVideoSyncClock()
-        val action = clock.evaluate(framePtsMs = 5_000, audioPositionMs = 5_010)
+        val clock = DesktopVideoSyncClock(displayLeadMs = 0L)
+        val action = clock.evaluate(framePtsMs = 5_000, audioPositionMs = 5_000)
         assertEquals(DesktopVideoSyncAction.RENDER, action)
     }
 
     @Test
     fun `video clock drops late frame when video is behind audio`() {
-        val clock = DesktopVideoSyncClock()
+        val clock = DesktopVideoSyncClock(displayLeadMs = 0L)
         // Frame is 200ms behind audio clock (> 100ms threshold)
         val action = clock.evaluate(framePtsMs = 5_000, audioPositionMs = 5_200)
         assertEquals(DesktopVideoSyncAction.DROP, action)
@@ -45,11 +45,11 @@ class DesktopVideoPlaybackTest {
 
     @Test
     fun `video clock compensates for display presentation latency`() {
-        val clock = DesktopVideoSyncClock(displayLeadMs = 14L)
-        // Frame is 80ms ahead of audio clock, but 14ms display lead brings wait down to 66ms
+        val clock = DesktopVideoSyncClock(displayLeadMs = -30L)
+        // Frame is 80ms ahead of audio clock, with -30ms lead (delay) wait is 110ms
         val action = clock.evaluate(framePtsMs = 5_080, audioPositionMs = 5_000)
         assertTrue(action is DesktopVideoSyncAction.WAIT)
-        assertEquals(66L, action.delayMs)
+        assertEquals(110L, action.delayMs)
     }
 
     @Test

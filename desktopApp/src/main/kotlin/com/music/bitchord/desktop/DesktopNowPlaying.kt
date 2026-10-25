@@ -270,11 +270,11 @@ internal fun DesktopNowPlaying(
                         )
                     }
                 }
-                Spacer(Modifier.height(if (isVideoMode) 14.dp else 24.dp))
+                Spacer(Modifier.height(if (isVideoMode) 8.dp else 24.dp))
                 val titleWidth = if (isExpanded && isVideoMode) 640.dp else 500.dp
                 Text(
                     song.title,
-                    style = MaterialTheme.typography.headlineLarge,
+                    style = if (isVideoMode) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -283,7 +283,7 @@ internal fun DesktopNowPlaying(
                 )
                 Text(
                     song.artist,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = if (isVideoMode) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
                     color = tint,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -292,7 +292,7 @@ internal fun DesktopNowPlaying(
                         .width(titleWidth)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onOpenArtist)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                 )
                 if (!song.albumName.isNullOrBlank() && !isExpanded) {
                     Text(
@@ -312,7 +312,7 @@ internal fun DesktopNowPlaying(
                         modifier = Modifier.width(420.dp).height(54.dp),
                     )
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(if (isVideoMode) 8.dp else 14.dp))
                 val controlWidth = if (isExpanded && isVideoMode) 640.dp else 420.dp
                 Row(
                     Modifier.width(controlWidth),
@@ -333,7 +333,7 @@ internal fun DesktopNowPlaying(
                     )
                     Text(timeLabel(1f, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(if (isVideoMode) 10.dp else 16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -398,7 +398,7 @@ internal fun DesktopNowPlaying(
                         }
                     }
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(if (isVideoMode) 8.dp else 14.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),

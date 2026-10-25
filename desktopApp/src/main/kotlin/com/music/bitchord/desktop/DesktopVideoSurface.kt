@@ -138,7 +138,11 @@ internal fun DesktopVideoSurface(
                     }
 
                     val nowAudioMs = currentClockMs()
-                    when (val action = clock.evaluate(frameMeta.ptsMs, nowAudioMs)) {
+                    val action = clock.evaluate(frameMeta.ptsMs, nowAudioMs)
+                    if (frameMeta.ptsMs % 2000L < 40L) {
+                        DesktopTrackLog.log("video-sync: pts=${frameMeta.ptsMs}ms audio=${nowAudioMs}ms diff=${frameMeta.ptsMs - nowAudioMs}ms action=$action")
+                    }
+                    when (action) {
                         is DesktopVideoSyncAction.DROP -> {
                             yield()
                             continue
