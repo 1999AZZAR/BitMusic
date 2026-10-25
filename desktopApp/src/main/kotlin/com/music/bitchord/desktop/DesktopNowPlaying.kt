@@ -127,7 +127,11 @@ internal fun DesktopNowPlaying(
         if (!lyricsAvailable) panelShown = false
     }
     LaunchedEffect(isVideoMode) {
-        if (!isVideoMode) isTheater = false
+        if (isVideoMode) {
+            panelShown = false
+        } else {
+            isTheater = false
+        }
     }
     val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
     val panelFraction by animateFloatAsState(
@@ -185,16 +189,18 @@ internal fun DesktopNowPlaying(
                                 if (isTheater) panelShown = false
                             },
                             modifier = if (isTheater) {
-                                Modifier.fillMaxWidth(0.95f).weight(1f).padding(bottom = 12.dp)
+                                Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
                             } else {
                                 Modifier.width(520.dp)
                             },
                         )
                     } else {
                         Box(
-                            modifier = Modifier
-                                .width(520.dp)
-                                .aspectRatio(16f / 9f)
+                            modifier = if (isTheater) {
+                                Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
+                            } else {
+                                Modifier.width(520.dp).aspectRatio(16f / 9f)
+                            }
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(Color.Black.copy(alpha = 0.5f))
                                 .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),

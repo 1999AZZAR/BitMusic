@@ -1758,6 +1758,7 @@ class DesktopPlaybackEngine(
             searchingBetter = track.song.videoId.let { it == searchingBetterFor || it == incomingSearchingFor },
             smartAnalysis = analysisStatus(track),
             isVideoMode = _state.value.isVideoMode,
+            videoStream = null,
         )
         if (_state.value.isVideoMode) {
             val current = track.song

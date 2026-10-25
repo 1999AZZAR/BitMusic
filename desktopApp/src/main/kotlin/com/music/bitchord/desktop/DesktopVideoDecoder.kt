@@ -3,8 +3,12 @@ package com.music.bitchord.desktop
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext
 import org.bytedeco.ffmpeg.avcodec.AVPacket
 import org.bytedeco.ffmpeg.avformat.AVFormatContext
+import org.bytedeco.ffmpeg.avformat.AVIOContext
+import org.bytedeco.ffmpeg.avformat.Read_packet_Pointer_BytePointer_int
+import org.bytedeco.ffmpeg.avformat.Seek_Pointer_long_int
 import org.bytedeco.ffmpeg.avutil.AVDictionary
 import org.bytedeco.ffmpeg.avutil.AVFrame
+import org.bytedeco.ffmpeg.global.avcodec.AVDISCARD_ALL
 import org.bytedeco.ffmpeg.global.avcodec.av_packet_alloc
 import org.bytedeco.ffmpeg.global.avcodec.av_packet_free
 import org.bytedeco.ffmpeg.global.avcodec.av_packet_unref
@@ -17,20 +21,27 @@ import org.bytedeco.ffmpeg.global.avcodec.avcodec_parameters_to_context
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_receive_frame
 import org.bytedeco.ffmpeg.global.avcodec.avcodec_send_packet
 import org.bytedeco.ffmpeg.global.avformat.AVSEEK_FLAG_BACKWARD
+import org.bytedeco.ffmpeg.global.avformat.AVSEEK_SIZE
 import org.bytedeco.ffmpeg.global.avformat.av_find_best_stream
 import org.bytedeco.ffmpeg.global.avformat.av_read_frame
 import org.bytedeco.ffmpeg.global.avformat.av_seek_frame
+import org.bytedeco.ffmpeg.global.avformat.avformat_alloc_context
 import org.bytedeco.ffmpeg.global.avformat.avformat_close_input
 import org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info
 import org.bytedeco.ffmpeg.global.avformat.avformat_open_input
+import org.bytedeco.ffmpeg.global.avformat.avio_alloc_context
+import org.bytedeco.ffmpeg.global.avformat.avio_context_free
+import org.bytedeco.ffmpeg.global.avutil.AVERROR_EOF
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO
 import org.bytedeco.ffmpeg.global.avutil.AV_NOPTS_VALUE
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
 import org.bytedeco.ffmpeg.global.avutil.av_dict_set
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
 import org.bytedeco.ffmpeg.global.avutil.av_frame_free
+import org.bytedeco.ffmpeg.global.avutil.av_free
 import org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays
 import org.bytedeco.ffmpeg.global.avutil.av_image_get_buffer_size
+import org.bytedeco.ffmpeg.global.avutil.av_malloc
 import org.bytedeco.ffmpeg.global.swscale.SWS_BILINEAR
 import org.bytedeco.ffmpeg.global.swscale.sws_freeContext
 import org.bytedeco.ffmpeg.global.swscale.sws_getContext
@@ -39,6 +50,7 @@ import org.bytedeco.ffmpeg.swscale.SwsContext
 import org.bytedeco.javacpp.BytePointer
 import org.bytedeco.javacpp.DoublePointer
 import org.bytedeco.javacpp.IntPointer
+import org.bytedeco.javacpp.Pointer
 import org.bytedeco.javacpp.PointerPointer
 
 /**
@@ -52,6 +64,8 @@ data class DesktopDecodedVideoFrame(
 /**
  * Dedicated video decoder wrapping FFmpeg demuxer, H.264/video codec context,
  * and SwsContext colorspace converter for desktop video playback.
+ * Leverages [DesktopRangeStream] to request bounded chunk windows via HTTP
+ * with zero native stalls or 403 Forbidden errors.
  */
 internal class DesktopVideoDecoder {
 
@@ -64,6 +78,11 @@ internal class DesktopVideoDecoder {
     private var view: java.nio.ByteBuffer? = null
     private var planes: PointerPointer<BytePointer>? = null
     private var strides: IntPointer? = null
+    private var rangeSource: DesktopRangeStream? = null
+    private var readPacket: Read_packet_Pointer_BytePointer_int? = null
+    private var seekPacket: Seek_Pointer_long_int? = null
+    private var avio: AVIOContext? = null
+
     private var scalerFormat = -1
     private var sourceWidth = 0
     private var sourceHeight = 0
@@ -86,28 +105,40 @@ internal class DesktopVideoDecoder {
 
     fun open(url: String, headers: Map<String, String> = emptyMap()): Result<Unit> = runCatching {
         DesktopAudioDecoder.ensureNetworkReady()
-        val options = AVDictionary(null)
-        if (headers.isNotEmpty()) {
-            av_dict_set(
-                options,
-                "headers",
-                headers.entries.joinToString("") { (k, v) -> "$k: $v\r\n" },
-                0,
-            )
-        }
-        av_dict_set(options, "rw_timeout", "15000000", 0)
-        av_dict_set(options, "reconnect", "1", 0)
-        av_dict_set(options, "reconnect_streamed", "1", 0)
-        av_dict_set(options, "reconnect_delay_max", "5", 0)
+        val isHttp = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
 
-        val opened = AVFormatContext(null)
-        check(avformat_open_input(opened, url, null, options) >= 0) { "could not open video stream" }
+        val opened = if (isHttp) {
+            windowedContext(url, headers)
+        } else {
+            val options = AVDictionary(null)
+            if (headers.isNotEmpty()) {
+                val block = headers.entries.joinToString("") { (k, v) -> "$k: $v\r\n" }
+                av_dict_set(options, "headers", block, 0)
+                headers["User-Agent"]?.let { av_dict_set(options, "user_agent", it, 0) }
+            }
+            av_dict_set(options, "rw_timeout", "15000000", 0)
+            val ctx = AVFormatContext(null)
+            check(avformat_open_input(ctx, url, null, options) >= 0) { "could not open video stream" }
+            ctx
+        }
         format = opened
+
+        if (isHttp) {
+            check(avformat_open_input(opened, null as String?, null, null as AVDictionary?) >= 0) {
+                "could not open windowed video stream"
+            }
+        }
+
         check(avformat_find_stream_info(opened, null as AVDictionary?) >= 0) { "no video stream info" }
         streamIndex = av_find_best_stream(
             opened, AVMEDIA_TYPE_VIDEO, -1, -1, null as org.bytedeco.ffmpeg.avcodec.AVCodec?, 0,
         )
         check(streamIndex >= 0) { "no video track in stream" }
+
+        // Discard non-video streams so FFmpeg doesn't demux or buffer them
+        for (i in 0 until opened.nb_streams()) {
+            if (i != streamIndex) opened.streams(i).discard(AVDISCARD_ALL)
+        }
 
         val stream = opened.streams(streamIndex)
         val parameters = stream.codecpar()
@@ -146,6 +177,41 @@ internal class DesktopVideoDecoder {
         packet = av_packet_alloc()
         frame = av_frame_alloc()
     }.onFailure { close() }
+
+    private fun windowedContext(url: String, headers: Map<String, String>): AVFormatContext {
+        val source = DesktopRangeStream(url, headers, windowBytes = 1024 * 1024)
+        val read = object : Read_packet_Pointer_BytePointer_int() {
+            override fun call(opaque: Pointer?, buf: BytePointer?, count: Int): Int {
+                if (buf == null || count <= 0) return 0
+                val block = ByteArray(count)
+                val taken = source.read(block, count)
+                if (taken <= 0) return AVERROR_EOF
+                buf.put(block, 0, taken)
+                return taken
+            }
+        }
+        val seek = object : Seek_Pointer_long_int() {
+            override fun call(opaque: Pointer?, offset: Long, whence: Int): Long {
+                if (whence == AVSEEK_SIZE) return source.length
+                val target = when (whence) {
+                    SEEK_CUR -> source.position() + offset
+                    SEEK_END -> source.length + offset
+                    else -> offset
+                }
+                source.seek(target)
+                return target
+            }
+        }
+        val ioBuf = BytePointer(av_malloc(IO_BUFFER_BYTES.toLong()))
+        val io = avio_alloc_context(ioBuf, IO_BUFFER_BYTES, 0, null, read, null, seek)
+        val context = avformat_alloc_context()
+        context.pb(io)
+        rangeSource = source
+        readPacket = read
+        seekPacket = seek
+        avio = io
+        return context
+    }
 
     fun seekTo(targetMs: Long): Boolean {
         val container = format ?: return false
@@ -223,6 +289,17 @@ internal class DesktopVideoDecoder {
         format?.let { avformat_close_input(it) }
         buffer?.deallocate()
         strides?.deallocate()
+        avio?.let {
+            av_free(it.buffer())
+            it.buffer(null as BytePointer?)
+            avio_context_free(it)
+        }
+        readPacket?.deallocate()
+        seekPacket?.deallocate()
+        readPacket = null
+        seekPacket = null
+        avio = null
+        rangeSource = null
         frame = null
         packet = null
         scaler = null
@@ -244,5 +321,8 @@ internal class DesktopVideoDecoder {
     companion object {
         const val MAX_WIDTH = 1280
         const val MAX_HEIGHT = 720
+        const val IO_BUFFER_BYTES = 64 * 1024
+        const val SEEK_CUR = 1
+        const val SEEK_END = 2
     }
 }
