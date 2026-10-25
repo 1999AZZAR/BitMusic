@@ -534,6 +534,8 @@ compose.desktop {
         mainClass = composeMainClass
         jvmArgs("-Xmx512m")
         jvmArgs("-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=20000", "-XX:G1PeriodicGCSystemLoadThreshold=0")
+        jvmArgs("-Dorg.bytedeco.javacpp.maxbytes=256M")
+        jvmArgs("-Dorg.bytedeco.javacpp.maxphysicalbytes=512M")
         jvmArgs("-Dbitchord.version=$appVersion")
         if (desktopModuleIndexUrl.isNotBlank()) {
             jvmArgs("-Dbitchord.module.index=$desktopModuleIndexUrl")

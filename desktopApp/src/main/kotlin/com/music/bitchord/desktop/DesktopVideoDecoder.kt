@@ -38,6 +38,7 @@ import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
 import org.bytedeco.ffmpeg.global.avutil.av_dict_set
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
 import org.bytedeco.ffmpeg.global.avutil.av_frame_free
+import org.bytedeco.ffmpeg.global.avutil.av_frame_unref
 import org.bytedeco.ffmpeg.global.avutil.av_free
 import org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays
 import org.bytedeco.ffmpeg.global.avutil.av_image_get_buffer_size
@@ -236,7 +237,10 @@ internal class DesktopVideoDecoder {
 
         while (true) {
             if (avcodec_receive_frame(context, decoded) == 0) {
-                val converter = scalerFor(decoded.format()) ?: return null
+                val converter = scalerFor(decoded.format()) ?: run {
+                    av_frame_unref(decoded)
+                    return null
+                }
                 sws_scale(converter, decoded.data(), decoded.linesize(), 0, sourceHeight, planes, strides)
                 view?.let { pixels ->
                     pixels.rewind()
@@ -251,6 +255,7 @@ internal class DesktopVideoDecoder {
                 lastPtsMs = ptsMs
                 @Suppress("DEPRECATION")
                 val isKey = decoded.key_frame() != 0
+                av_frame_unref(decoded)
                 return DesktopDecodedVideoFrame(ptsMs = ptsMs, isKeyFrame = isKey)
             }
             val readRes = av_read_frame(container, pkt)
@@ -289,6 +294,7 @@ internal class DesktopVideoDecoder {
         format?.let { avformat_close_input(it) }
         buffer?.deallocate()
         strides?.deallocate()
+        planes?.deallocate()
         avio?.let {
             av_free(it.buffer())
             it.buffer(null as BytePointer?)
@@ -316,6 +322,7 @@ internal class DesktopVideoDecoder {
         timeBaseNum = 0
         timeBaseDen = 0
         lastPtsMs = 0L
+        org.bytedeco.javacpp.Pointer.deallocateReferences()
     }
 
     companion object {

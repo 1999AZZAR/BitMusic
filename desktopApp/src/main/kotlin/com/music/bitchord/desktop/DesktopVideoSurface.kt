@@ -85,6 +85,10 @@ internal fun DesktopVideoSurface(
     val currentlyPlaying by rememberUpdatedState(isPlaying)
     val currentPlaybackPos by rememberUpdatedState(playbackPosition)
 
+    // Explicit tracking of native Skia Images to release off-heap C++ memory immediately
+    var olderSkiaImage by remember(videoStream.url) { mutableStateOf<Image?>(null) }
+    var previousSkiaImage by remember(videoStream.url) { mutableStateOf<Image?>(null) }
+
     LaunchedEffect(videoStream.url) {
         withContext(Dispatchers.IO) {
             val decoder = DesktopVideoDecoder()
@@ -141,18 +145,28 @@ internal fun DesktopVideoSurface(
                         }
                         is DesktopVideoSyncAction.WAIT -> {
                             delay((action.delayMs - 2L).coerceIn(2L, 45L))
-                            val newBitmap = Image.makeRaster(info, currentBuffer, decoder.width * 4).toComposeImageBitmap()
+                            val newSkiaImage = Image.makeRaster(info, currentBuffer, decoder.width * 4)
+                            val newBitmap = newSkiaImage.toComposeImageBitmap()
                             withContext(Dispatchers.Main) {
+                                val toRelease = olderSkiaImage
+                                olderSkiaImage = previousSkiaImage
+                                previousSkiaImage = newSkiaImage
                                 frameBitmap = newBitmap
+                                toRelease?.close()
                                 isBuffering = false
                             }
                             useBufferA = !useBufferA
                             lastAudioMs = currentClockMs()
                         }
                         DesktopVideoSyncAction.RENDER -> {
-                            val newBitmap = Image.makeRaster(info, currentBuffer, decoder.width * 4).toComposeImageBitmap()
+                            val newSkiaImage = Image.makeRaster(info, currentBuffer, decoder.width * 4)
+                            val newBitmap = newSkiaImage.toComposeImageBitmap()
                             withContext(Dispatchers.Main) {
+                                val toRelease = olderSkiaImage
+                                olderSkiaImage = previousSkiaImage
+                                previousSkiaImage = newSkiaImage
                                 frameBitmap = newBitmap
+                                toRelease?.close()
                                 isBuffering = false
                             }
                             useBufferA = !useBufferA
@@ -162,6 +176,12 @@ internal fun DesktopVideoSurface(
                 }
             } finally {
                 decoder.close()
+                withContext(Dispatchers.Main) {
+                    olderSkiaImage?.close()
+                    olderSkiaImage = null
+                    previousSkiaImage?.close()
+                    previousSkiaImage = null
+                }
             }
         }
     }
@@ -169,6 +189,10 @@ internal fun DesktopVideoSurface(
     DisposableEffect(videoStream.url) {
         onDispose {
             frameBitmap = null
+            olderSkiaImage?.close()
+            olderSkiaImage = null
+            previousSkiaImage?.close()
+            previousSkiaImage = null
             isBuffering = true
         }
     }
