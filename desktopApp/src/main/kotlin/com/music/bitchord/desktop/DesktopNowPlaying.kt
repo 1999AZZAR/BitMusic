@@ -127,12 +127,11 @@ internal fun DesktopNowPlaying(
     var userPreferredPanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
     var sidePanel by remember { mutableStateOf(if (lyricsAvailable) DesktopSidePanel.LYRICS else DesktopSidePanel.QUEUE) }
     var panelShown by remember { mutableStateOf(!isVideoMode) }
-    var isTheater by remember { mutableStateOf(false) }
+    val isExpanded = isVideoMode && !panelShown
     LaunchedEffect(song.videoId, lyricsAvailable, isVideoMode) {
         if (isVideoMode) {
             panelShown = false
         } else {
-            isTheater = false
             if (!lyricsAvailable) {
                 sidePanel = DesktopSidePanel.QUEUE
                 panelShown = true
@@ -185,12 +184,8 @@ internal fun DesktopNowPlaying(
                                 playbackPosition = playbackPosition,
                                 preferredResolution = preferredVideoResolution,
                                 onSelectResolution = onSelectVideoResolution,
-                                isTheater = isTheater,
-                                onToggleTheater = {
-                                    isTheater = !isTheater
-                                    if (isTheater) panelShown = false
-                                },
-                                modifier = if (isTheater) {
+                                isExpanded = isExpanded,
+                                modifier = if (isExpanded) {
                                     Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
                                 } else {
                                     Modifier.width(520.dp)
@@ -198,7 +193,7 @@ internal fun DesktopNowPlaying(
                             )
                         } else {
                             Box(
-                                modifier = if (isTheater) {
+                                modifier = if (isExpanded) {
                                     Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
                                 } else {
                                     Modifier.width(520.dp).aspectRatio(16f / 9f)
@@ -276,7 +271,7 @@ internal fun DesktopNowPlaying(
                     }
                 }
                 Spacer(Modifier.height(if (isVideoMode) 14.dp else 24.dp))
-                val titleWidth = if (isTheater && isVideoMode) 640.dp else 500.dp
+                val titleWidth = if (isExpanded && isVideoMode) 640.dp else 500.dp
                 Text(
                     song.title,
                     style = MaterialTheme.typography.headlineLarge,
@@ -299,7 +294,7 @@ internal fun DesktopNowPlaying(
                         .clickable(onClick = onOpenArtist)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
-                if (!song.albumName.isNullOrBlank() && !isTheater) {
+                if (!song.albumName.isNullOrBlank() && !isExpanded) {
                     Text(
                         song.albumName.orEmpty(),
                         style = MaterialTheme.typography.bodyMedium,
@@ -318,7 +313,7 @@ internal fun DesktopNowPlaying(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                val controlWidth = if (isTheater && isVideoMode) 640.dp else 420.dp
+                val controlWidth = if (isExpanded && isVideoMode) 640.dp else 420.dp
                 Row(
                     Modifier.width(controlWidth),
                     verticalAlignment = Alignment.CenterVertically,
@@ -443,7 +438,6 @@ internal fun DesktopNowPlaying(
                             if (panelShown && sidePanel == DesktopSidePanel.LYRICS) {
                                 panelShown = false
                             } else {
-                                isTheater = false
                                 userPreferredPanel = DesktopSidePanel.LYRICS
                                 sidePanel = DesktopSidePanel.LYRICS
                                 panelShown = true
@@ -468,7 +462,6 @@ internal fun DesktopNowPlaying(
                             if (panelShown && sidePanel == DesktopSidePanel.QUEUE) {
                                 panelShown = false
                             } else {
-                                isTheater = false
                                 userPreferredPanel = DesktopSidePanel.QUEUE
                                 sidePanel = DesktopSidePanel.QUEUE
                                 panelShown = true

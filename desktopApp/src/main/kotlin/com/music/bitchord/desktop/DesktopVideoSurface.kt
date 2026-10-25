@@ -21,13 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Fullscreen
-import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -75,8 +72,7 @@ internal fun DesktopVideoSurface(
     playbackPosition: PlaybackPosition? = null,
     preferredResolution: String = "auto",
     onSelectResolution: ((String) -> Unit)? = null,
-    isTheater: Boolean = false,
-    onToggleTheater: (() -> Unit)? = null,
+    isExpanded: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var frameBitmap by remember(videoStream.url) { mutableStateOf<ImageBitmap?>(null) }
@@ -193,17 +189,12 @@ internal fun DesktopVideoSurface(
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = (if (isTheater) Modifier.fillMaxHeight() else Modifier)
-                .aspectRatio(streamAspect, matchHeightConstraintsFirst = isTheater)
+            modifier = (if (isExpanded) Modifier.fillMaxHeight() else Modifier)
+                .aspectRatio(streamAspect, matchHeightConstraintsFirst = isExpanded)
                 .shadow(24.dp, RoundedCornerShape(16.dp))
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.Black)
-                .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = { onToggleTheater?.invoke() }
-                    )
-                },
+                .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -311,22 +302,6 @@ internal fun DesktopVideoSurface(
                                 )
                             }
                         }
-                    }
-                }
-
-                if (onToggleTheater != null) {
-                    IconButton(
-                        onClick = onToggleTheater,
-                        modifier = Modifier
-                            .size(34.dp)
-                            .background(Color.Black.copy(alpha = 0.55f), CircleShape),
-                    ) {
-                        Icon(
-                            imageVector = if (isTheater) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                            contentDescription = if (isTheater) "Exit theater mode" else "Theater mode",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp),
-                        )
                     }
                 }
             }
