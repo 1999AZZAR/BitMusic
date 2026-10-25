@@ -30,6 +30,7 @@ import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
 import org.schabi.newpipe.extractor.exceptions.PaidContentException
 import org.schabi.newpipe.extractor.exceptions.PrivateContentException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
+import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
 import org.schabi.newpipe.extractor.exceptions.SoundCloudGoPlusContentException
 import org.schabi.newpipe.extractor.exceptions.UnsupportedContentInCountryException
 import org.schabi.newpipe.extractor.exceptions.YoutubeMusicPremiumContentException
@@ -509,6 +510,9 @@ object StreamResolver {
                 return Stream(found.url, found.kbps, found.mimeType, found.loudnessDb)
             }
             TrackLog.w(TAG, "InnerTubeX ${found.profileId} minted an unusable URL for $videoId: $verdict")
+            if (verdict != Probe.OK) {
+                InnerTubeXResolver.exclude(videoId, found.profileId)
+            }
             skip += found.profileId
         }
         return null
@@ -781,16 +785,28 @@ object StreamResolver {
         return try {
             prober.newCall(builder.build()).execute().use { response ->
                 when {
-                    response.code in REFUSAL_CODES -> Probe.REFUSED
-                    response.code !in 200..299 && response.code != 416 -> Probe.UNREACHABLE
+                    response.code in REFUSAL_CODES -> {
+                        TrackLog.w(TAG, "probe REFUSED for $url: HTTP ${response.code}")
+                        Probe.REFUSED
+                    }
+                    response.code !in 200..299 && response.code != 416 -> {
+                        TrackLog.w(TAG, "probe UNREACHABLE for $url: HTTP ${response.code}")
+                        Probe.UNREACHABLE
+                    }
                     // A refusal dressed as a success: an error page, or the
                     // consent/captcha interstitial, rather than audio.
-                    response.header("Content-Type")?.startsWith("audio/") != true -> Probe.REFUSED
+                    response.header("Content-Type")?.startsWith("audio/") != true -> {
+                        TrackLog.w(TAG, "probe REFUSED for $url: non-audio Content-Type ${response.header("Content-Type")}")
+                        Probe.REFUSED
+                    }
                     // Headers can arrive long before a body that never does —
                     // exactly the shaping this whole path exists to sidestep.
                     // Insisting on the bytes is the point: a trickle that
                     // yields its first byte and stalls is a failure too.
-                    response.body?.source()?.request(PROBE_READ_BYTES) != true -> Probe.UNREACHABLE
+                    response.body?.source()?.request(PROBE_READ_BYTES) != true -> {
+                        TrackLog.w(TAG, "probe UNREACHABLE for $url: stalled body read")
+                        Probe.UNREACHABLE
+                    }
                     else -> Probe.OK
                 }
             }
@@ -946,6 +962,8 @@ object StreamResolver {
      */
     private fun permanentReason(e: Throwable): String? = when (e) {
         is PermanentlyUnplayableException -> e.message ?: "This track cannot be played"
+        is SignInConfirmNotBotException -> "YouTube requires bot verification to play this track"
+        is ReCaptchaException -> "YouTube requires captcha verification to play this track"
         // The whole reason this function exists — see [newPipeStream].
         is AgeRestrictedContentException ->
             if (Innertube.cookie == null) {
@@ -964,7 +982,11 @@ object StreamResolver {
         // classification has to survive being wrapped or it never fires: the
         // failure that reaches [resolveUncached] arrives as whatever the last
         // layer chose to throw it as.
-        else -> e.cause?.takeIf { it !== e }?.let(::permanentReason)
+        else -> when {
+            e.message?.contains("Sign in to confirm", ignoreCase = true) == true ->
+                "YouTube requires bot verification to play this track"
+            else -> e.cause?.takeIf { it !== e }?.let(::permanentReason)
+        }
     }
 
     /** How many times the watch page is worth asking for before giving up. */

@@ -51,6 +51,7 @@ internal fun blendElapsedUs(samples: Long, channels: Int, sampleRate: Int): Long
 class DesktopPlaybackEngine(
     private val onEnded: () -> Unit,
     private val onCrossfaded: (Song) -> Unit = {},
+    private val onFailed: (Song, Throwable) -> Unit = { _, _ -> },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var persistentVideoMode: Boolean = DesktopPersistence().boolean("video_mode", false)
@@ -311,6 +312,7 @@ class DesktopPlaybackEngine(
                         isVideoMode = _state.value.isVideoMode,
                         error = reported.message ?: "Playback failed",
                     )
+                    onFailed(song, reported)
                 },
             )
         }
@@ -359,6 +361,7 @@ class DesktopPlaybackEngine(
                 isVideoMode = _state.value.isVideoMode,
                 error = "Could not play this track: ${failure.message}",
             )
+            onFailed(song, failure)
         }
     }
 
