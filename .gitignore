@@ -42,12 +42,14 @@ keystore.properties
 .debug/
 
 # AI agent configuration
-AGENTS.md
 /output/
-.claude/
 !.cursor/
 !.cursor/rules/
 !.cursor/rules/**
+!AGENTS.md
+!CLAUDE.md
+!GEMINI.md
+!.github/copilot-instructions.md
 
 # Built packages — release APKs/bundles are handed out, never committed
 *.apk
