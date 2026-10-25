@@ -21,13 +21,19 @@ sealed interface DesktopVideoSyncAction {
 class DesktopVideoSyncClock(
     val toleranceEarlyMs: Long = 8L,
     val toleranceLateMs: Long = 120L,
+    /**
+     * Compensates for display presentation latency (display refresh/VSync cadence,
+     * compositor buffer swaps, and UI frame scheduling), bringing video forward to match audio.
+     */
+    val displayLeadMs: Long = 35L,
 ) {
     /**
      * Determines whether the decoded frame with presentation timestamp [framePtsMs]
      * should be rendered, dropped, or held relative to [audioPositionMs].
      */
     fun evaluate(framePtsMs: Long, audioPositionMs: Long): DesktopVideoSyncAction {
-        val diff = framePtsMs - audioPositionMs
+        val targetAudioMs = audioPositionMs + displayLeadMs
+        val diff = framePtsMs - targetAudioMs
         return when {
             diff < -toleranceLateMs -> DesktopVideoSyncAction.DROP
             diff > toleranceEarlyMs -> DesktopVideoSyncAction.WAIT(diff)
