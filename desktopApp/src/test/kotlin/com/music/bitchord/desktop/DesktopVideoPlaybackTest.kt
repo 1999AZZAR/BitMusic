@@ -45,11 +45,11 @@ class DesktopVideoPlaybackTest {
 
     @Test
     fun `video clock compensates for display presentation latency`() {
-        val clock = DesktopVideoSyncClock(displayLeadMs = 35L)
-        // Frame is 80ms ahead of audio clock, but 35ms display lead brings wait down to 45ms
+        val clock = DesktopVideoSyncClock(displayLeadMs = 14L)
+        // Frame is 80ms ahead of audio clock, but 14ms display lead brings wait down to 66ms
         val action = clock.evaluate(framePtsMs = 5_080, audioPositionMs = 5_000)
         assertTrue(action is DesktopVideoSyncAction.WAIT)
-        assertEquals(45L, action.delayMs)
+        assertEquals(66L, action.delayMs)
     }
 
     @Test

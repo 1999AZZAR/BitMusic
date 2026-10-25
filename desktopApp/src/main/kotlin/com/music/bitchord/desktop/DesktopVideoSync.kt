@@ -19,13 +19,14 @@ sealed interface DesktopVideoSyncAction {
  * Playhead clock synchronization between video frames and the audio engine.
  */
 class DesktopVideoSyncClock(
-    val toleranceEarlyMs: Long = 8L,
+    val toleranceEarlyMs: Long = 4L,
     val toleranceLateMs: Long = 120L,
     /**
      * Compensates for display presentation latency (display refresh/VSync cadence,
      * compositor buffer swaps, and UI frame scheduling), bringing video forward to match audio.
+     * Tuned for standard 60 Hz desktop displays (~14 ms pipeline latency).
      */
-    val displayLeadMs: Long = 35L,
+    val displayLeadMs: Long = 14L,
 ) {
     /**
      * Determines whether the decoded frame with presentation timestamp [framePtsMs]
