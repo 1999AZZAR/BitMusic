@@ -19,8 +19,8 @@ sealed interface DesktopVideoSyncAction {
  * Playhead clock synchronization between video frames and the audio engine.
  */
 class DesktopVideoSyncClock(
-    val toleranceEarlyMs: Long = 40L,
-    val toleranceLateMs: Long = 100L,
+    val toleranceEarlyMs: Long = 2L,
+    val toleranceLateMs: Long = 65L,
 ) {
     /**
      * Determines whether the decoded frame with presentation timestamp [framePtsMs]
@@ -39,7 +39,7 @@ class DesktopVideoSyncClock(
      * Checks if audio clock jumped significantly (e.g. user scrubbed or seeked),
      * requiring the video decoder pipeline to flush and seek.
      */
-    fun isDiscontinuous(lastAudioMs: Long, currentAudioMs: Long, thresholdMs: Long = 800L): Boolean {
+    fun isDiscontinuous(lastAudioMs: Long, currentAudioMs: Long, thresholdMs: Long = 500L): Boolean {
         if (currentAudioMs < lastAudioMs) return true
         return (currentAudioMs - lastAudioMs) > thresholdMs
     }

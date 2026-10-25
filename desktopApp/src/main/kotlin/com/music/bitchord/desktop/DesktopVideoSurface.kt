@@ -148,37 +148,32 @@ internal fun DesktopVideoSurface(
                             continue
                         }
                         is DesktopVideoSyncAction.WAIT -> {
-                            delay((action.delayMs - 2L).coerceIn(2L, 45L))
-                            val targetBitmap = if (useBufferA) {
-                                bA.installPixels(info, currentBuffer, decoder.width * 4)
-                                composeBitmapA
-                            } else {
-                                bB.installPixels(info, currentBuffer, decoder.width * 4)
-                                composeBitmapB
+                            if (action.delayMs > 80L) {
+                                delay(80L)
+                                continue
                             }
-                            withContext(Dispatchers.Main) {
-                                frameBitmap = targetBitmap
-                                isBuffering = false
+                            if (action.delayMs > 1L) {
+                                delay(action.delayMs - 1L)
                             }
-                            useBufferA = !useBufferA
-                            lastAudioMs = currentClockMs()
                         }
                         DesktopVideoSyncAction.RENDER -> {
-                            val targetBitmap = if (useBufferA) {
-                                bA.installPixels(info, currentBuffer, decoder.width * 4)
-                                composeBitmapA
-                            } else {
-                                bB.installPixels(info, currentBuffer, decoder.width * 4)
-                                composeBitmapB
-                            }
-                            withContext(Dispatchers.Main) {
-                                frameBitmap = targetBitmap
-                                isBuffering = false
-                            }
-                            useBufferA = !useBufferA
-                            lastAudioMs = currentClockMs()
+                            // Frame is on-time; present immediately
                         }
                     }
+
+                    val targetBitmap = if (useBufferA) {
+                        bA.installPixels(info, currentBuffer, decoder.width * 4)
+                        composeBitmapA
+                    } else {
+                        bB.installPixels(info, currentBuffer, decoder.width * 4)
+                        composeBitmapB
+                    }
+                    withContext(Dispatchers.Main) {
+                        frameBitmap = targetBitmap
+                        isBuffering = false
+                    }
+                    useBufferA = !useBufferA
+                    lastAudioMs = currentClockMs()
                 }
             } finally {
                 decoder.close()
