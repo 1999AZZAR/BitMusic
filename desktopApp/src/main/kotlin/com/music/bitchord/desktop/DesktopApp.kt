@@ -8348,12 +8348,14 @@ private fun ShelfItem.toSong(): Song {
             it.lowercase() !in SHELF_TYPE_WORDS &&
             !it.matches(SHELF_TALLY)
     } ?: "Unknown Artist"
+    val isVideoItem = parts.any { it.lowercase() in listOf("video", "music video") || it.contains("views", ignoreCase = true) }
     return Song(
         videoId = videoId.orEmpty(),
         title = title,
         artist = artist,
         thumbnailUrl = thumbnailUrl,
         durationText = parts.firstOrNull { it.matches(SHELF_DURATION) },
+        isVideo = isVideoItem,
     )
 }
 

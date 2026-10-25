@@ -108,4 +108,18 @@ class DesktopVideoPlaybackTest {
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("local or non-YouTube") == true)
     }
+
+    @Test
+    fun `resolveVideo fails for catalogue track without music video`() = kotlinx.coroutines.runBlocking {
+        val catalogueSong = com.music.bitchord.data.model.Song(
+            videoId = "pure_audio_1",
+            title = "Album Track",
+            artist = "Band",
+            thumbnailUrl = null,
+            isVideo = false,
+        )
+        // With no search results or match found, resolveVideo will fail
+        val result = DesktopStreamClient.resolveVideo(catalogueSong)
+        assertTrue(result.isFailure)
+    }
 }

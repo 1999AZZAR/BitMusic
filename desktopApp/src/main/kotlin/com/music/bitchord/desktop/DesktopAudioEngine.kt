@@ -254,12 +254,13 @@ class DesktopPlaybackEngine(
         incomingSearchingFor = null
         val isLocalSong = song.localUri != null || song.videoId.isBlank()
         val willAttemptVideo = persistentVideoMode && !isLocalSong
+        val startInVideoMode = willAttemptVideo && song.isVideo
 
         _state.value = DesktopPlaybackState(
             song = song,
             volume = volume,
             isLoading = true,
-            isVideoMode = willAttemptVideo,
+            isVideoMode = startInVideoMode,
             videoLoading = willAttemptVideo,
             preferredVideoResolution = preferredVideoResolution,
         )
@@ -1826,10 +1827,13 @@ class DesktopPlaybackEngine(
             isLocalSong -> false
             !persistentVideoMode -> false
             existingVideo != null -> true
-            isVideoResolving -> true
+            isVideoResolving -> _state.value.isVideoMode
             videoAlreadyResolvedAndUnavailable -> false
-            else -> true
+            track.song.isVideo -> true
+            else -> false
         }
+
+        val willAttemptVideo = persistentVideoMode && !isLocalSong && existingVideo == null && !isVideoResolving && !videoAlreadyResolvedAndUnavailable
 
         _state.value = DesktopPlaybackState(
             song = track.song,
@@ -1850,10 +1854,10 @@ class DesktopPlaybackEngine(
             isVideoMode = shouldBeVideoMode,
             preferredVideoResolution = preferredVideoResolution,
             videoStream = existingVideo,
-            videoLoading = isVideoResolving || (shouldBeVideoMode && existingVideo == null),
+            videoLoading = isVideoResolving || (willAttemptVideo && track.song.isVideo),
             videoError = null,
         )
-        if (shouldBeVideoMode && existingVideo == null && !isVideoResolving) {
+        if (willAttemptVideo) {
             val current = track.song
             scope.launch {
                 val videoResult = DesktopStreamClient.resolveVideo(current, targetResolution = preferredVideoResolution)

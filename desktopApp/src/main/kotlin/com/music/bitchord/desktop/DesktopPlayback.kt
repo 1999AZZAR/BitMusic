@@ -2,6 +2,7 @@ package com.music.bitchord.desktop
 
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.NerdStats
+import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.innertube.StreamResolver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
@@ -243,7 +244,13 @@ internal object DesktopStreamClient {
         if (song.localUri != null || song.videoId.isBlank()) {
             error("No video stream for local or non-YouTube track '${song.title}'")
         }
-        val candidates = StreamResolver.resolveVideoCandidates(song.videoId)
+        val videoIdToResolve = if (song.isVideo) {
+            song.videoId
+        } else {
+            val videoVersion = YtMusicRepository.resolveVideo(song)
+            videoVersion?.videoId ?: error("Track '${song.title}' is pure music with no video")
+        }
+        val candidates = StreamResolver.resolveVideoCandidates(videoIdToResolve)
         val video = com.music.bitchord.data.innertube.VideoStreamSelector.selectStream(
             candidates,
             targetResolution = targetResolution,
