@@ -46,6 +46,8 @@ keystore.properties
 !.cursor/
 !.cursor/rules/
 !.cursor/rules/**
+!conductor/
+!conductor/**
 !AGENTS.md
 !CLAUDE.md
 !GEMINI.md
