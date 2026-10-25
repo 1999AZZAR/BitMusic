@@ -216,11 +216,7 @@ internal fun DesktopNowPlaying(
                         modifier = Modifier.width(500.dp),
                     )
                 }
-                Spacer(Modifier.height(10.dp))
-                DesktopPlaybackQualityBadge(
-                    tint = tint,
-                )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(18.dp))
                 SpectrumPane(
                     tint = tint,
                     modifier = Modifier.width(420.dp).height(54.dp),
@@ -603,6 +599,8 @@ private fun PlayerQueueRow(
             )
         }
         if (isCurrent) {
+            QueueQualityBadge(tint)
+            Spacer(Modifier.width(8.dp))
             Icon(
                 Icons.Rounded.GraphicEq,
                 contentDescription = null,
@@ -627,7 +625,7 @@ private fun PlayerQueueRow(
 }
 
 @Composable
-internal fun DesktopPlaybackQualityBadge(
+private fun QueueQualityBadge(
     tint: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -639,31 +637,31 @@ internal fun DesktopPlaybackQualityBadge(
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(
                 when {
-                    isLossless -> Color(0xFF26C6DA).copy(alpha = 0.18f)
-                    isAtmos -> Color(0xFFAB47BC).copy(alpha = 0.18f)
+                    isLossless -> Color(0xFF26C6DA).copy(alpha = 0.22f)
+                    isAtmos -> Color(0xFFAB47BC).copy(alpha = 0.22f)
                     else -> Color.White.copy(alpha = 0.08f)
                 }
             )
             .border(
                 0.5.dp,
                 when {
-                    isLossless -> Color(0xFF26C6DA).copy(alpha = 0.35f)
-                    isAtmos -> Color(0xFFAB47BC).copy(alpha = 0.35f)
-                    else -> Color.White.copy(alpha = 0.12f)
+                    isLossless -> Color(0xFF26C6DA).copy(alpha = 0.45f)
+                    isAtmos -> Color(0xFFAB47BC).copy(alpha = 0.45f)
+                    else -> Color.White.copy(alpha = 0.14f)
                 },
-                RoundedCornerShape(6.dp),
+                RoundedCornerShape(4.dp),
             )
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         val iconColor = when {
             isLossless -> Color(0xFF80DEEA)
             isAtmos -> Color(0xFFCE93D8)
-            else -> tint.copy(alpha = 0.75f)
+            else -> tint.copy(alpha = 0.85f)
         }
 
         when {
@@ -672,52 +670,47 @@ internal fun DesktopPlaybackQualityBadge(
                     painter = painterResource(SharedRes.drawable.ic_dolby_atmos),
                     contentDescription = null,
                     tint = iconColor,
-                    modifier = Modifier.height(11.dp),
+                    modifier = Modifier.height(9.dp),
                 )
-                Spacer(Modifier.width(6.dp))
             }
             isLossless -> {
                 Icon(
                     painter = painterResource(SharedRes.drawable.ic_lossless),
                     contentDescription = null,
                     tint = iconColor,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size(11.dp),
                 )
-                Spacer(Modifier.width(6.dp))
             }
             else -> {
                 Icon(
                     imageVector = Icons.Rounded.Headphones,
                     contentDescription = null,
                     tint = iconColor,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size(11.dp),
                 )
-                Spacer(Modifier.width(6.dp))
             }
         }
 
         Text(
             text = badge.title,
-            style = MaterialTheme.typography.labelMedium.copy(
+            style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 11.5.sp,
+                fontSize = 10.sp,
             ),
             color = if (isLossless) Color(0xFFE0F7FA) else Color.White.copy(alpha = 0.9f),
         )
 
         val details = badge.details
         if (!details.isNullOrBlank()) {
-            Spacer(Modifier.width(6.dp))
             Text(
                 text = "·",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = Color.White.copy(alpha = 0.35f),
             )
-            Spacer(Modifier.width(6.dp))
             Text(
                 text = details,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
+                    fontSize = 9.5.sp,
                 ),
                 color = Color.White.copy(alpha = 0.65f),
             )
