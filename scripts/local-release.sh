@@ -68,4 +68,5 @@ in=$(ls -1 desktopApp/build/compose/binaries/main/deb/bitmusic_*_amd64.deb | tai
 out="/tmp/bitmusic-${next}.deb"
 sh desktopApp/packaging/linux-stamp-deb.sh "$in" "$out" "$next"
 sudo dpkg --force-downgrade -i "$out"
+rm -f "$out"
 dpkg-query -W -f 'installed: ${Package} ${Version}\n' bitmusic
