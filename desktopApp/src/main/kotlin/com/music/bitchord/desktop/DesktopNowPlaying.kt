@@ -2,12 +2,10 @@ package com.music.bitchord.desktop
 
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.icons.BitChordIcons
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.aspectRatio
@@ -168,33 +166,13 @@ internal fun DesktopNowPlaying(
                 ),
             ),
         )
-        Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 20.dp)) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp)) {
             Column(
                 Modifier.weight(1f).fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                val canToggleVideo = song.videoId.isNotBlank() && (song.localUri == null || videoStream != null)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(if (isTheater) 36.dp else 44.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (canToggleVideo) {
-                        DesktopSongVideoToggle(
-                            isVideoMode = isVideoMode,
-                            onToggle = onToggleVideoMode,
-                            tint = tint,
-                        )
-                    }
-                }
-
-                Column(
-                    Modifier.weight(1f).fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    if (isVideoMode) {
+                if (isVideoMode) {
                         if (videoStream != null) {
                             DesktopVideoSurface(
                                 videoStream = videoStream,
@@ -436,6 +414,23 @@ internal fun DesktopNowPlaying(
                     DesktopToolbarButton(onClick = onOpenMenu, size = 36.dp) {
                         Icon(Icons.Rounded.MoreHoriz, "More options", tint = DesktopSecondary, modifier = Modifier.size(19.dp))
                     }
+                    val canToggleVideo = song.videoId.isNotBlank() && (song.localUri == null || videoStream != null)
+                    DesktopToolbarButton(
+                        onClick = onToggleVideoMode,
+                        enabled = canToggleVideo,
+                        size = 36.dp,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Videocam,
+                            if (isVideoMode) "Switch to song" else "Switch to video",
+                            tint = if (isVideoMode) {
+                                tint
+                            } else {
+                                DesktopSecondary.copy(alpha = if (canToggleVideo) 1f else 0.4f)
+                            },
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                     DesktopToolbarButton(
                         onClick = {
                             if (panelShown && sidePanel == DesktopSidePanel.LYRICS) {
@@ -483,7 +478,6 @@ internal fun DesktopNowPlaying(
                     }
                 }
             }
-        }
             // The other half of the window, as the original player split it: the lyric sheet
             // standing on the window itself, or the queue on the sidebar's glass. Its share of
             // the window animates, so putting it away hands the space back to the sleeve in
@@ -835,92 +829,5 @@ private fun QueueQualityBadge(
     }
 }
 
-/**
- * Modern icon-rich "Song / Video" segmented toggle pill.
- */
-@Composable
-private fun DesktopSongVideoToggle(
-    isVideoMode: Boolean,
-    onToggle: () -> Unit,
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
-    val songSelected = !isVideoMode
-    val videoSelected = isVideoMode
 
-    val songBg by animateColorAsState(
-        targetValue = if (songSelected) tint else Color.Transparent,
-        animationSpec = if (reduceMotion) snap() else tween(180),
-        label = "songToggleBg",
-    )
-    val songContent by animateColorAsState(
-        targetValue = if (songSelected) Color.Black else Color.White.copy(alpha = 0.72f),
-        animationSpec = if (reduceMotion) snap() else tween(180),
-        label = "songToggleContent",
-    )
-    val videoBg by animateColorAsState(
-        targetValue = if (videoSelected) tint else Color.Transparent,
-        animationSpec = if (reduceMotion) snap() else tween(180),
-        label = "videoToggleBg",
-    )
-    val videoContent by animateColorAsState(
-        targetValue = if (videoSelected) Color.Black else Color.White.copy(alpha = 0.72f),
-        animationSpec = if (reduceMotion) snap() else tween(180),
-        label = "videoToggleContent",
-    )
-
-    Row(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.14f), CircleShape)
-            .padding(3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(songBg)
-                .clickable(enabled = isVideoMode, onClick = onToggle)
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                imageVector = BitChordIcons.MusicNote,
-                contentDescription = "Song mode",
-                tint = songContent,
-                modifier = Modifier.size(15.dp),
-            )
-            Text(
-                text = "Song",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = songContent,
-            )
-        }
-        Row(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(videoBg)
-                .clickable(enabled = !isVideoMode, onClick = onToggle)
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Videocam,
-                contentDescription = "Video mode",
-                tint = videoContent,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = "Video",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = videoContent,
-            )
-        }
-    }
-}
 
