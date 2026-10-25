@@ -24,6 +24,38 @@ class AudioQualityBadgeFormatterTest {
     }
 
     @Test
+    fun testStandardQualityOpusWithNullBitrate() {
+        val snapshot = NerdStats.Snapshot(
+            mimeType = "audio/opus",
+            bitrateKbps = null,
+            sampleRateHz = 48_000,
+            channels = 2,
+            bitDepth = null,
+        )
+        val badge = assertNotNull(AudioQualityBadgeFormatter.formatBadge(snapshot))
+        assertEquals(AudioQualityTier.STANDARD_QUALITY, badge.tier)
+        assertEquals("Standard Quality", badge.title)
+        assertEquals("Opus · 48 kHz", badge.details)
+        assertEquals(false, badge.isLossless)
+    }
+
+    @Test
+    fun testDataSaverLowQuality() {
+        val snapshot = NerdStats.Snapshot(
+            mimeType = "audio/opus",
+            bitrateKbps = 70,
+            sampleRateHz = 48_000,
+            channels = 2,
+            bitDepth = null,
+        )
+        val badge = assertNotNull(AudioQualityBadgeFormatter.formatBadge(snapshot))
+        assertEquals(AudioQualityTier.LOW_QUALITY, badge.tier)
+        assertEquals("Data Saver", badge.title)
+        assertEquals("Opus · 70 kbps · 48 kHz", badge.details)
+        assertEquals(false, badge.isLossless)
+    }
+
+    @Test
     fun testHighQualityAac() {
         val snapshot = NerdStats.Snapshot(
             mimeType = "audio/mp4a-latm",

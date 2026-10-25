@@ -1677,7 +1677,15 @@ private fun LosslessOrStats(
             iconSize = 13.dp,
             modifier = modifier,
         )
-        nerdStats?.isMediumQuality == true || (nerdStats != null && (nerdStats.bitrateKbps ?: 0) > 0) -> LosslessLabel(
+        nerdStats?.isLowQuality == true -> LosslessLabel(
+            text = "Data Saver",
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
+            animated = false,
+            iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
+            iconSize = 13.dp,
+            modifier = modifier,
+        )
+        nerdStats != null -> LosslessLabel(
             text = "Standard Quality",
             details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
             animated = false,

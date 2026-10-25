@@ -22,3 +22,9 @@
   - [x] Display codec & bitrate details inline
   - [x] Verify TV compile checks
 - [x] Task: Phase 3 Verification & Checkpoint (Refer to workflow.md)
+
+## Phase 4: Desktop Native Now Playing Integration & Bitrate Pipeline Fix
+- [x] Task: Ensure robust bitrate fallback in DesktopAudioEngine, DesktopStreamClient, and StreamResolver
+- [x] Task: Integrate DesktopPlaybackQualityBadge in DesktopNowPlaying.kt
+- [x] Task: Update AudioQualityBadgeFormatter tests for null bitrate streams
+- [x] Task: Build, test, package, and verify local release

@@ -1,5 +1,6 @@
 package com.music.bitchord.desktop
 
+import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AutomixPerformanceMode
 import com.music.bitchord.data.settings.MixBlend
@@ -1695,6 +1696,33 @@ class DesktopPlaybackEngine(
     private fun incomingElapsedUs(): Long =
         (incomingSourceFrames * 1_000_000.0 / sink.format.sampleRate.coerceAtLeast(1)).toLong()
 
+    private fun resolveEffectiveFormat(track: Track): DesktopStreamFormat {
+        val measured = track.decoder.measuredFormat
+        val stream = track.stream.format
+        val pickedKbps = NerdStats.pickedBitrateKbps(track.song.videoId)
+        val codec = measured?.codec ?: stream.codec
+        val isOpus = codec?.lowercase()?.contains("opus") == true
+        val kbps = measured?.kbps
+            ?: stream.kbps
+            ?: pickedKbps
+            ?: (if (isOpus) 160 else null)
+
+        return if (measured != null) {
+            measured.copy(
+                codec = codec,
+                kbps = kbps,
+                sampleRateHz = measured.sampleRateHz ?: stream.sampleRateHz,
+                bitDepth = measured.bitDepth ?: stream.bitDepth,
+                channels = measured.channels ?: stream.channels,
+            )
+        } else {
+            stream.copy(
+                codec = codec,
+                kbps = kbps,
+            )
+        }
+    }
+
     private fun publishTrack(track: Track, isPlaying: Boolean, positionUs: Long = track.startUs) {
         _state.value = DesktopPlaybackState(
             song = track.song,
@@ -1708,7 +1736,7 @@ class DesktopPlaybackEngine(
             durationMs = (track.decoder.durationUs ?: 0L) / 1_000,
             // What the decoder is actually being fed, falling back to what the source promised only
             // until something has been measured.
-            streamFormat = track.decoder.measuredFormat ?: track.stream.format,
+            streamFormat = resolveEffectiveFormat(track),
             streamSourceId = track.stream.sourceId,
             searchingBetter = track.song.videoId.let { it == searchingBetterFor || it == incomingSearchingFor },
             smartAnalysis = analysisStatus(track),

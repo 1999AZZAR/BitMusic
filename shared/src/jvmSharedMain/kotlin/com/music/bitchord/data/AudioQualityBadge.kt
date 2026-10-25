@@ -38,9 +38,8 @@ object AudioQualityBadgeFormatter {
             stats.isHiRes -> AudioQualityTier.HI_RES_LOSSLESS
             stats.isLossless -> AudioQualityTier.LOSSLESS
             stats.isHiQuality -> AudioQualityTier.HIGH_QUALITY
-            stats.isMediumQuality || (stats.bitrateKbps ?: 0) > 0 -> AudioQualityTier.STANDARD_QUALITY
             stats.isLowQuality -> AudioQualityTier.LOW_QUALITY
-            else -> AudioQualityTier.UNKNOWN
+            else -> AudioQualityTier.STANDARD_QUALITY
         }
     }
 

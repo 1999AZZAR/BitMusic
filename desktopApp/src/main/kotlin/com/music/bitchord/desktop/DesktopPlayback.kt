@@ -196,7 +196,7 @@ internal object DesktopStreamClient {
             url = url,
             format = DesktopStreamFormat(
                 codec = mimeOf(url),
-                kbps = NerdStats.pickedBitrateKbps(song.videoId),
+                kbps = NerdStats.pickedBitrateKbps(song.videoId) ?: 160,
             ),
             headers = StreamResolver.mediaHeadersFor(url),
             sourceId = "youtube",
