@@ -1086,6 +1086,9 @@ object StreamResolver {
      * around it while staying well inside the window where the URL is good.
      */
     private val recent = ConcurrentHashMap<String, Resolved>()
+    private val recentVideos = ConcurrentHashMap<String, ResolvedVideo>()
+
+    private class ResolvedVideo(val info: VideoStreamInfo, val at: Long)
 
     private const val URL_TTL_MS = 20 * 60 * 1000L
 
@@ -1099,5 +1102,62 @@ object StreamResolver {
             if (recent.size >= MAX_REMEMBERED) recent.clear()
         }
         recent[videoId] = Resolved(url, MonotonicClock.nowMs(), kbps)
+    }
+
+    private fun rememberVideo(videoId: String, info: VideoStreamInfo) {
+        if (recentVideos.size >= MAX_REMEMBERED) {
+            val cutoff = MonotonicClock.nowMs() - URL_TTL_MS
+            recentVideos.entries.removeAll { it.value.at < cutoff }
+            if (recentVideos.size >= MAX_REMEMBERED) recentVideos.clear()
+        }
+        recentVideos[videoId] = ResolvedVideo(info, MonotonicClock.nowMs())
+    }
+
+    /**
+     * Resolves a progressive video stream (up to 720p H.264 pre-muxed) for [videoId],
+     * or null if no playable video rendition is available.
+     */
+    suspend fun resolveVideoStream(videoId: String): VideoStreamInfo? {
+        recentVideos[videoId]
+            ?.takeIf { MonotonicClock.nowMs() - it.at < URL_TTL_MS }
+            ?.let { return it.info }
+
+        return try {
+            val video = withContext(Dispatchers.IO) {
+                extractionGate.withLock {
+                    val extractor = ServiceList.YouTube.getStreamExtractor(
+                        "https://www.youtube.com/watch?v=$videoId",
+                    )
+                    extractor.fetchPage()
+                    val candidates = extractor.videoStreams
+                        .filter {
+                            !it.content.isNullOrBlank() &&
+                                !it.isVideoOnly &&
+                                it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP
+                        }
+                        .map {
+                            VideoStreamInfo(
+                                url = it.content,
+                                resolution = it.resolution ?: "${it.height}p",
+                                width = it.width,
+                                height = it.height,
+                                fps = it.fps,
+                                mimeType = it.format?.mimeType ?: "video/mp4",
+                                videoCodec = it.codec,
+                                audioCodec = "mp4a.40.2",
+                            )
+                        }
+                    VideoStreamSelector.pickBestPreMuxed(candidates)
+                }
+            }
+
+            if (video != null) {
+                rememberVideo(videoId, video)
+            }
+            video
+        } catch (e: Exception) {
+            TrackLog.w(TAG, "Video resolution failed for $videoId: ${e.message}")
+            null
+        }
     }
 }

@@ -470,6 +470,23 @@ class DesktopPlaybackEngine(
         _state.update { it.copy(volume = volume) }
     }
 
+    fun setVideoMode(enabled: Boolean) {
+        val currentSong = _state.value.song
+        _state.update { it.copy(isVideoMode = enabled) }
+        if (enabled && _state.value.videoStream == null && currentSong != null) {
+            scope.launch {
+                val video = DesktopStreamClient.resolveVideo(currentSong).getOrNull()
+                if (video != null && _state.value.song?.videoId == currentSong.videoId) {
+                    _state.update { it.copy(videoStream = video) }
+                }
+            }
+        }
+    }
+
+    fun toggleVideoMode() {
+        setVideoMode(!_state.value.isVideoMode)
+    }
+
     /** Sets the source quality ceiling used the next time a track is resolved. */
     fun setAudioQuality(quality: String) {
         audioQuality = quality.uppercase()
@@ -1740,7 +1757,17 @@ class DesktopPlaybackEngine(
             streamSourceId = track.stream.sourceId,
             searchingBetter = track.song.videoId.let { it == searchingBetterFor || it == incomingSearchingFor },
             smartAnalysis = analysisStatus(track),
+            isVideoMode = _state.value.isVideoMode,
         )
+        if (_state.value.isVideoMode) {
+            val current = track.song
+            scope.launch {
+                val video = DesktopStreamClient.resolveVideo(current).getOrNull()
+                if (video != null && _state.value.song?.videoId == current.videoId) {
+                    _state.update { it.copy(videoStream = video) }
+                }
+            }
+        }
     }
 
     /** Position from what the device has actually rendered, not from what has been decoded. */

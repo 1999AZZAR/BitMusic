@@ -1,19 +1,19 @@
 # Implementation Plan: Dedicated Desktop Video Playback & Now Playing Switch
 
 ## Phase 1: Video Stream Resolution & Data Models (TDD)
-- [ ] Task: Write Video Stream Resolution Tests
-  - [ ] Create unit tests for video stream resolution in `:shared`
-  - [ ] Test resolving 720p H.264 pre-muxed stream URLs
-  - [ ] Test graceful fallback to audio-only stream when video rendition is absent
-  - [ ] Verify tests fail as expected (Red Phase)
-- [ ] Task: Implement Video Stream Resolution in :shared & :desktopApp
-  - [ ] Add `resolveVideoStream(videoId: String)` in `StreamResolver.kt`
-  - [ ] Add `DesktopVideoStream` and format descriptors in `DesktopPlayback.kt`
-  - [ ] Verify all tests pass (Green Phase)
-- [ ] Task: Phase 1 Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Write Video Stream Resolution Tests
+  - [x] Create unit tests for video stream resolution in `:shared`
+  - [x] Test resolving 720p H.264 pre-muxed stream URLs
+  - [x] Test graceful fallback to audio-only stream when video rendition is absent
+  - [x] Verify tests fail as expected (Red Phase)
+- [x] Task: Implement Video Stream Resolution in :shared & :desktopApp
+  - [x] Add `resolveVideoStream(videoId: String)` in `StreamResolver.kt`
+  - [x] Add `DesktopVideoStream` and format descriptors in `DesktopPlayback.kt`
+  - [x] Verify all tests pass (Green Phase)
+- [x] Task: Phase 1 Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Video Player Engine & Playhead Synchronization
-- [ ] Task: Video Playback Surface & Decoding Pipeline
+- [~] Task: Video Playback Surface & Decoding Pipeline
   - [ ] Create hardware-accelerated Compose video surface adapter for desktop
   - [ ] Implement playhead clock synchronization (A/V sync) between video presentation and audio output
   - [ ] Add buffering and seek handling for windowed video stream reads
