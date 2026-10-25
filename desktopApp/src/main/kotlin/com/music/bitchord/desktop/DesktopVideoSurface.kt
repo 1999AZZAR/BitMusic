@@ -43,7 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -56,8 +56,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorAlphaType
-import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import kotlin.math.roundToInt
 
@@ -85,10 +85,6 @@ internal fun DesktopVideoSurface(
     val currentlyPlaying by rememberUpdatedState(isPlaying)
     val currentPlaybackPos by rememberUpdatedState(playbackPosition)
 
-    // Explicit tracking of native Skia Images to release off-heap C++ memory immediately
-    var olderSkiaImage by remember(videoStream.url) { mutableStateOf<Image?>(null) }
-    var previousSkiaImage by remember(videoStream.url) { mutableStateOf<Image?>(null) }
-
     LaunchedEffect(videoStream.url) {
         withContext(Dispatchers.IO) {
             val decoder = DesktopVideoDecoder()
@@ -110,11 +106,19 @@ internal fun DesktopVideoSurface(
                 decoder.seekTo(lastAudioMs)
             }
 
+            var bitmapA: Bitmap? = null
+            var bitmapB: Bitmap? = null
+
             try {
                 val bufferA = ByteArray(decoder.width * decoder.height * 4)
                 val bufferB = ByteArray(decoder.width * decoder.height * 4)
                 var useBufferA = true
                 val info = ImageInfo.makeN32(decoder.width, decoder.height, ColorAlphaType.OPAQUE)
+
+                val bA = Bitmap().also { bitmapA = it }
+                val bB = Bitmap().also { bitmapB = it }
+                val composeBitmapA = bA.asComposeImageBitmap()
+                val composeBitmapB = bB.asComposeImageBitmap()
 
                 while (isActive) {
                     // Pause handling: hold current frame without spinning CPU
@@ -145,28 +149,30 @@ internal fun DesktopVideoSurface(
                         }
                         is DesktopVideoSyncAction.WAIT -> {
                             delay((action.delayMs - 2L).coerceIn(2L, 45L))
-                            val newSkiaImage = Image.makeRaster(info, currentBuffer, decoder.width * 4)
-                            val newBitmap = newSkiaImage.toComposeImageBitmap()
+                            val targetBitmap = if (useBufferA) {
+                                bA.installPixels(info, currentBuffer, decoder.width * 4)
+                                composeBitmapA
+                            } else {
+                                bB.installPixels(info, currentBuffer, decoder.width * 4)
+                                composeBitmapB
+                            }
                             withContext(Dispatchers.Main) {
-                                val toRelease = olderSkiaImage
-                                olderSkiaImage = previousSkiaImage
-                                previousSkiaImage = newSkiaImage
-                                frameBitmap = newBitmap
-                                toRelease?.close()
+                                frameBitmap = targetBitmap
                                 isBuffering = false
                             }
                             useBufferA = !useBufferA
                             lastAudioMs = currentClockMs()
                         }
                         DesktopVideoSyncAction.RENDER -> {
-                            val newSkiaImage = Image.makeRaster(info, currentBuffer, decoder.width * 4)
-                            val newBitmap = newSkiaImage.toComposeImageBitmap()
+                            val targetBitmap = if (useBufferA) {
+                                bA.installPixels(info, currentBuffer, decoder.width * 4)
+                                composeBitmapA
+                            } else {
+                                bB.installPixels(info, currentBuffer, decoder.width * 4)
+                                composeBitmapB
+                            }
                             withContext(Dispatchers.Main) {
-                                val toRelease = olderSkiaImage
-                                olderSkiaImage = previousSkiaImage
-                                previousSkiaImage = newSkiaImage
-                                frameBitmap = newBitmap
-                                toRelease?.close()
+                                frameBitmap = targetBitmap
                                 isBuffering = false
                             }
                             useBufferA = !useBufferA
@@ -176,12 +182,8 @@ internal fun DesktopVideoSurface(
                 }
             } finally {
                 decoder.close()
-                withContext(Dispatchers.Main) {
-                    olderSkiaImage?.close()
-                    olderSkiaImage = null
-                    previousSkiaImage?.close()
-                    previousSkiaImage = null
-                }
+                bitmapA?.close()
+                bitmapB?.close()
             }
         }
     }
@@ -189,10 +191,6 @@ internal fun DesktopVideoSurface(
     DisposableEffect(videoStream.url) {
         onDispose {
             frameBitmap = null
-            olderSkiaImage?.close()
-            olderSkiaImage = null
-            previousSkiaImage?.close()
-            previousSkiaImage = null
             isBuffering = true
         }
     }
