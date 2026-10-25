@@ -19,8 +19,8 @@ sealed interface DesktopVideoSyncAction {
  * Playhead clock synchronization between video frames and the audio engine.
  */
 class DesktopVideoSyncClock(
-    val toleranceEarlyMs: Long = 2L,
-    val toleranceLateMs: Long = 65L,
+    val toleranceEarlyMs: Long = 8L,
+    val toleranceLateMs: Long = 120L,
 ) {
     /**
      * Determines whether the decoded frame with presentation timestamp [framePtsMs]

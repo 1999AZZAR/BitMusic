@@ -148,12 +148,10 @@ internal fun DesktopVideoSurface(
                             continue
                         }
                         is DesktopVideoSyncAction.WAIT -> {
-                            if (action.delayMs > 80L) {
-                                delay(80L)
-                                continue
-                            }
-                            if (action.delayMs > 1L) {
-                                delay(action.delayMs - 1L)
+                            // Account for pixel upload and Main dispatch overhead (~6ms)
+                            val waitMs = action.delayMs - 6L
+                            if (waitMs > 0L) {
+                                delay(waitMs)
                             }
                         }
                         DesktopVideoSyncAction.RENDER -> {
