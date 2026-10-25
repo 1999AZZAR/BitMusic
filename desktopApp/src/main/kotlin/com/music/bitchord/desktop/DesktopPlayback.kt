@@ -240,6 +240,9 @@ internal object DesktopStreamClient {
         song: Song,
         targetResolution: String? = null,
     ): Result<DesktopVideoStream> = runCatching {
+        if (song.localUri != null || song.videoId.isBlank()) {
+            error("No video stream for local or non-YouTube track '${song.title}'")
+        }
         val candidates = StreamResolver.resolveVideoCandidates(song.videoId)
         val video = com.music.bitchord.data.innertube.VideoStreamSelector.selectStream(
             candidates,

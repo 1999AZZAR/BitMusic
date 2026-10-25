@@ -86,10 +86,26 @@ class DesktopVideoPlaybackTest {
         val failed = initial.copy(
             videoStream = null,
             videoLoading = false,
-            videoError = "Video unavailable",
+            isVideoMode = false,
+            videoError = null,
         )
-        assertTrue(failed.isVideoMode)
+        assertFalse(failed.isVideoMode)
         assertFalse(failed.videoLoading)
-        assertEquals("Video unavailable", failed.videoError)
+        assertEquals(null, failed.videoStream)
+        assertEquals(null, failed.videoError)
+    }
+
+    @Test
+    fun `resolveVideo fails immediately for local tracks without network calls`() = kotlinx.coroutines.runBlocking {
+        val localSong = com.music.bitchord.data.model.Song(
+            videoId = "local_1",
+            title = "Local Audio",
+            artist = "Local Artist",
+            thumbnailUrl = null,
+            localUri = "file:///music/song.mp3",
+        )
+        val result = DesktopStreamClient.resolveVideo(localSong)
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("local or non-YouTube") == true)
     }
 }
