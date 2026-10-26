@@ -45,8 +45,10 @@ class Presence(
     @Volatile private var announced = false
     @Volatile private var intervalSec = DEFAULT_INTERVAL_SEC
 
+    private val coroutineJob = SupervisorJob()
+
     init {
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        CoroutineScope(coroutineJob + Dispatchers.IO).launch {
             // collectLatest: a change of state cancels whatever the last one was
             // still doing, so a close cancels the ping loop and a quick reopen
             // cancels a pending close.
@@ -75,7 +77,11 @@ class Presence(
      */
     fun closeBlocking() {
         open.value = false
-        if (announced) send(open = false, timeoutSec = 2)
+        try {
+            if (announced) send(open = false, timeoutSec = 2)
+        } finally {
+            coroutineJob.cancel()
+        }
     }
 
     private fun nextDelayMs(): Long {
