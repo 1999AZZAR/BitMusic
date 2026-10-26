@@ -1376,7 +1376,8 @@ fun BitChordDesktopApp() {
         }
     }
 
-    fun playNext() {
+    fun playNext(autoAdvance: Boolean = false) {
+        if (!autoAdvance) consecutivePlaybackFailures = 0
         if (DesktopListenTogether.state.value.controlsLocked) return
         // Automix on skip: when enabled and the next deck is already prepared, blend into it over a
         // short crossfade instead of cutting. The blend's own hand-off advances the queue, so a
@@ -1406,6 +1407,7 @@ fun BitChordDesktopApp() {
     }
 
     fun playPrevious() {
+        consecutivePlaybackFailures = 0
         if (DesktopListenTogether.state.value.controlsLocked) return
         val positionMs = playbackEngine.state.value.positionMs
 
@@ -1617,7 +1619,7 @@ fun BitChordDesktopApp() {
                         scope.launch {
                             delay(1200L)
                             if (selectedSong?.videoId == failedSong.videoId && playbackEngine.state.value.error != null) {
-                                playNext()
+                                playNext(autoAdvance = true)
                             }
                         }
                     }

@@ -30,7 +30,6 @@ import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
 import org.schabi.newpipe.extractor.exceptions.PaidContentException
 import org.schabi.newpipe.extractor.exceptions.PrivateContentException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
-import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
 import org.schabi.newpipe.extractor.exceptions.SoundCloudGoPlusContentException
 import org.schabi.newpipe.extractor.exceptions.UnsupportedContentInCountryException
 import org.schabi.newpipe.extractor.exceptions.YoutubeMusicPremiumContentException
@@ -132,6 +131,13 @@ object StreamResolver {
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                         "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
                 )
+            }
+            val cookie = Innertube.cookie
+            if (!cookie.isNullOrBlank() && (request.url().contains("youtube.com") || request.url().contains("youtubei.googleapis.com"))) {
+                val hasCookie = request.headers().keys.any { it.equals("Cookie", ignoreCase = true) }
+                if (!hasCookie) {
+                    builder.header("Cookie", cookie)
+                }
             }
 
             // Every byte NewPipe fetches passes through here, and until this
@@ -510,9 +516,6 @@ object StreamResolver {
                 return Stream(found.url, found.kbps, found.mimeType, found.loudnessDb)
             }
             TrackLog.w(TAG, "InnerTubeX ${found.profileId} minted an unusable URL for $videoId: $verdict")
-            if (verdict != Probe.OK) {
-                InnerTubeXResolver.exclude(videoId, found.profileId)
-            }
             skip += found.profileId
         }
         return null
@@ -962,8 +965,6 @@ object StreamResolver {
      */
     private fun permanentReason(e: Throwable): String? = when (e) {
         is PermanentlyUnplayableException -> e.message ?: "This track cannot be played"
-        is SignInConfirmNotBotException -> "YouTube requires bot verification to play this track"
-        is ReCaptchaException -> "YouTube requires captcha verification to play this track"
         // The whole reason this function exists — see [newPipeStream].
         is AgeRestrictedContentException ->
             if (Innertube.cookie == null) {
@@ -983,8 +984,10 @@ object StreamResolver {
         // failure that reaches [resolveUncached] arrives as whatever the last
         // layer chose to throw it as.
         else -> when {
-            e.message?.contains("Sign in to confirm", ignoreCase = true) == true ->
-                "YouTube requires bot verification to play this track"
+            // NewPipe's YouTube parsing wraps the HTTP body's own reason in
+            // ExtractionException when it can find one, and that message is
+            // what says why a track can never be resolved.
+            e.message?.contains("This video is not available") == true -> "This track is no longer available"
             else -> e.cause?.takeIf { it !== e }?.let(::permanentReason)
         }
     }
