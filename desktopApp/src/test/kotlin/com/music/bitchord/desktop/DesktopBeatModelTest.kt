@@ -17,6 +17,12 @@ class DesktopBeatModelTest {
             println("analysis library unavailable — skipping")
             return
         }
+        val isMacX64 = System.getProperty("os.name").contains("Mac", ignoreCase = true) &&
+            (System.getProperty("os.arch").lowercase() in setOf("x86_64", "amd64"))
+        if (isMacX64) {
+            println("ONNX Runtime does not provide osx-x86_64 native binaries in 1.29+ — skipping on macOS Intel")
+            return
+        }
         val model = File(DesktopAnalysisRuntime.modelPath(BeatTracker.MODEL_ASSET))
         assertTrue(model.isFile && model.length() > 0, "the model was not unpacked")
 
