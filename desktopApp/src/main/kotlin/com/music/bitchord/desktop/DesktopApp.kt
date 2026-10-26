@@ -673,6 +673,7 @@ fun BitChordDesktopApp() {
                 .getOrDefault(DesktopRepeatMode.OFF),
         )
     }
+    var consecutivePlaybackFailures by remember { mutableStateOf(0) }
     var playbackSpeed by remember { mutableStateOf(persistence.string("playback_speed", "1.0").toFloatOrNull() ?: 1.0f) }
     var volume by remember { mutableStateOf(persistence.string("volume", "1.0").toFloatOrNull()?.coerceIn(0.0f, 1.0f) ?: 1.0f) }
     var crossfadeSeconds by remember { mutableStateOf(persistence.string("crossfade_seconds", "0").toIntOrNull()?.coerceIn(0, 12) ?: 0) }
@@ -865,6 +866,7 @@ fun BitChordDesktopApp() {
     /** A song played on its own — from a search row, a shelf card, history. */
     fun playSong(song: Song, startPlaying: Boolean = true, source: DesktopQueueSource? = null) {
         if (partyTrackChangeBlocked()) return
+        consecutivePlaybackFailures = 0
         val tapped = canonicalSong(song).withSource(source)
         val songs = if (DesktopListenTogether.state.value.inParty) {
             partyPlaybackQueue(tapped)
@@ -936,6 +938,7 @@ fun BitChordDesktopApp() {
         val resolved = songs.withIndex().filterNot { it.value.isUnresolvedSpotify }
         if (resolved.isEmpty()) return
         if (partyTrackChangeBlocked()) return
+        consecutivePlaybackFailures = 0
         val playable = resolved.map { canonicalSong(it.value).withSource(source) }
         // Past the end still means the last row, as the clamp here always did.
         val at = resolved.indexOfFirst { it.index >= startIndex }.takeIf { it >= 0 } ?: resolved.lastIndex
@@ -968,6 +971,7 @@ fun BitChordDesktopApp() {
     fun playQueueIndex(target: Int) {
         if (target !in liveQueue.songs.indices) return
         if (partyTrackChangeBlocked()) return
+        consecutivePlaybackFailures = 0
         liveQueue = liveQueue.jumpTo(target)
         playCurrent()
     }
@@ -1372,7 +1376,8 @@ fun BitChordDesktopApp() {
         }
     }
 
-    fun playNext() {
+    fun playNext(autoAdvance: Boolean = false) {
+        if (!autoAdvance) consecutivePlaybackFailures = 0
         if (DesktopListenTogether.state.value.controlsLocked) return
         // Automix on skip: when enabled and the next deck is already prepared, blend into it over a
         // short crossfade instead of cutting. The blend's own hand-off advances the queue, so a
@@ -1402,6 +1407,7 @@ fun BitChordDesktopApp() {
     }
 
     fun playPrevious() {
+        consecutivePlaybackFailures = 0
         if (DesktopListenTogether.state.value.controlsLocked) return
         val positionMs = playbackEngine.state.value.positionMs
 
@@ -1588,6 +1594,7 @@ fun BitChordDesktopApp() {
             },
             onCrossfaded = { song ->
                 scope.launch {
+                    consecutivePlaybackFailures = 0
                     // The queue moves with the audio. Only the selection used to, which left the
                     // queue on the track that had just finished — so Next "advanced" onto the song
                     // already playing, and every later skip landed one behind.
@@ -1598,6 +1605,26 @@ fun BitChordDesktopApp() {
                     persistence.saveHistory(history)
                     DesktopScrobbling.updateNowPlaying(song)
                     partySyncHolder[0]?.onLocalIntent()
+                }
+            },
+            onFailed = { failedSong, throwable ->
+                DesktopTrackLog.log("playback failed for '${failedSong.title}': ${throwable.message}")
+                consecutivePlaybackFailures++
+                if (consecutivePlaybackFailures <= 3 && repeatMode != DesktopRepeatMode.ONE) {
+                    val hasNext = liveQueue.hasNext ||
+                        (repeatMode == DesktopRepeatMode.ALL && liveQueue.songs.isNotEmpty()) ||
+                        DesktopAutoplay.enabled(DesktopListenTogether.state.value, autoplay)
+                    if (hasNext) {
+                        DesktopTrackLog.log("auto-advancing past unplayable track (failure $consecutivePlaybackFailures/3) in 1.2s")
+                        scope.launch {
+                            delay(1200L)
+                            if (selectedSong?.videoId == failedSong.videoId && playbackEngine.state.value.error != null) {
+                                playNext(autoAdvance = true)
+                            }
+                        }
+                    }
+                } else if (consecutivePlaybackFailures > 3) {
+                    DesktopTrackLog.log("stopping auto-advance: 3 consecutive tracks failed")
                 }
             },
         )
@@ -1842,6 +1869,9 @@ fun BitChordDesktopApp() {
             playerPosition.report(it.positionMs, it.positionSampledAtNanos)
             playerPosition.seeks = it.seeks
             playerPosition.advancing = !it.awaitingAudio
+            if (it.isPlaying && it.positionMs > 1000L) {
+                consecutivePlaybackFailures = 0
+            }
         }
     }
 
@@ -3483,6 +3513,14 @@ fun BitChordDesktopApp() {
                             hasNext = liveQueue.hasNext,
                             liked = current.videoId in likedIds,
                             canRate = youtubeSignedIn && current.localUri == null,
+                            isVideoMode = playback.isVideoMode,
+                            videoStream = playback.videoStream,
+                            videoLoading = playback.videoLoading,
+                            videoError = playback.videoError,
+                            playbackPosition = playerPosition,
+                            preferredVideoResolution = playback.preferredVideoResolution,
+                            onSelectVideoResolution = { playbackEngine.setVideoResolution(it) },
+                            onToggleVideoMode = { playbackEngine.toggleVideoMode() },
                             onToggleLike = { toggleLike(current) },
                             onPlayPause = ::togglePlayPauseFromUser,
                             onNext = ::playNext,
@@ -8340,12 +8378,14 @@ private fun ShelfItem.toSong(): Song {
             it.lowercase() !in SHELF_TYPE_WORDS &&
             !it.matches(SHELF_TALLY)
     } ?: "Unknown Artist"
+    val isVideoItem = parts.any { it.lowercase() in listOf("video", "music video") || it.contains("views", ignoreCase = true) }
     return Song(
         videoId = videoId.orEmpty(),
         title = title,
         artist = artist,
         thumbnailUrl = thumbnailUrl,
         durationText = parts.firstOrNull { it.matches(SHELF_DURATION) },
+        isVideo = isVideoItem,
     )
 }
 

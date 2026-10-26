@@ -1,5 +1,6 @@
 package com.music.bitchord.desktop
 
+import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AutomixPerformanceMode
 import com.music.bitchord.data.settings.MixBlend
@@ -50,9 +51,17 @@ internal fun blendElapsedUs(samples: Long, channels: Int, sampleRate: Int): Long
 class DesktopPlaybackEngine(
     private val onEnded: () -> Unit,
     private val onCrossfaded: (Song) -> Unit = {},
+    private val onFailed: (Song, Throwable) -> Unit = { _, _ -> },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val _state = MutableStateFlow(DesktopPlaybackState())
+    private var persistentVideoMode: Boolean = DesktopPersistence().boolean("video_mode", false)
+    private var preferredVideoResolution: String = DesktopPersistence().string("video_resolution", "auto")
+    private val _state = MutableStateFlow(
+        DesktopPlaybackState(
+            isVideoMode = persistentVideoMode,
+            preferredVideoResolution = preferredVideoResolution,
+        )
+    )
     val state: StateFlow<DesktopPlaybackState> = _state.asStateFlow()
 
     private val sink = DesktopAudioSink()
@@ -244,7 +253,34 @@ class DesktopPlaybackEngine(
         commands += Command.Flush
         searchingBetterFor = null
         incomingSearchingFor = null
-        _state.value = DesktopPlaybackState(song = song, volume = volume, isLoading = true)
+        val isLocalSong = song.localUri != null || song.videoId.isBlank()
+        val willAttemptVideo = persistentVideoMode && !isLocalSong
+        val startInVideoMode = willAttemptVideo && song.isVideo
+
+        _state.value = DesktopPlaybackState(
+            song = song,
+            volume = volume,
+            isLoading = true,
+            isVideoMode = startInVideoMode,
+            videoLoading = willAttemptVideo,
+            preferredVideoResolution = preferredVideoResolution,
+        )
+        if (willAttemptVideo) {
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(song, targetResolution = preferredVideoResolution)
+                if (_state.value.song?.videoId == song.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null, isVideoMode = true) }
+                        },
+                        onFailure = {
+                            // Pure music with no video: automatically fall back to music mode
+                            _state.update { it.copy(videoStream = null, videoLoading = false, videoError = null, isVideoMode = false) }
+                        },
+                    )
+                }
+            }
+        }
         resolveJob = scope.launch {
             // Only when the file is really there: a download record can outlive the file it names,
             // and handing the decoder a path that is not there fails as "could not open stream"
@@ -273,8 +309,10 @@ class DesktopPlaybackEngine(
                     _state.value = DesktopPlaybackState(
                         song = song,
                         volume = volume,
+                        isVideoMode = _state.value.isVideoMode,
                         error = reported.message ?: "Playback failed",
                     )
+                    onFailed(song, reported)
                 },
             )
         }
@@ -320,8 +358,10 @@ class DesktopPlaybackEngine(
             _state.value = DesktopPlaybackState(
                 song = song,
                 volume = volume,
+                isVideoMode = _state.value.isVideoMode,
                 error = "Could not play this track: ${failure.message}",
             )
+            onFailed(song, failure)
         }
     }
 
@@ -467,6 +507,63 @@ class DesktopPlaybackEngine(
         volume = value.coerceIn(0f, 1f)
         sink.gain = volume
         _state.update { it.copy(volume = volume) }
+    }
+
+    fun setVideoMode(enabled: Boolean) {
+        persistentVideoMode = enabled
+        DesktopPersistence().saveBoolean("video_mode", enabled)
+        val currentSong = _state.value.song
+        val isLocalSong = currentSong?.localUri != null || currentSong?.videoId.isNullOrBlank()
+        if (!enabled || isLocalSong) {
+            _state.update { it.copy(isVideoMode = false, videoLoading = false, videoError = null) }
+            return
+        }
+
+        _state.update { it.copy(isVideoMode = true) }
+        if (_state.value.videoStream == null && !_state.value.videoLoading) {
+            _state.update { it.copy(videoLoading = true, videoError = null) }
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(currentSong, targetResolution = preferredVideoResolution)
+                if (_state.value.song?.videoId == currentSong.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null, isVideoMode = true) }
+                        },
+                        onFailure = { err ->
+                            // Explicit toggle on pure music track: automatically fall back to music mode
+                            _state.update { it.copy(videoStream = null, videoLoading = false, videoError = err.message ?: "Video unavailable", isVideoMode = false) }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    fun setVideoResolution(resolution: String) {
+        preferredVideoResolution = resolution
+        DesktopPersistence().saveString("video_resolution", resolution)
+        _state.update { it.copy(preferredVideoResolution = resolution) }
+        val currentSong = _state.value.song
+        if (_state.value.isVideoMode && currentSong != null) {
+            _state.update { it.copy(videoLoading = true) }
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(currentSong, targetResolution = resolution)
+                if (_state.value.song?.videoId == currentSong.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null) }
+                        },
+                        onFailure = { err ->
+                            _state.update { it.copy(videoLoading = false, videoError = err.message ?: "Failed to switch resolution") }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleVideoMode() {
+        setVideoMode(!persistentVideoMode)
     }
 
     /** Sets the source quality ceiling used the next time a track is resolved. */
@@ -1695,7 +1792,52 @@ class DesktopPlaybackEngine(
     private fun incomingElapsedUs(): Long =
         (incomingSourceFrames * 1_000_000.0 / sink.format.sampleRate.coerceAtLeast(1)).toLong()
 
+    private fun resolveEffectiveFormat(track: Track): DesktopStreamFormat {
+        val measured = track.decoder.measuredFormat
+        val stream = track.stream.format
+        val pickedKbps = NerdStats.pickedBitrateKbps(track.song.videoId)
+        val codec = measured?.codec ?: stream.codec
+        val isOpus = codec?.lowercase()?.contains("opus") == true
+        val kbps = measured?.kbps
+            ?: stream.kbps
+            ?: pickedKbps
+            ?: (if (isOpus) 160 else null)
+
+        return if (measured != null) {
+            measured.copy(
+                codec = codec,
+                kbps = kbps,
+                sampleRateHz = measured.sampleRateHz ?: stream.sampleRateHz,
+                bitDepth = measured.bitDepth ?: stream.bitDepth,
+                channels = measured.channels ?: stream.channels,
+            )
+        } else {
+            stream.copy(
+                codec = codec,
+                kbps = kbps,
+            )
+        }
+    }
+
     private fun publishTrack(track: Track, isPlaying: Boolean, positionUs: Long = track.startUs) {
+        val sameSong = _state.value.song?.videoId == track.song.videoId
+        val isLocalSong = track.song.localUri != null || track.song.videoId.isBlank()
+        val existingVideo = if (persistentVideoMode && !isLocalSong && sameSong) _state.value.videoStream else null
+        val isVideoResolving = persistentVideoMode && !isLocalSong && sameSong && _state.value.videoLoading
+        val videoAlreadyResolvedAndUnavailable = sameSong && !_state.value.isVideoMode && !isVideoResolving && existingVideo == null
+
+        val shouldBeVideoMode = when {
+            isLocalSong -> false
+            !persistentVideoMode -> false
+            existingVideo != null -> true
+            isVideoResolving -> _state.value.isVideoMode
+            videoAlreadyResolvedAndUnavailable -> false
+            track.song.isVideo -> true
+            else -> false
+        }
+
+        val willAttemptVideo = persistentVideoMode && !isLocalSong && existingVideo == null && !isVideoResolving && !videoAlreadyResolvedAndUnavailable
+
         _state.value = DesktopPlaybackState(
             song = track.song,
             isPlaying = isPlaying,
@@ -1708,11 +1850,33 @@ class DesktopPlaybackEngine(
             durationMs = (track.decoder.durationUs ?: 0L) / 1_000,
             // What the decoder is actually being fed, falling back to what the source promised only
             // until something has been measured.
-            streamFormat = track.decoder.measuredFormat ?: track.stream.format,
+            streamFormat = resolveEffectiveFormat(track),
             streamSourceId = track.stream.sourceId,
             searchingBetter = track.song.videoId.let { it == searchingBetterFor || it == incomingSearchingFor },
             smartAnalysis = analysisStatus(track),
+            isVideoMode = shouldBeVideoMode,
+            preferredVideoResolution = preferredVideoResolution,
+            videoStream = existingVideo,
+            videoLoading = isVideoResolving || (willAttemptVideo && track.song.isVideo),
+            videoError = null,
         )
+        if (willAttemptVideo) {
+            val current = track.song
+            scope.launch {
+                val videoResult = DesktopStreamClient.resolveVideo(current, targetResolution = preferredVideoResolution)
+                if (_state.value.song?.videoId == current.videoId) {
+                    videoResult.fold(
+                        onSuccess = { video ->
+                            _state.update { it.copy(videoStream = video, videoLoading = false, videoError = null, isVideoMode = true) }
+                        },
+                        onFailure = {
+                            // Pure music with no video: automatically fall back to music mode
+                            _state.update { it.copy(videoStream = null, videoLoading = false, videoError = null, isVideoMode = false) }
+                        },
+                    )
+                }
+            }
+        }
     }
 
     /** Position from what the device has actually rendered, not from what has been decoded. */

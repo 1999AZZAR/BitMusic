@@ -132,6 +132,13 @@ object StreamResolver {
                         "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
                 )
             }
+            val cookie = Innertube.cookie
+            if (!cookie.isNullOrBlank() && (request.url().contains("youtube.com") || request.url().contains("youtubei.googleapis.com"))) {
+                val hasCookie = request.headers().keys.any { it.equals("Cookie", ignoreCase = true) }
+                if (!hasCookie) {
+                    builder.header("Cookie", cookie)
+                }
+            }
 
             // Every byte NewPipe fetches passes through here, and until this
             // line none of it was visible: an extraction that took thirty
@@ -263,7 +270,10 @@ object StreamResolver {
 
         recent[videoId]
             ?.takeIf { MonotonicClock.nowMs() - it.at < URL_TTL_MS }
-            ?.let { return it.url }
+            ?.let {
+                NerdStats.onStreamPicked(videoId, it.kbps)
+                return it.url
+            }
 
         // A verdict, not a failure: asking again cannot change the answer, so
         // every caller after the first is told so without a request being sent.
@@ -276,7 +286,7 @@ object StreamResolver {
         // real figure is ever known.
         NerdStats.onStreamPicked(videoId, stream.kbps)
         stream.loudnessDb?.let { loudness[videoId] = it }
-        remember(videoId, stream.url)
+        remember(videoId, stream.url, stream.kbps)
         return stream.url
     }
 
@@ -778,16 +788,28 @@ object StreamResolver {
         return try {
             prober.newCall(builder.build()).execute().use { response ->
                 when {
-                    response.code in REFUSAL_CODES -> Probe.REFUSED
-                    response.code !in 200..299 && response.code != 416 -> Probe.UNREACHABLE
+                    response.code in REFUSAL_CODES -> {
+                        TrackLog.w(TAG, "probe REFUSED for $url: HTTP ${response.code}")
+                        Probe.REFUSED
+                    }
+                    response.code !in 200..299 && response.code != 416 -> {
+                        TrackLog.w(TAG, "probe UNREACHABLE for $url: HTTP ${response.code}")
+                        Probe.UNREACHABLE
+                    }
                     // A refusal dressed as a success: an error page, or the
                     // consent/captcha interstitial, rather than audio.
-                    response.header("Content-Type")?.startsWith("audio/") != true -> Probe.REFUSED
+                    response.header("Content-Type")?.startsWith("audio/") != true -> {
+                        TrackLog.w(TAG, "probe REFUSED for $url: non-audio Content-Type ${response.header("Content-Type")}")
+                        Probe.REFUSED
+                    }
                     // Headers can arrive long before a body that never does —
                     // exactly the shaping this whole path exists to sidestep.
                     // Insisting on the bytes is the point: a trickle that
                     // yields its first byte and stalls is a failure too.
-                    response.body?.source()?.request(PROBE_READ_BYTES) != true -> Probe.UNREACHABLE
+                    response.body?.source()?.request(PROBE_READ_BYTES) != true -> {
+                        TrackLog.w(TAG, "probe UNREACHABLE for $url: stalled body read")
+                        Probe.UNREACHABLE
+                    }
                     else -> Probe.OK
                 }
             }
@@ -961,7 +983,13 @@ object StreamResolver {
         // classification has to survive being wrapped or it never fires: the
         // failure that reaches [resolveUncached] arrives as whatever the last
         // layer chose to throw it as.
-        else -> e.cause?.takeIf { it !== e }?.let(::permanentReason)
+        else -> when {
+            // NewPipe's YouTube parsing wraps the HTTP body's own reason in
+            // ExtractionException when it can find one, and that message is
+            // what says why a track can never be resolved.
+            e.message?.contains("This video is not available") == true -> "This track is no longer available"
+            else -> e.cause?.takeIf { it !== e }?.let(::permanentReason)
+        }
     }
 
     /** How many times the watch page is worth asking for before giving up. */
@@ -1069,7 +1097,7 @@ object StreamResolver {
     suspend fun contentLength(videoId: String): Long? =
         resolve(videoId).toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()
 
-    private class Resolved(val url: String, val at: Long)
+    private class Resolved(val url: String, val at: Long, val kbps: Int = 160)
 
     /**
      * Stream URLs already resolved, by videoId — and, since [resolve] only ever
@@ -1083,18 +1111,85 @@ object StreamResolver {
      * around it while staying well inside the window where the URL is good.
      */
     private val recent = ConcurrentHashMap<String, Resolved>()
+    private val recentVideoCandidates = ConcurrentHashMap<String, ResolvedVideoCandidates>()
+
+    private class ResolvedVideoCandidates(val candidates: List<VideoStreamInfo>, val at: Long)
 
     private const val URL_TTL_MS = 20 * 60 * 1000L
 
     /** Enough for the queue in hand; this is a latency cache, not a store. */
     private const val MAX_REMEMBERED = 32
 
-    private fun remember(videoId: String, url: String) {
+    private fun remember(videoId: String, url: String, kbps: Int = 160) {
         if (recent.size >= MAX_REMEMBERED) {
             val cutoff = MonotonicClock.nowMs() - URL_TTL_MS
             recent.entries.removeAll { it.value.at < cutoff }
             if (recent.size >= MAX_REMEMBERED) recent.clear()
         }
-        recent[videoId] = Resolved(url, MonotonicClock.nowMs())
+        recent[videoId] = Resolved(url, MonotonicClock.nowMs(), kbps)
+    }
+
+    private fun rememberVideoCandidates(videoId: String, candidates: List<VideoStreamInfo>) {
+        if (recentVideoCandidates.size >= MAX_REMEMBERED) {
+            val cutoff = MonotonicClock.nowMs() - URL_TTL_MS
+            recentVideoCandidates.entries.removeAll { it.value.at < cutoff }
+            if (recentVideoCandidates.size >= MAX_REMEMBERED) recentVideoCandidates.clear()
+        }
+        recentVideoCandidates[videoId] = ResolvedVideoCandidates(candidates, MonotonicClock.nowMs())
+    }
+
+    /**
+     * Resolves all available video renditions (progressive and adaptive up to 1080p) for [videoId].
+     */
+    suspend fun resolveVideoCandidates(videoId: String): List<VideoStreamInfo> {
+        recentVideoCandidates[videoId]
+            ?.takeIf { MonotonicClock.nowMs() - it.at < URL_TTL_MS }
+            ?.let { return it.candidates }
+
+        return try {
+            val candidates = withContext(Dispatchers.IO) {
+                extractionGate.withLock {
+                    val extractor = ServiceList.YouTube.getStreamExtractor(
+                        "https://www.youtube.com/watch?v=$videoId",
+                    )
+                    extractor.fetchPage()
+                    val progressive = extractor.videoStreams.orEmpty().map { it to false }
+                    val videoOnly = extractor.videoOnlyStreams.orEmpty().map { it to true }
+                    (progressive + videoOnly)
+                        .filter { !it.first.content.isNullOrBlank() }
+                        .map { (stream, isOnly) ->
+                            val h = stream.height
+                            VideoStreamInfo(
+                                url = stream.content,
+                                resolution = "${h}p",
+                                width = stream.width,
+                                height = h,
+                                fps = stream.fps,
+                                mimeType = stream.format?.mimeType ?: "video/mp4",
+                                videoCodec = stream.codec,
+                                audioCodec = if (isOnly) null else "mp4a.40.2",
+                                isVideoOnly = isOnly,
+                            )
+                        }
+                }
+            }
+
+            if (candidates.isNotEmpty()) {
+                rememberVideoCandidates(videoId, candidates)
+            }
+            candidates
+        } catch (e: Exception) {
+            TrackLog.w(TAG, "Video resolution failed for $videoId: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * Resolves a video stream matching [targetResolution] (up to 1080p) for [videoId],
+     * or null if no playable video rendition is available.
+     */
+    suspend fun resolveVideoStream(videoId: String, targetResolution: String? = null): VideoStreamInfo? {
+        val candidates = resolveVideoCandidates(videoId)
+        return VideoStreamSelector.selectStream(candidates, targetResolution = targetResolution)
     }
 }

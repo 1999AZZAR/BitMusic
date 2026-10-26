@@ -40,6 +40,8 @@ import org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default
 import org.bytedeco.ffmpeg.global.avutil.av_dict_get
 import org.bytedeco.ffmpeg.global.avutil.av_dict_set
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
+import org.bytedeco.ffmpeg.global.avutil.av_frame_free
+import org.bytedeco.ffmpeg.global.avutil.av_frame_unref
 import org.bytedeco.ffmpeg.global.avutil.av_get_bytes_per_sample
 import org.bytedeco.ffmpeg.global.avutil.av_strerror
 import org.bytedeco.ffmpeg.global.avutil.av_malloc
@@ -344,7 +346,9 @@ internal class DesktopAudioDecoder : DesktopSampleSource {
             // Whatever the decoder is already holding, before asking for more.
             val received = avcodec_receive_frame(context, decoded)
             if (received == 0) {
-                val block = convert(decoded) ?: return null
+                val block = convert(decoded)
+                av_frame_unref(decoded)
+                if (block == null) return null
                 // Empty when the whole frame fell before a seek target; on to the next one.
                 if (block.isNotEmpty()) return block
                 continue
@@ -473,6 +477,7 @@ internal class DesktopAudioDecoder : DesktopSampleSource {
         codec?.let { avcodec_free_context(it) }
         format?.let { avformat_close_input(it) }
         outputBuffer?.deallocate()
+        outputPlanes?.deallocate()
         frame = null
         packet = null
         resampler = null
@@ -494,6 +499,7 @@ internal class DesktopAudioDecoder : DesktopSampleSource {
         readPacket = null
         seekPacket = null
         rangeSource = null
+        org.bytedeco.javacpp.Pointer.deallocateReferences()
     }
 
     internal companion object {

@@ -2,14 +2,19 @@
 # BitMusic local release loop: build the deb, stamp it with the branch-aware version, and install.
 #
 # Version scheme:
-#   master  -> 1.1.0
-#   staging -> 1.1.0-beta-0 (increments -1, -2... if already installed)
-#   feature -> 1.1.0-beta-<feature>-0
+#   master  -> 1.2.0
+#   staging -> 1.2.0-beta-0 (increments -1, -2... if already installed)
+#   feature -> 1.2.0-beta-<feature>-0
 set -eu
 cd "$(dirname "$0")/.."
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "staging")
-base="1.1.0"
+version_file="$(dirname "$0")/../version.txt"
+if [ -f "$version_file" ]; then
+    base=$(tr -d '[:space:]' < "$version_file")
+else
+    base="1.2.0"
+fi
 
 case "$branch" in
     master|main)
@@ -68,4 +73,5 @@ in=$(ls -1 desktopApp/build/compose/binaries/main/deb/bitmusic_*_amd64.deb | tai
 out="/tmp/bitmusic-${next}.deb"
 sh desktopApp/packaging/linux-stamp-deb.sh "$in" "$out" "$next"
 sudo dpkg --force-downgrade -i "$out"
+rm -f "$out"
 dpkg-query -W -f 'installed: ${Package} ${Version}\n' bitmusic

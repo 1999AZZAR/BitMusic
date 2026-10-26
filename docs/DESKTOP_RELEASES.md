@@ -48,10 +48,11 @@ The script determines the active branch, builds the `.deb`, updates package cont
 
 ## 4. GitHub Actions Release Workflow
 
-Release generation is automated via `.github/workflows/release.yml`. When a tag matching `v*.*.*` is pushed to `master`:
+Release generation is automated via `.github/workflows/release.yml`. When code is merged/promoted to `master` (or when a tag matching `v*.*.*` is pushed, or via `workflow_dispatch`):
 
-1. Linux runner builds the `.deb`, `.rpm`, and `.AppImage`.
-2. Windows runner builds the `.exe`, `.msi`, and portable `.zip`.
-3. macOS runner builds the Apple Silicon and Intel `.dmg` and `.pkg`.
-4. Android runner builds the production Leanback `.apk`.
-5. GitHub Actions uploads all artifacts to the new GitHub Release.
+1. The `prepare` job resolves the release version from `version.txt` (or tag / input).
+2. Linux runner builds the `.deb`, `.rpm`, and `.AppImage`.
+3. Windows runner builds the `.exe`, `.msi`, and portable `.zip`.
+4. macOS runner builds the Apple Silicon (`arm64`) and Intel (`x64`) `.dmg`, `.pkg`, and `.zip`.
+5. Android runner builds the production Leanback `.apk`.
+6. GitHub Actions automatically generates release notes, tags the commit, and publishes the GitHub Release with all 10 distributables attached.

@@ -1,0 +1,7 @@
+# Windsurf Rules for BitMusic
+
+Refer to AGENTS.md and .cursor/rules/rules.mdc for complete standards.
+
+- Target: Big Screen only (Linux Desktop, Android TV, Windows, macOS). No mobile devices.
+- Branching: master (prod 1.1.0) <- staging (active dev 1.1.0-beta-0) <- feature/<name>.
+- Testing: Validate all changes with `./gradlew :desktopApp:test`.

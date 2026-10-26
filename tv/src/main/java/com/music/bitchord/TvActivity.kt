@@ -2,11 +2,14 @@ package com.music.bitchord
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.SideEffect
 import androidx.core.view.WindowCompat
+import androidx.media3.session.MediaController
 import com.music.bitchord.data.listentogether.JamInviteLink
 import com.music.bitchord.playback.MusicLink
 import com.music.bitchord.playback.PlayerDeepLink
@@ -16,6 +19,8 @@ import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.theme.BitChordTheme
 import com.music.bitchord.ui.tv.TvApp
 import com.music.bitchord.ui.tv.display.TvRefreshRateController
+import com.music.bitchord.ui.tv.remote.TvRemoteAction
+import com.music.bitchord.ui.tv.remote.TvRemoteKeyDispatcher
 import com.music.bitchord.ui.tv.theme.BitChordTvTheme
 
 /**
@@ -25,6 +30,7 @@ import com.music.bitchord.ui.tv.theme.BitChordTvTheme
 class TvActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private var activeMediaController: MediaController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +50,10 @@ class TvActivity : ComponentActivity() {
                     val mediaController = rememberMediaController()
                     val playerState = rememberPlayerState(mediaController)
 
+                    SideEffect {
+                        activeMediaController = mediaController
+                    }
+
                     TvApp(
                         viewModel = viewModel,
                         mediaController = mediaController,
@@ -52,6 +62,51 @@ class TvActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val controller = activeMediaController
+            val action = TvRemoteKeyDispatcher.resolveAction(event.keyCode, isPlayingViewActive = false)
+            if (controller != null && action != TvRemoteAction.NONE) {
+                when (action) {
+                    TvRemoteAction.PLAY_PAUSE -> {
+                        if (controller.isPlaying) controller.pause() else controller.play()
+                        return true
+                    }
+                    TvRemoteAction.PLAY -> {
+                        controller.play()
+                        return true
+                    }
+                    TvRemoteAction.PAUSE -> {
+                        controller.pause()
+                        return true
+                    }
+                    TvRemoteAction.NEXT_TRACK -> {
+                        controller.seekToNextMediaItem()
+                        return true
+                    }
+                    TvRemoteAction.PREVIOUS_TRACK -> {
+                        controller.seekToPrevious()
+                        return true
+                    }
+                    TvRemoteAction.FAST_FORWARD -> {
+                        val duration = controller.duration
+                        val maxPos = if (duration > 0) duration else Long.MAX_VALUE
+                        val target = (controller.currentPosition + TvRemoteKeyDispatcher.SEEK_STEP_MS).coerceAtMost(maxPos)
+                        controller.seekTo(target)
+                        return true
+                    }
+                    TvRemoteAction.REWIND -> {
+                        val target = (controller.currentPosition - TvRemoteKeyDispatcher.SEEK_STEP_MS).coerceAtLeast(0L)
+                        controller.seekTo(target)
+                        return true
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onNewIntent(intent: Intent) {

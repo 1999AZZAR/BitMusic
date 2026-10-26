@@ -109,6 +109,7 @@ import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.data.AudioQualityBadgeFormatter
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.listentogether.PartyMember
 import com.music.bitchord.data.settings.TrackAnalysisState
@@ -1638,6 +1639,7 @@ private fun LosslessOrStats(
             (isLoading && losslessRequested && nerdStats == null) -> LosslessLabel(
             text = stringResource(Res.string.upgrading_quality),
             iconPainter = painterResource(Res.drawable.ic_lossless),
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
             // Breathes for as long as the search runs: a wait, not a result,
             // and the one badge state that is still going to change.
             pulsing = true,
@@ -1649,6 +1651,7 @@ private fun LosslessOrStats(
             // [NerdStats.Snapshot.isHiRes].
             text = stringResource(if (nerdStats.isHiRes) Res.string.hi_res_lossless else Res.string.lossless),
             iconPainter = painterResource(Res.drawable.ic_lossless),
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
             // Shimmer is reserved for the thing that was asked for and
             // confirmed. It is what makes the badge read as an achievement
             // rather than a label, which only one of these two is.
@@ -1657,6 +1660,7 @@ private fun LosslessOrStats(
         )
         nerdStats?.isDolbyAtmos == true -> LosslessLabel(
             text = "Dolby Atmos",
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
             animated = true,
             iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
             modifier = modifier,
@@ -1666,14 +1670,29 @@ private fun LosslessOrStats(
         // app can reach. See [NerdStats.Snapshot.isHiQuality].
         nerdStats?.isHiQuality == true -> LosslessLabel(
             text = stringResource(Res.string.high_quality),
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
             animated = false,
             iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
             // A Material glyph's own size is 24dp; the badge's are drawn small.
             iconSize = 13.dp,
             modifier = modifier,
         )
-        // Below that, no badge: "Medium Quality" and "Data Saver" are gone.
-        // The space under the bar is kept for what is worth announcing.
+        nerdStats?.isLowQuality == true -> LosslessLabel(
+            text = "Data Saver",
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
+            animated = false,
+            iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
+            iconSize = 13.dp,
+            modifier = modifier,
+        )
+        nerdStats != null -> LosslessLabel(
+            text = "Standard Quality",
+            details = AudioQualityBadgeFormatter.formatDetails(nerdStats),
+            animated = false,
+            iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
+            iconSize = 13.dp,
+            modifier = modifier,
+        )
         else -> {}
     }
 }
@@ -1685,6 +1704,7 @@ private fun LosslessLabel(
     animated: Boolean,
     iconPainter: Painter,
     modifier: Modifier = Modifier,
+    details: String? = null,
     /** Fades the whole label in and out, for a state that is still in progress. */
     pulsing: Boolean = false,
     /** Unspecified draws [iconPainter] at its own size. */
@@ -1736,6 +1756,24 @@ private fun LosslessLabel(
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Medium,
                     fontSize = (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
+                ),
+                color = LocalPlayerTint.current.copy(alpha = 0.45f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (!details.isNullOrBlank()) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "·",
+                style = MaterialTheme.typography.labelMedium,
+                color = LocalPlayerTint.current.copy(alpha = 0.35f),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = details,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = MaterialTheme.typography.labelMedium.fontSize.value.sp,
                 ),
                 color = LocalPlayerTint.current.copy(alpha = 0.45f),
                 maxLines = 1,

@@ -125,9 +125,10 @@ internal object DesktopLinuxAudio {
         val handle = stream
         val bindings = native
         if (handle == null || bindings == null) return 0
+        val error = intArrayOf(0)
         val usec = runCatching {
-            bindings.pa_simple_get_playback_latency(handle, null).toLong()
-        }.getOrNull()?.takeIf { it >= 0 }
+            bindings.pa_simple_get_latency(handle, error).takeIf { error[0] == 0 && it >= 0 }
+        }.getOrNull()
         if (usec != null) lastQueuedFrames = usec * sampleRate / 1_000_000
         return (writtenFrames - lastQueuedFrames).coerceAtLeast(0)
     }
@@ -199,7 +200,7 @@ internal object DesktopLinuxAudio {
         fun pa_simple_write(handle: Pointer, data: FloatArray, bytes: NativeLong, error: IntArray?): Int
         fun pa_simple_drain(handle: Pointer, error: IntArray?): Int
         fun pa_simple_flush(handle: Pointer, error: IntArray?): Int
-        fun pa_simple_get_playback_latency(handle: Pointer, error: IntArray?): NativeLong
+        fun pa_simple_get_latency(handle: Pointer, error: IntArray?): Long
         fun pa_simple_free(handle: Pointer)
         fun pa_strerror(code: Int): String
     }
