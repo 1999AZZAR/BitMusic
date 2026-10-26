@@ -9,7 +9,12 @@ set -eu
 cd "$(dirname "$0")/.."
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "staging")
-base="1.2.0"
+version_file="$(dirname "$0")/../version.txt"
+if [ -f "$version_file" ]; then
+    base=$(tr -d '[:space:]' < "$version_file")
+else
+    base="1.2.0"
+fi
 
 case "$branch" in
     master|main)

@@ -83,7 +83,9 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 3
-        versionName = "1.2.0"
+        val versionFile = rootProject.file("version.txt")
+        val appVersionName = if (versionFile.exists()) versionFile.readText().trim() else "1.2.0"
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

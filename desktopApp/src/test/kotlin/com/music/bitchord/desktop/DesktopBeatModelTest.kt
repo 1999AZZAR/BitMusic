@@ -29,7 +29,10 @@ class DesktopBeatModelTest {
                 session.inputNames.first()
             }
         }
-        outcome.exceptionOrNull()?.let { println("beat model load failed: ${it.message}") }
+        outcome.exceptionOrNull()?.let {
+            System.err.println("beat model load failed: ${it.message}")
+            it.printStackTrace()
+        }
         assertTrue(
             outcome.isSuccess,
             "the beat model would not load, so Automix has no meter: ${outcome.exceptionOrNull()?.message}",
