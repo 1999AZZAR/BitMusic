@@ -35,9 +35,11 @@ val androidSdk: String? = file("local.properties")
     ?: System.getenv("ANDROID_HOME")
     ?: System.getenv("ANDROID_SDK_ROOT")
 
-if (androidSdk != null && file(androidSdk).isDirectory) {
+val desktopOnly: Boolean = providers.gradleProperty("bitchord.desktopOnly").orNull?.toBoolean() ?: false
+
+if (!desktopOnly && androidSdk != null && file(androidSdk).isDirectory) {
     include(":app")
     include(":tv")
 } else {
-    logger.lifecycle("No Android SDK found — building the desktop targets only.")
+    logger.lifecycle("No Android SDK found or desktopOnly active — building the desktop targets only.")
 }
