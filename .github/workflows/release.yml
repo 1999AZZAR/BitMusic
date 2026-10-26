@@ -59,6 +59,9 @@ jobs:
     name: Linux · AppImage, deb, rpm
     needs: [prepare]
     runs-on: ubuntu-22.04
+    env:
+      ANDROID_HOME: ""
+      ANDROID_SDK_ROOT: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -86,12 +89,12 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Tests
-        run: ./gradlew :shared:jvmTest :desktopUi:jvmTest :desktopApp:test -Pbitchord.version=${{ needs.prepare.outputs.version }}
+        run: ./gradlew :shared:jvmTest :desktopUi:jvmTest :desktopApp:test -Pbitchord.version=${{ needs.prepare.outputs.version }} -Pbitchord.desktopOnly=true
 
       - name: Build deb, rpm and the app image
         run: |
           ./gradlew :desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable \
-            -Pbitchord.version=${{ needs.prepare.outputs.version }}
+            -Pbitchord.version=${{ needs.prepare.outputs.version }} -Pbitchord.desktopOnly=true
 
       - name: The analyser and models are in the jar
         run: |
@@ -125,6 +128,9 @@ jobs:
     name: Windows · installer, msi, portable
     needs: [prepare]
     runs-on: windows-latest
+    env:
+      ANDROID_HOME: ""
+      ANDROID_SDK_ROOT: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -154,11 +160,11 @@ jobs:
           echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
 
       - name: Tests
-        run: .\gradlew.bat :shared:jvmTest :desktopUi:jvmTest :desktopApp:test "-Pbitchord.version=${{ needs.prepare.outputs.version }}"
+        run: .\gradlew.bat :shared:jvmTest :desktopUi:jvmTest :desktopApp:test "-Pbitchord.version=${{ needs.prepare.outputs.version }}" "-Pbitchord.desktopOnly=true"
 
       - name: Build msi, exe and the app image
         run: |
-          .\gradlew.bat :desktopApp:packageMsi :desktopApp:packageExe :desktopApp:createDistributable "-Pbitchord.version=${{ needs.prepare.outputs.version }}"
+          .\gradlew.bat :desktopApp:packageMsi :desktopApp:packageExe :desktopApp:createDistributable "-Pbitchord.version=${{ needs.prepare.outputs.version }}" "-Pbitchord.desktopOnly=true"
 
       - name: The analyser and models are in the jar
         shell: bash
@@ -189,6 +195,7 @@ jobs:
     name: macOS · dmg, pkg, zip (${{ matrix.arch }})
     needs: [prepare]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-14
@@ -196,6 +203,9 @@ jobs:
           - os: macos-15-intel
             arch: x64
     runs-on: ${{ matrix.os }}
+    env:
+      ANDROID_HOME: ""
+      ANDROID_SDK_ROOT: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -215,12 +225,12 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Tests
-        run: ./gradlew :shared:jvmTest :desktopUi:jvmTest :desktopApp:test -Pbitchord.version=${{ needs.prepare.outputs.version }}
+        run: ./gradlew :shared:jvmTest :desktopUi:jvmTest :desktopApp:test -Pbitchord.version=${{ needs.prepare.outputs.version }} -Pbitchord.desktopOnly=true
 
       - name: Build DMG, PKG and the app bundle
         run: |
           ./gradlew :desktopApp:packageDmg :desktopApp:packagePkg :desktopApp:createDistributable \
-            -Pbitchord.version=${{ needs.prepare.outputs.version }}
+            -Pbitchord.version=${{ needs.prepare.outputs.version }} -Pbitchord.desktopOnly=true
 
       - name: The analyser and models are in the jar
         run: |
