@@ -48,4 +48,23 @@ class DesktopSoundCloudTest {
         assertFalse(DesktopSourceRegistry.hasYouTubeOriginal(scSong))
         assertTrue(DesktopSourceRegistry.hasYouTubeOriginal(ytSong))
     }
+
+    @Test
+    fun directUrlSearchReturnsResolvedTrack() = kotlinx.coroutines.runBlocking {
+        val url = "https://soundcloud.com/alanwalker/faded-slushii-remix-1"
+        val results = DesktopSourceRegistry.search(url, com.music.bitchord.data.model.SearchFilter.ALL).getOrNull()
+        assertNotNull(results, "Search should succeed for direct SoundCloud URL")
+        assertTrue(results.isNotEmpty(), "Should return resolved results")
+        val top = results.first()
+        assertTrue(top is com.music.bitchord.data.model.SearchResult.TopTrack)
+        assertTrue(top.song.videoId.startsWith("soundcloud:"))
+        assertEquals("Faded (SLUSHII Remix)", top.song.title)
+    }
+
+    @Test
+    fun relatedTracksRetrievedForAutoplay() = kotlinx.coroutines.runBlocking {
+        val related = DesktopSoundCloud.getRelatedTracks("275391672", limit = 3).getOrNull()
+        assertNotNull(related)
+        assertTrue(related.isNotEmpty())
+    }
 }

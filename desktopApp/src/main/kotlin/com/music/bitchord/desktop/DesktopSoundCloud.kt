@@ -31,6 +31,14 @@ internal object DesktopSoundCloud {
     /** Finds the same catalogue recording for a YouTube-origin song. */
     suspend fun match(song: Song): Song? = matches(song).firstOrNull()
 
+    suspend fun resolveUrl(url: String): Result<com.music.bitchord.data.soundcloud.SoundCloudResolved> =
+        SoundCloudService.resolveUrl(url)
+
+    suspend fun getRelatedTracks(trackId: String, limit: Int = 20): Result<List<Song>> = runCatching {
+        SoundCloudService.getRelatedTracks(trackId, limit).getOrDefault(emptyList())
+            .map { SoundCloudService.toSong(it) }
+    }
+
     /** Every copy this catalogue holds of [song], most confident first. */
     suspend fun matches(song: Song): List<Song> {
         if (song.title.isBlank() || song.isVideo) return emptyList()

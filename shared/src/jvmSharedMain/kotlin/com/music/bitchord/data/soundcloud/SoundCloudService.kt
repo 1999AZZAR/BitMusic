@@ -18,6 +18,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import java.net.URI
 
 @Serializable
 data class SoundCloudUser(
@@ -25,6 +30,43 @@ data class SoundCloudUser(
     val username: String = "",
     @SerialName("avatar_url") val avatarUrl: String? = null,
 )
+
+@Serializable
+data class SoundCloudPlaylist(
+    val id: Long = 0,
+    val title: String = "",
+    val description: String? = null,
+    @SerialName("artwork_url") val artworkUrl: String? = null,
+    @SerialName("track_count") val trackCount: Int = 0,
+    val user: SoundCloudUser = SoundCloudUser(),
+    val tracks: List<SoundCloudTrack> = emptyList(),
+)
+
+@Serializable
+data class SoundCloudUserFull(
+    val id: Long = 0,
+    val username: String = "",
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("track_count") val trackCount: Int = 0,
+    @SerialName("public_favorites_count") val likesCount: Int? = null,
+)
+
+@Serializable
+private data class SoundCloudCollectionResponse<T>(
+    val collection: List<T> = emptyList(),
+)
+
+@Serializable
+private data class SoundCloudLikeItem(
+    val kind: String = "",
+    val track: SoundCloudTrack? = null,
+)
+
+sealed class SoundCloudResolved {
+    data class Track(val track: SoundCloudTrack, val song: Song) : SoundCloudResolved()
+    data class Playlist(val playlist: SoundCloudPlaylist, val songs: List<Song>) : SoundCloudResolved()
+    data class User(val user: SoundCloudUserFull, val tracks: List<Song>) : SoundCloudResolved()
+}
 
 @Serializable
 data class SoundCloudFormat(
@@ -277,5 +319,162 @@ object SoundCloudService {
             sourceQuality = "STANDARD",
             isExplicit = false,
         )
+    }
+
+    fun isSoundCloudUrl(input: String): Boolean {
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) return false
+        val candidate = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "https://$trimmed"
+        val host = runCatching { URI(candidate).host?.lowercase() }.getOrNull() ?: return false
+        return host == "soundcloud.com" || host.endsWith(".soundcloud.com")
+    }
+
+    suspend fun resolveUrl(rawUrl: String, configId: String? = null): Result<SoundCloudResolved> = runCatching {
+        val trimmed = rawUrl.trim()
+        val candidate = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "https://$trimmed"
+        val finalUrl = if (candidate.contains("on.soundcloud.com/")) {
+            runCatching { client.get(candidate) { header(HttpHeaders.UserAgent, USER_AGENT) }.call.request.url.toString() }
+                .getOrDefault(candidate)
+        } else {
+            candidate
+        }
+
+        var clientId = currentClientId
+        var response = executeResolve(finalUrl, clientId)
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+            clientId = refreshClientId()
+            response = executeResolve(finalUrl, clientId)
+        }
+
+        check(response.status == HttpStatusCode.OK) {
+            "SoundCloud resolve returned HTTP ${response.status.value}"
+        }
+
+        val text = response.bodyAsText()
+        val root = json.parseToJsonElement(text).jsonObject
+        val kind = root["kind"]?.jsonPrimitive?.contentOrNull
+
+        when (kind) {
+            "track" -> {
+                val track = json.decodeFromJsonElement<SoundCloudTrack>(root)
+                SoundCloudResolved.Track(track, toSong(track, configId))
+            }
+            "playlist" -> {
+                val playlist = json.decodeFromJsonElement<SoundCloudPlaylist>(root)
+                val fullTracks = playlist.tracks.filter { it.title.isNotBlank() }
+                val songs = fullTracks.map { toSong(it, configId) }
+                SoundCloudResolved.Playlist(playlist, songs)
+            }
+            "user" -> {
+                val user = json.decodeFromJsonElement<SoundCloudUserFull>(root)
+                val userTracks = getUserTracks(user.id, limit = 50).getOrDefault(emptyList())
+                val songs = userTracks.map { toSong(it, configId) }
+                SoundCloudResolved.User(user, songs)
+            }
+            else -> error("Unsupported SoundCloud resource kind: $kind")
+        }
+    }
+
+    private suspend fun executeResolve(url: String, clientId: String) =
+        client.get("$BASE_URL/resolve") {
+            parameter("url", url)
+            parameter("client_id", clientId)
+            header(HttpHeaders.UserAgent, USER_AGENT)
+            header(HttpHeaders.Accept, "application/json")
+        }
+
+    suspend fun getRelatedTracks(trackId: String, limit: Int = 20): Result<List<SoundCloudTrack>> = runCatching {
+        val cleanId = trackId.removePrefix("soundcloud:").substringAfterLast("::").trim()
+        if (cleanId.isBlank()) return@runCatching emptyList()
+
+        var clientId = currentClientId
+        var response = client.get("$BASE_URL/tracks/$cleanId/related") {
+            parameter("client_id", clientId)
+            parameter("limit", limit)
+            header(HttpHeaders.UserAgent, USER_AGENT)
+            header(HttpHeaders.Accept, "application/json")
+        }
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+            clientId = refreshClientId()
+            response = client.get("$BASE_URL/tracks/$cleanId/related") {
+                parameter("client_id", clientId)
+                parameter("limit", limit)
+                header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.Accept, "application/json")
+            }
+        }
+        if (response.status != HttpStatusCode.OK) return@runCatching emptyList()
+
+        val parsed = json.decodeFromString<SoundCloudCollectionResponse<SoundCloudTrack>>(response.bodyAsText())
+        parsed.collection.filter { it.policy != "BLOCK" }
+    }
+
+    suspend fun getUserTracks(userId: Long, limit: Int = 50): Result<List<SoundCloudTrack>> = runCatching {
+        var clientId = currentClientId
+        var response = client.get("$BASE_URL/users/$userId/tracks") {
+            parameter("client_id", clientId)
+            parameter("limit", limit)
+            header(HttpHeaders.UserAgent, USER_AGENT)
+            header(HttpHeaders.Accept, "application/json")
+        }
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+            clientId = refreshClientId()
+            response = client.get("$BASE_URL/users/$userId/tracks") {
+                parameter("client_id", clientId)
+                parameter("limit", limit)
+                header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.Accept, "application/json")
+            }
+        }
+        if (response.status != HttpStatusCode.OK) return@runCatching emptyList()
+
+        val parsed = json.decodeFromString<SoundCloudCollectionResponse<SoundCloudTrack>>(response.bodyAsText())
+        parsed.collection.filter { it.policy != "BLOCK" }
+    }
+
+    suspend fun getUserLikes(userId: Long, limit: Int = 50): Result<List<SoundCloudTrack>> = runCatching {
+        var clientId = currentClientId
+        var response = client.get("$BASE_URL/users/$userId/likes") {
+            parameter("client_id", clientId)
+            parameter("limit", limit)
+            header(HttpHeaders.UserAgent, USER_AGENT)
+            header(HttpHeaders.Accept, "application/json")
+        }
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+            clientId = refreshClientId()
+            response = client.get("$BASE_URL/users/$userId/likes") {
+                parameter("client_id", clientId)
+                parameter("limit", limit)
+                header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.Accept, "application/json")
+            }
+        }
+        if (response.status != HttpStatusCode.OK) return@runCatching emptyList()
+
+        val parsed = json.decodeFromString<SoundCloudCollectionResponse<SoundCloudLikeItem>>(response.bodyAsText())
+        parsed.collection.mapNotNull { it.track }.filter { it.policy != "BLOCK" }
+    }
+
+    suspend fun getUserPlaylists(userId: Long, limit: Int = 50): Result<List<SoundCloudPlaylist>> = runCatching {
+        var clientId = currentClientId
+        var response = client.get("$BASE_URL/users/$userId/playlists") {
+            parameter("client_id", clientId)
+            parameter("limit", limit)
+            header(HttpHeaders.UserAgent, USER_AGENT)
+            header(HttpHeaders.Accept, "application/json")
+        }
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+            clientId = refreshClientId()
+            response = client.get("$BASE_URL/users/$userId/playlists") {
+                parameter("client_id", clientId)
+                parameter("limit", limit)
+                header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.Accept, "application/json")
+            }
+        }
+        if (response.status != HttpStatusCode.OK) return@runCatching emptyList()
+
+        val parsed = json.decodeFromString<SoundCloudCollectionResponse<SoundCloudPlaylist>>(response.bodyAsText())
+        parsed.collection
     }
 }

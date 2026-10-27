@@ -218,6 +218,21 @@ internal object DesktopSourceRegistry {
 
     /** Search YouTube Music, plus enabled non-YouTube sources when searching songs. */
     suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> = runCatching {
+        if (isEnabled("soundcloud") && com.music.bitchord.data.soundcloud.SoundCloudService.isSoundCloudUrl(query)) {
+            val resolved = DesktopSoundCloud.resolveUrl(query).getOrNull()
+            if (resolved != null) {
+                return@runCatching when (resolved) {
+                    is com.music.bitchord.data.soundcloud.SoundCloudResolved.Track ->
+                        listOf(SearchResult.TopTrack(resolved.song), SearchResult.Track(resolved.song))
+                    is com.music.bitchord.data.soundcloud.SoundCloudResolved.Playlist ->
+                        if (resolved.songs.isNotEmpty()) {
+                            listOf(SearchResult.TopTrack(resolved.songs.first())) + resolved.songs.drop(1).map { SearchResult.Track(it) }
+                        } else emptyList()
+                    is com.music.bitchord.data.soundcloud.SoundCloudResolved.User ->
+                        resolved.tracks.map { SearchResult.Track(it) }
+                }
+            }
+        }
         val ytJob = scope.async { DesktopSearchClient.search(query, filter).getOrDefault(emptyList()) }
         val scJob: Deferred<List<SearchResult>>? = if (isEnabled("soundcloud") && (filter == SearchFilter.ALL || filter == SearchFilter.SONGS)) {
             scope.async { DesktopSoundCloud.search(query, limit = 15).getOrDefault(emptyList()) }

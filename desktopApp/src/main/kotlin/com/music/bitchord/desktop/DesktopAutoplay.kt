@@ -63,6 +63,16 @@ internal object DesktopAutoplay {
         seedSong: Song,
         limit: Int = MAX_QUEUED_AUTOPLAY,
     ): Result<List<Song>> {
+        if (seedSong.videoId.startsWith("soundcloud:")) {
+            val relatedSc = DesktopSoundCloud.getRelatedTracks(seedSong.videoId, limit).getOrNull()
+            if (!relatedSc.isNullOrEmpty()) {
+                val extra = QueueBuilder.extend(existing, relatedSc, limit)
+                if (extra.isNotEmpty()) {
+                    DesktopTrackLog.log("autoplay: soundcloud station for '${seedSong.title}' offered ${extra.size} tracks")
+                    return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
+                }
+            }
+        }
         val seed = youtubeSeedFor(seedSong)
         if (seed == null) {
             DesktopTrackLog.log("autoplay: no YouTube match to seed a station on for '${seedSong.title}'")
