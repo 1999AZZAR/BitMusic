@@ -82,9 +82,9 @@ android {
         // Haze falls back to a translucent scrim below that.
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
+        versionCode = 4
         val versionFile = rootProject.file("version.txt")
-        val appVersionName = if (versionFile.exists()) versionFile.readText().trim() else "1.2.0"
+        val appVersionName = if (versionFile.exists()) versionFile.readText().trim() else "1.2.1"
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
