@@ -1,8 +1,28 @@
+<p align="center">
+  <img src="Logo.png" alt="BitMusic Logo" width="120" height="120" />
+</p>
+
 # BitMusic
 
-BitMusic is a YouTube Music client built for large screens: Linux desktop, Android TV, Windows, and macOS.
+BitMusic is a high-fidelity YouTube Music client designed specifically for large displays: Linux desktop, Android TV, Windows, and macOS.
 
-The project is an independent fork of [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh and contributors. BitMusic decouples the core codebase from mobile phones to focus entirely on large viewports, high-fidelity desktop audio, and remote-driven television interfaces.
+The project is an independent fork of [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh and contributors. BitMusic decouples the core codebase from mobile phones to focus entirely on large viewports, high-fidelity desktop audio pipelines, multi-source stream aggregation, and remote-driven television interfaces.
+
+---
+
+## Screenshots
+
+<div align="center">
+
+| Discover & Home Dashboard | Multi-Source Search (YouTube + SoundCloud) |
+|:---:|:---:|
+| <img src="docs/screenshots/home.png" alt="Discover and Home Dashboard" width="100%" /> | <img src="docs/screenshots/search.png" alt="Multi-Source Search" width="100%" /> |
+
+| Now Playing & Synchronized Lyrics | Audio Sources & Routing Settings |
+|:---:|:---:|
+| <img src="docs/screenshots/now_playing.png" alt="Now Playing and Synchronized Lyrics" width="100%" /> | <img src="docs/screenshots/settings.png" alt="Audio Sources and Settings" width="100%" /> |
+
+</div>
 
 ---
 
