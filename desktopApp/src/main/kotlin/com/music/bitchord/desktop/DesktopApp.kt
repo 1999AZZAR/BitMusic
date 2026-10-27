@@ -6857,7 +6857,7 @@ private fun DesktopSettingsScreen(
                         .filter(DesktopSourceConfig::isUserAdded)
                         .map(DesktopSourceConfig::id)
                     sourceConfigs.inSourceOrder().forEachIndexed { index, config ->
-                        if (!settingsRowVisible(sourcesHeading, config.displayName)) return@forEachIndexed
+                        if (!settingsRowVisible(sourcesHeading, "${config.displayName} ${config.kind.detail}")) return@forEachIndexed
                         DesktopSourceSettingsRow(
                             position = index + 1,
                             config = config,

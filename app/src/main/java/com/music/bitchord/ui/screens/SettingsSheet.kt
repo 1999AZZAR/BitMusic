@@ -446,7 +446,7 @@ fun SettingsScreen(
         SearchableSettingsGroup(search, header = stringResource(R.string.audio_quality)) {
             val sourceTitle = stringResource(R.string.source)
             val sourceSubtitle = stringResource(R.string.sources_subtitle)
-            row(sourceTitle, sourceSubtitle, "addon", "lossless") {
+            row(sourceTitle, sourceSubtitle, "addon", "lossless", "jiosaavn", "soundcloud") {
                 SettingsRow(
                     icon = Icons.Rounded.Extension,
                     title = sourceTitle,
