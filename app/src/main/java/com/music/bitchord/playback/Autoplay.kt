@@ -102,15 +102,16 @@ suspend fun loadAutoplayTracks(
     limit: Int = MAX_QUEUED_AUTOPLAY,
 ): Result<List<Song>> {
     val key = SourceRegistry.parseTrackKey(seedSong.videoId)
-    val isSoundCloud = (key != null && SourceRegistry.instance(key.configId) is com.music.bitchord.data.sources.SoundCloudSource) ||
+    val configId = key?.first
+    val rawId = key?.second ?: seedSong.videoId.removePrefix("soundcloud:")
+    val isSoundCloud = (configId != null && SourceRegistry.instance(configId) is com.music.bitchord.data.sources.SoundCloudSource) ||
         seedSong.videoId.startsWith("soundcloud:")
     if (isSoundCloud) {
-        val rawId = key?.trackId ?: seedSong.videoId.removePrefix("soundcloud:")
         val scTracks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             com.music.bitchord.data.soundcloud.SoundCloudService.getRelatedTracks(rawId, limit).getOrNull()
         }
         if (!scTracks.isNullOrEmpty()) {
-            val scSongs = scTracks.map { com.music.bitchord.data.soundcloud.SoundCloudService.toSong(it, key?.configId) }
+            val scSongs = scTracks.map { com.music.bitchord.data.soundcloud.SoundCloudService.toSong(it, configId) }
             val extra = QueueBuilder.extend(existing, scSongs, limit)
             if (extra.isNotEmpty()) {
                 return Result.success(extra.map {

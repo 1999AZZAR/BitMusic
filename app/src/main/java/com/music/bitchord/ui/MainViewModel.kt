@@ -80,6 +80,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import com.music.bitchord.data.sources.AddonSource
@@ -2143,6 +2144,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 } else emptyList()
                             is com.music.bitchord.data.soundcloud.SoundCloudResolved.User ->
                                 resolved.tracks.map { SearchResult.Track(it) }
+                            else -> emptyList()
                         }
                         if (rows.isNotEmpty()) {
                             _results.value = UiState.Success(rows)
