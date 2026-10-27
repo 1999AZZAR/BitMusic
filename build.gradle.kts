@@ -41,14 +41,14 @@ buildscript {
  * No "v" in the name — the in-app updater reads it as a number; the "v" is the
  * release tag's alone.
  */
-extra["bitchordVersionCode"] = 4
-extra["bitchordVersionName"] = "1.2.1"
+extra["bitchordVersionCode"] = 5
+extra["bitchordVersionName"] = "1.2.2"
 
 /*
  * Bump this before cutting each test build ("beta0", "beta1", ...)
  * and blank it out before cutting the real production release.
  */
-extra["bitchordBetaSuffix"] = ""
+extra["bitchordBetaSuffix"] = "beta0"
 
 plugins {
     id("com.android.application") version "8.10.1" apply false
