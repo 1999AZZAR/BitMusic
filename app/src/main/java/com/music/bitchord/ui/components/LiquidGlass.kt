@@ -21,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
@@ -91,6 +93,37 @@ private const val GLASS_RESOLUTION_SCALE = 0.33f
 internal val GLASS_EDGE_WIDTH = 0.5.dp
 internal val GLASS_EDGE_COLOR = Color.White.copy(alpha = 0.10f)
 
+/** Specular gradient border brush simulating physical glass refraction and top-left light incidence. */
+@Composable
+fun rememberGlassEdgeBrush(): Brush {
+    val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    return remember(isLight) {
+        if (isLight) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.65f),
+                    Color.White.copy(alpha = 0.20f),
+                    Color.Black.copy(alpha = 0.08f),
+                    Color.Black.copy(alpha = 0.16f),
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.35f),
+                    Color.White.copy(alpha = 0.12f),
+                    Color.White.copy(alpha = 0.04f),
+                    Color.Black.copy(alpha = 0.22f),
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            )
+        }
+    }
+}
+
 /**
  * Icon and label colour for content sitting on a glass surface.
  *
@@ -127,16 +160,15 @@ fun Modifier.lightweightLiquidGlass(
     fallbackColor: Color,
 ): Modifier {
     val useGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
-    val glassTint = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-        Color(0xFFFAFAFA)
-    } else {
-        Color(0xFF121212)
-    }
+    val m3Surface = MaterialTheme.colorScheme.surface
+    val isLight = m3Surface.luminance() > 0.5f
+    val glassTint = m3Surface
     val shapeProvider = ShapeProvider { shape }
+    val edgeBrush = rememberGlassEdgeBrush()
 
     return clip(shape)
         .background(
-            color = if (useGlass) glassTint.copy(alpha = SURFACE_OPACITY) else fallbackColor,
+            color = if (useGlass) glassTint.copy(alpha = if (isLight) 0.52f else SURFACE_OPACITY) else fallbackColor,
             shape = shape,
         )
         .then(
@@ -149,7 +181,7 @@ fun Modifier.lightweightLiquidGlass(
                 Modifier
             },
         )
-        .border(GLASS_EDGE_WIDTH, GLASS_EDGE_COLOR, shape)
+        .border(GLASS_EDGE_WIDTH, if (useGlass) edgeBrush else Brush.linearGradient(listOf(fallbackColor, fallbackColor)), shape)
 }
 
 /**
@@ -203,11 +235,10 @@ fun Modifier.liquidGlass(shape: CornerBasedShape): Modifier {
     val blurPx = with(density) { BLUR_RADIUS_DP.dp.toPx() } * GLASS_RESOLUTION_SCALE
     val lensHeightPx = with(density) { (LENS_HEIGHT * LENS_MAX_DP).dp.toPx() } * GLASS_RESOLUTION_SCALE
     val lensAmountPx = with(density) { (LENS_AMOUNT * LENS_MAX_DP).dp.toPx() } * GLASS_RESOLUTION_SCALE
-    val surfaceTintColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-        Color(0xFFFAFAFA)
-    } else {
-        Color(0xFF121212)
-    }
+    val m3Surface = MaterialTheme.colorScheme.surface
+    val isLight = m3Surface.luminance() > 0.5f
+    val surfaceTintColor = m3Surface
+    val surfaceAlpha = if (isLight) 0.52f else SURFACE_OPACITY
 
     return drawBackdrop(
         backdrop = backdrop,
@@ -227,9 +258,21 @@ fun Modifier.liquidGlass(shape: CornerBasedShape): Modifier {
         highlight = { Highlight.Default },
         shadow = { Shadow.Default },
         onDrawSurface = {
-            drawRect(color = surfaceTintColor.copy(alpha = SURFACE_OPACITY), size = size)
+            drawRect(color = surfaceTintColor.copy(alpha = surfaceAlpha), size = size)
+            // Specular top highlight sheen
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (isLight) 0.12f else 0.06f),
+                        Color.Transparent,
+                    ),
+                    startY = 0f,
+                    endY = size.height * 0.40f,
+                ),
+                size = size,
+            )
         },
         exportedBackdrop = exportedBackdrop,
         backdropScale = GLASS_RESOLUTION_SCALE,
-    )
+    ).border(GLASS_EDGE_WIDTH, rememberGlassEdgeBrush(), shape)
 }

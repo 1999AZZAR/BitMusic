@@ -225,6 +225,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -7669,10 +7670,63 @@ private fun rememberPlayingRowMatcher(rows: List<Song>): (Song) -> Boolean {
     return remember(rows, current) { playingRowMatcher(rows, current) }
 }
 
-/** The frosted pane the floating bars are made of. */
+/** Specular gradient border simulating physical glass refraction and top-left light incidence. */
 @Composable
-internal fun Modifier.desktopBarGlass(shape: Shape): Modifier =
-    desktopFrosted(DesktopBarGlass, tintAlpha = 0.55f).border(0.5.dp, DesktopBarEdge, shape)
+internal fun rememberSpecularGlassBorder(): Brush {
+    val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    return remember(isLight) {
+        if (isLight) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.65f),
+                    Color.White.copy(alpha = 0.25f),
+                    Color.Black.copy(alpha = 0.08f),
+                    Color.Black.copy(alpha = 0.16f),
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.35f),
+                    Color.White.copy(alpha = 0.12f),
+                    Color.White.copy(alpha = 0.04f),
+                    Color.Black.copy(alpha = 0.22f),
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            )
+        }
+    }
+}
+
+/** The frosted liquid glass capsule the floating bars are made of. */
+@Composable
+internal fun Modifier.desktopBarGlass(shape: Shape): Modifier {
+    val surface = MaterialTheme.colorScheme.surface
+    val specularBorder = rememberSpecularGlassBorder()
+    val isLight = surface.luminance() > 0.5f
+
+    return this
+        .desktopFrosted(
+            opaque = surface.copy(alpha = if (isLight) 0.88f else 0.82f),
+            tintAlpha = if (isLight) 0.65f else 0.52f,
+        )
+        .border(0.75.dp, specularBorder, shape)
+        .drawBehind {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (isLight) 0.14f else 0.07f),
+                        Color.Transparent,
+                    ),
+                    startY = 0f,
+                    endY = size.height * 0.40f,
+                ),
+            )
+        }
+}
 
 /** The edge of a chrome pane that meets the page, and so has to dissolve into it. */
 internal enum class DesktopChromeEdge { NONE, BOTTOM, END }

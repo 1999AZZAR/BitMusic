@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -501,7 +502,7 @@ internal fun DesktopNowPlaying(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(20.dp))
                                 .playerQueueGlass()
-                                .border(0.5.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(20.dp)),
+                                .border(0.75.dp, rememberSpecularGlassBorder(), RoundedCornerShape(20.dp)),
                         ) {
                             queuePanel()
                             // The dissolve: the list's last rows wash out into the card rather
@@ -547,15 +548,16 @@ private fun Modifier.playerQueueGlass(): Modifier {
     val haze = LocalDesktopHaze.current
     val reduceDynamicBlur by DesktopAppearanceSettings.reduceDynamicBlur.collectAsState()
     val surface = MaterialTheme.colorScheme.surface
+    val isLight = surface.luminance() > 0.5f
     return if (haze == null || reduceDynamicBlur) {
-        background(surface.copy(alpha = 0.82f))
+        background(surface.copy(alpha = if (isLight) 0.88f else 0.82f))
     } else {
         hazeEffect(state = haze) {
             blurEnabled = true
             backgroundColor = surface
-            blurRadius = 40.dp
-            tints = listOf(HazeTint(surface.copy(alpha = 0.30f)))
-            noiseFactor = 0.03f
+            blurRadius = 36.dp
+            tints = listOf(HazeTint(surface.copy(alpha = if (isLight) 0.45f else 0.28f)))
+            noiseFactor = 0.02f
         }
     }
 }
