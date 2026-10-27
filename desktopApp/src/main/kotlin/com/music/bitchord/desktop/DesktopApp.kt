@@ -6857,7 +6857,7 @@ private fun DesktopSettingsScreen(
                         .filter(DesktopSourceConfig::isUserAdded)
                         .map(DesktopSourceConfig::id)
                     sourceConfigs.inSourceOrder().forEachIndexed { index, config ->
-                        if (!settingsRowVisible(sourcesHeading, config.displayName)) return@forEachIndexed
+                        if (!settingsRowVisible(sourcesHeading, "${config.displayName} ${config.kind.detail}")) return@forEachIndexed
                         DesktopSourceSettingsRow(
                             position = index + 1,
                             config = config,
@@ -7066,6 +7066,7 @@ private fun DesktopSourceSettingsRow(
                 DesktopSourceKind.ADDON -> Icons.Rounded.Extension
                 DesktopSourceKind.CUSTOM_MODULE, DesktopSourceKind.MODULE -> Icons.Rounded.Extension
                 DesktopSourceKind.JIOSAAVN -> Icons.Rounded.GraphicEq
+                DesktopSourceKind.SOUNDCLOUD -> Icons.Rounded.Cloud
                 DesktopSourceKind.YOUTUBE -> Icons.Rounded.PlayCircle
             },
             contentDescription = null,

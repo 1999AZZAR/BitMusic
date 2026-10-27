@@ -101,6 +101,30 @@ suspend fun loadAutoplayTracks(
     seedSong: Song,
     limit: Int = MAX_QUEUED_AUTOPLAY,
 ): Result<List<Song>> {
+    val key = SourceRegistry.parseTrackKey(seedSong.videoId)
+    val configId = key?.first
+    val rawId = key?.second ?: seedSong.videoId.removePrefix("soundcloud:")
+    val isSoundCloud = (configId != null && SourceRegistry.instance(configId) is com.music.bitchord.data.sources.SoundCloudSource) ||
+        seedSong.videoId.startsWith("soundcloud:")
+    if (isSoundCloud) {
+        val scTracks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.music.bitchord.data.soundcloud.SoundCloudService.getRelatedTracks(rawId, limit).getOrNull()
+        }
+        if (!scTracks.isNullOrEmpty()) {
+            val scSongs = scTracks.map { com.music.bitchord.data.soundcloud.SoundCloudService.toSong(it, configId) }
+            val extra = QueueBuilder.extend(existing, scSongs, limit)
+            if (extra.isNotEmpty()) {
+                return Result.success(extra.map {
+                    it.copy(
+                        radioName = seedSong.radioName,
+                        playbackSource = seedSong.playbackSource,
+                        playbackSourceType = seedSong.playbackSourceType,
+                        playbackSourceId = seedSong.playbackSourceId,
+                    ).asQueueEntry(QueueTier.AUTOPLAY)
+                })
+            }
+        }
+    }
     val seed = youtubeSeedFor(seedSong) ?: return Result.success(emptyList())
     val related = YtMusicRepository.radio(seed).getOrElse { return Result.failure(it) }
     val extra = QueueBuilder.extend(existing, related, limit)

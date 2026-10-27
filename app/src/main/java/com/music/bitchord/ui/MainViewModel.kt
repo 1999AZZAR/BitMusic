@@ -80,6 +80,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import com.music.bitchord.data.sources.AddonSource
@@ -2128,6 +2129,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun startSearchPipeline() = viewModelScope.launch {
         searchRequests
             .collectLatest { request ->
+                if (com.music.bitchord.data.soundcloud.SoundCloudService.isSoundCloudUrl(request.query)) {
+                    _results.value = UiState.Loading
+                    val resolved = withContext(Dispatchers.IO) {
+                        com.music.bitchord.data.soundcloud.SoundCloudService.resolveUrl(request.query).getOrNull()
+                    }
+                    if (resolved != null && request.requestId == newestRequestId.get()) {
+                        val rows = when (resolved) {
+                            is com.music.bitchord.data.soundcloud.SoundCloudResolved.Track ->
+                                listOf(SearchResult.TopTrack(resolved.song), SearchResult.Track(resolved.song))
+                            is com.music.bitchord.data.soundcloud.SoundCloudResolved.Playlist ->
+                                if (resolved.songs.isNotEmpty()) {
+                                    listOf(SearchResult.TopTrack(resolved.songs.first())) + resolved.songs.drop(1).map { SearchResult.Track(it) }
+                                } else emptyList()
+                            is com.music.bitchord.data.soundcloud.SoundCloudResolved.User ->
+                                resolved.tracks.map { SearchResult.Track(it) }
+                            else -> emptyList()
+                        }
+                        if (rows.isNotEmpty()) {
+                            _results.value = UiState.Success(rows)
+                            return@collectLatest
+                        }
+                    }
+                }
+
                 val key = cacheKey(request.query, request.filter)
                 // Something to look at immediately: the exact answer if this
                 // query has been run before, otherwise the closest earlier

@@ -10,7 +10,7 @@ val appVersion: String = providers.gradleProperty("bitchord.version").orNull
     ?.takeIf { it.isNotBlank() }
     ?: run {
         val versionFile = rootProject.file("version.txt")
-        val baseVersion = if (versionFile.exists()) versionFile.readText().trim() else "1.2.0"
+        val baseVersion = if (versionFile.exists()) versionFile.readText().trim() else "1.2.1"
         val branch = try {
             val p = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD").redirectErrorStream(true).start()
             val out = p.inputStream.bufferedReader().readText().trim()

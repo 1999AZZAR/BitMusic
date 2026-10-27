@@ -100,6 +100,20 @@ internal object DesktopSourceRegistry {
         override suspend fun matches(song: Song): List<Song> = DesktopJioSaavn.matches(song)
     }
 
+    private class SoundCloudAdapter(
+        override val config: DesktopSourceConfig,
+    ) : SourceAdapter {
+        override val descriptor: DesktopSourceDescriptor
+            get() = config.descriptor()
+
+        override fun owns(song: Song): Boolean = song.videoId.startsWith("soundcloud:")
+
+        override suspend fun resolve(song: Song, quality: String?): Result<DesktopStream?> =
+            DesktopSoundCloud.stream(song.videoId)
+
+        override suspend fun matches(song: Song): List<Song> = DesktopSoundCloud.matches(song)
+    }
+
     private class YouTubeAdapter(
         override val config: DesktopSourceConfig,
     ) : SourceAdapter {
@@ -191,6 +205,7 @@ internal object DesktopSourceRegistry {
                     DesktopSourceKind.MODULE,
                     -> ModuleAdapter(config)
                     DesktopSourceKind.JIOSAAVN -> JioAdapter(config)
+                    DesktopSourceKind.SOUNDCLOUD -> SoundCloudAdapter(config)
                     DesktopSourceKind.YOUTUBE -> YouTubeAdapter(config)
                 }
             }
@@ -201,9 +216,32 @@ internal object DesktopSourceRegistry {
 
     fun isEnabled(sourceId: String): Boolean = configs().firstOrNull { it.id == sourceId }?.enabled == true
 
-    /** Searching is YouTube Music's job, and only YouTube Music's. */
-    suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> =
-        DesktopSearchClient.search(query, filter)
+    /** Search YouTube Music, plus enabled non-YouTube sources when searching songs. */
+    suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> = runCatching {
+        if (isEnabled("soundcloud") && com.music.bitchord.data.soundcloud.SoundCloudService.isSoundCloudUrl(query)) {
+            val resolved = DesktopSoundCloud.resolveUrl(query).getOrNull()
+            if (resolved != null) {
+                return@runCatching when (resolved) {
+                    is com.music.bitchord.data.soundcloud.SoundCloudResolved.Track ->
+                        listOf(SearchResult.TopTrack(resolved.song), SearchResult.Track(resolved.song))
+                    is com.music.bitchord.data.soundcloud.SoundCloudResolved.Playlist ->
+                        if (resolved.songs.isNotEmpty()) {
+                            listOf(SearchResult.TopTrack(resolved.songs.first())) + resolved.songs.drop(1).map { SearchResult.Track(it) }
+                        } else emptyList()
+                    is com.music.bitchord.data.soundcloud.SoundCloudResolved.User ->
+                        resolved.tracks.map { SearchResult.Track(it) }
+                }
+            }
+        }
+        val ytJob = scope.async { DesktopSearchClient.search(query, filter).getOrDefault(emptyList()) }
+        val scJob: Deferred<List<SearchResult>>? = if (isEnabled("soundcloud") && (filter == SearchFilter.ALL || filter == SearchFilter.SONGS)) {
+            scope.async { DesktopSoundCloud.search(query, limit = 15).getOrDefault(emptyList()) }
+        } else null
+
+        val yt = ytJob.await()
+        val sc = scJob?.await().orEmpty()
+        yt + sc
+    }
 
     suspend fun resolve(
         song: Song,
@@ -222,6 +260,7 @@ internal object DesktopSourceRegistry {
                 it.config.kind == DesktopSourceKind.CUSTOM_MODULE || it.config.kind == DesktopSourceKind.MODULE
             }
             song.videoId.startsWith("jiosaavn:") -> available.firstOrNull { it.config.kind == DesktopSourceKind.JIOSAAVN }
+            song.videoId.startsWith("soundcloud:") -> available.firstOrNull { it.config.kind == DesktopSourceKind.SOUNDCLOUD }
             else -> null
         }
 
@@ -230,7 +269,7 @@ internal object DesktopSourceRegistry {
         // than refused the way a disabled source's row is.
         val heldBack = addonReference != null && owned == null &&
             configs().any { it.id == addonReference.sourceId && it.enabled && it.isComplete }
-        if (!heldBack && (addonReference != null || moduleReference != null || song.videoId.startsWith("jiosaavn:"))) {
+        if (!heldBack && (addonReference != null || moduleReference != null || song.videoId.startsWith("jiosaavn:") || song.videoId.startsWith("soundcloud:"))) {
             if (owned == null) error("The source for this track is disabled or no longer configured")
             // This path has nothing to race.
             DesktopTrackLog.log(
@@ -313,7 +352,8 @@ internal object DesktopSourceRegistry {
         val available = playbackAdapters(quality)
         val owned = available.any { it.owns(song) } ||
             DesktopModuleSource.parseTrack(song.videoId) != null ||
-            song.videoId.startsWith("jiosaavn:")
+            song.videoId.startsWith("jiosaavn:") ||
+            song.videoId.startsWith("soundcloud:")
         if (owned) {
             return@runCatching DesktopLiveResolution(resolve(song, quality, excludedSourceId).getOrThrow())
         }
@@ -551,6 +591,7 @@ internal object DesktopSourceRegistry {
         DesktopAddonSource.parseTrack(song.videoId) == null &&
             DesktopModuleSource.parseTrack(song.videoId) == null &&
             !song.videoId.startsWith("jiosaavn:") &&
+            !song.videoId.startsWith("soundcloud:") &&
             song.videoId.isNotBlank()
 
     /** The configured source a stream came from, for a log line. */

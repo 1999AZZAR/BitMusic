@@ -122,6 +122,7 @@ class DesktopPersistence {
             DesktopTrackLog.log("stored sources could not be read; leaving them untouched")
             return listOf(
                 DesktopSourceConfig("jiosaavn", DesktopSourceKind.JIOSAAVN, enabled = sourceEnabled("jiosaavn")),
+                DesktopSourceConfig("soundcloud", DesktopSourceKind.SOUNDCLOUD, enabled = sourceEnabled("soundcloud")),
                 DesktopSourceConfig("youtube", DesktopSourceKind.YOUTUBE),
             )
         }
@@ -136,6 +137,15 @@ class DesktopPersistence {
                         "jiosaavn",
                         DesktopSourceKind.JIOSAAVN,
                         enabled = sourceEnabled("jiosaavn"),
+                    ),
+                )
+            }
+            if (none { it.kind == DesktopSourceKind.SOUNDCLOUD }) {
+                add(
+                    DesktopSourceConfig(
+                        "soundcloud",
+                        DesktopSourceKind.SOUNDCLOUD,
+                        enabled = sourceEnabled("soundcloud"),
                     ),
                 )
             }

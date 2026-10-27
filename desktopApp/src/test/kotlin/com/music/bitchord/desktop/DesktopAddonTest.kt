@@ -197,6 +197,7 @@ class DesktopAddonTest {
         assertTrue(DesktopSourceConfig("a", DesktopSourceKind.ADDON).isUserAdded)
         assertTrue(DesktopSourceConfig("c", DesktopSourceKind.CUSTOM_MODULE).isUserAdded)
         assertFalse(DesktopSourceConfig("j", DesktopSourceKind.JIOSAAVN).isUserAdded)
+        assertFalse(DesktopSourceConfig("s", DesktopSourceKind.SOUNDCLOUD).isUserAdded)
         assertFalse(DesktopSourceConfig("y", DesktopSourceKind.YOUTUBE).isUserAdded)
     }
 

@@ -137,6 +137,16 @@ enum class SourceKind(
         rank = 2,
     ),
 
+    SOUNDCLOUD(
+        label = "SoundCloud",
+        detail = "Free streaming up to 128kbps AAC/MP3. Independent artists, remixes and live sets.",
+        labels = listOf("Free", "Remixes", "Indie"),
+        needsServer = false,
+        canServeLossless = false,
+        worthPrefetching = false,
+        rank = 3,
+    ),
+
     /**
      * The source the app was built on, listed here so it always has a fixed
      * place: second, behind the module source. It cannot be removed — see
@@ -150,7 +160,7 @@ enum class SourceKind(
         labels = listOf("Lossy", "Full catalogue", "Radio"),
         needsServer = false,
         canServeLossless = false,
-        rank = 3,
+        rank = 4,
     ),
     ;
 
