@@ -1116,6 +1116,7 @@ class SourcesTest {
         assertTrue(SourceKind.JIOSAAVN.worthPrefetching)
         assertFalse(SourceKind.MODULE.worthPrefetching)
         assertFalse(SourceKind.CUSTOM_MODULE.worthPrefetching)
+        assertFalse(SourceKind.SOUNDCLOUD.worthPrefetching)
     }
 
     /**

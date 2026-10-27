@@ -7066,6 +7066,7 @@ private fun DesktopSourceSettingsRow(
                 DesktopSourceKind.ADDON -> Icons.Rounded.Extension
                 DesktopSourceKind.CUSTOM_MODULE, DesktopSourceKind.MODULE -> Icons.Rounded.Extension
                 DesktopSourceKind.JIOSAAVN -> Icons.Rounded.GraphicEq
+                DesktopSourceKind.SOUNDCLOUD -> Icons.Rounded.Cloud
                 DesktopSourceKind.YOUTUBE -> Icons.Rounded.PlayCircle
             },
             contentDescription = null,

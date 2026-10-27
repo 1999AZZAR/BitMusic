@@ -51,13 +51,21 @@ internal enum class DesktopSourceKind(
         supportsLossless = false,
         rank = 2,
     ),
+    SOUNDCLOUD(
+        label = "SoundCloud",
+        detail = "Free · Remixes · Indie",
+        labels = listOf("Free", "Remixes", "Indie"),
+        needsServer = false,
+        supportsLossless = false,
+        rank = 3,
+    ),
     YOUTUBE(
         label = "YouTube Music",
         detail = "Lossy · Full catalogue · Radio",
         labels = listOf("Lossy", "Full catalogue", "Radio"),
         needsServer = false,
         supportsLossless = false,
-        rank = 3,
+        rank = 4,
     ),
 }
 
