@@ -564,7 +564,7 @@ compose.desktop {
             )
             packageName = "BitMusic"
             packageVersion = nativePackageVersion
-            description = if (targetOs == "windows") "BitMusic" else "Aesthetic YouTube Music client"
+            description = if (targetOs == "windows") "BitMusic" else "Bigscreen YT-music client"
             vendor = "BitMusic contributors"
             copyright = "Copyright © 2026 BitMusic contributors"
 
@@ -608,7 +608,7 @@ compose.desktop {
             linux {
                 debPackageVersion = appVersion
                 iconFile.set(project.file("packaging/icons/AppIcon.png"))
-                menuGroup = "Audio"
+                menuGroup = "AudioVideo;Audio;Player;"
                 appCategory = "AudioVideo;Audio;Player"
                 debMaintainer = "85984486+AbhiTheModder@users.noreply.github.com"
                 rpmLicenseType = "GPL-3.0"

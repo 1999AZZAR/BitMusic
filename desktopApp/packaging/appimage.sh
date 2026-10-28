@@ -35,7 +35,7 @@ cat > "$APPDIR/bitmusic.desktop" <<'DESKTOP'
 Type=Application
 Name=BitMusic
 GenericName=Music Player
-Comment=Aesthetic YouTube Music client for Big Screens
+Comment=Bigscreen YT-music client
 Exec=BitMusic
 Icon=bitmusic
 Categories=AudioVideo;Audio;Player;
