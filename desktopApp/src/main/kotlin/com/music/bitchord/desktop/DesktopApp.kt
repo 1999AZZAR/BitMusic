@@ -298,6 +298,9 @@ import com.music.bitchord.data.model.PLAYER_ART_PX
 import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.SearchFilter
+import com.music.bitchord.data.model.SearchSourceFilter
+import com.music.bitchord.data.model.AudioSourceOrigin
+import com.music.bitchord.data.model.audioSourceOrigin
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.PlaybackSourceType
@@ -540,6 +543,8 @@ fun BitChordDesktopApp() {
     var destination by remember { mutableStateOf(DesktopDestination.LISTEN_NOW) }
     var query by remember { mutableStateOf("") }
     var searchFilter by remember { mutableStateOf(SearchFilter.ALL) }
+    var searchSourceFilter by remember { mutableStateOf(SearchSourceFilter.ALL) }
+    var rawSearchRows by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     var searchRows by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     // What has been searched before, and what YouTube thinks is being typed.
     val searchHistory by DesktopSearchHistory.recent.collectAsState()
@@ -577,6 +582,7 @@ fun BitChordDesktopApp() {
     /** What the Spotify grid is waiting on, or why it is empty; null once its playlists are in. */
     var spotifyLibraryStatus by remember { mutableStateOf<String?>(null) }
     var spotifyImportOpen by remember { mutableStateOf(false) }
+    var soundCloudImportOpen by remember { mutableStateOf(false) }
     /** Where the one back button in the top bar goes: every place visited, oldest first. */
     val navHistory = remember { mutableStateListOf<DesktopNavEntry>() }
     /** Set while [goBack] puts a place back, so that move is not itself recorded as a visit. */
@@ -2250,8 +2256,56 @@ fun BitChordDesktopApp() {
         searchTyping = true
         if (text.isBlank()) {
             searchCommitted = false
+            rawSearchRows = emptyList()
             searchRows = emptyList()
             searchError = null
+        }
+    }
+
+    fun filterSearchRows(rows: List<SearchResult>, filter: SearchSourceFilter): List<SearchResult> {
+        return when (filter) {
+            SearchSourceFilter.ALL -> rows
+            SearchSourceFilter.YOUTUBE -> rows.filter { row ->
+                when (row) {
+                    is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.YOUTUBE
+                    is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.YOUTUBE
+                    is SearchResult.Browse -> !row.item.browseId.startsWith("soundcloud:")
+                }
+            }
+            SearchSourceFilter.SOUNDCLOUD -> rows.filter { row ->
+                when (row) {
+                    is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.SOUNDCLOUD
+                    is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.SOUNDCLOUD
+                    is SearchResult.Browse -> row.item.browseId.startsWith("soundcloud:")
+                }
+            }
+            SearchSourceFilter.LOCAL -> {
+                val q = query.trim()
+                val matchedLocal = if (q.isBlank()) {
+                    localSongs
+                } else {
+                    localSongs.filter { song ->
+                        song.title.contains(q, ignoreCase = true) ||
+                            song.artist.contains(q, ignoreCase = true) ||
+                            song.artists.any { it.name.contains(q, ignoreCase = true) } ||
+                            (song.albumName?.contains(q, ignoreCase = true) == true)
+                    }
+                }.map { SearchResult.Track(it) }
+                val fromRows = rows.filter { row ->
+                    when (row) {
+                        is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.LOCAL
+                        is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.LOCAL
+                        else -> false
+                    }
+                }
+                (matchedLocal + fromRows).distinctBy {
+                    when (it) {
+                        is SearchResult.TopTrack -> it.song.videoId
+                        is SearchResult.Track -> it.song.videoId
+                        is SearchResult.Browse -> it.item.browseId
+                    }
+                }
+            }
         }
     }
 
@@ -2279,7 +2333,8 @@ fun BitChordDesktopApp() {
             try {
                 DesktopMusicSources.search(query, searchFilter).fold(
                     onSuccess = { rows ->
-                        searchRows = rows
+                        rawSearchRows = rows
+                        searchRows = filterSearchRows(rows, searchSourceFilter)
                         if (typedHit == null) {
                             rows.firstNotNullOfOrNull { row ->
                                 when (row) {
@@ -3711,6 +3766,13 @@ fun BitChordDesktopApp() {
                         )
                     }
 
+                    if (soundCloudImportOpen) {
+                        DesktopSoundCloudImportDialog(
+                            onImportPlaylist = ::importSpotifyPlaylist,
+                            onDismiss = { soundCloudImportOpen = false },
+                        )
+                    }
+
                     if (overlays.signIn) {
                         DesktopSignInDialog(
                             busy = signInBusy,
@@ -4281,6 +4343,11 @@ fun BitChordDesktopApp() {
                             query = query,
                             onQueryChange = ::editQuery,
                             filter = searchFilter,
+                            sourceFilter = searchSourceFilter,
+                            onSourceFilterChange = {
+                                searchSourceFilter = it
+                                searchRows = filterSearchRows(rawSearchRows, it)
+                            },
                             // The playing row's indicator, as the phone passes it: the engine's
                             // live state, not the selection a track change publishes behind it.
                             currentSong = playback.song,
@@ -4403,6 +4470,7 @@ fun BitChordDesktopApp() {
                             onShelfItemLongPress = { item -> if (item.videoId != null) openMenu(item.toSong()) },
                             onNewPlaylist = { overlays.playlistDialog = true },
                             onImportSpotifyPlaylist = { spotifyImportOpen = true },
+                            onImportSoundCloud = { soundCloudImportOpen = true },
                             onShowAll = { shelf -> libraryShowAll = shelf },
                             replay = {
                                 // The phone's wallet of Replay cards, or nothing until there is

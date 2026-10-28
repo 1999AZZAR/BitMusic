@@ -455,6 +455,261 @@ internal fun DesktopSpotifyImportDialog(
     }
 }
 
+/**
+ * Import public SoundCloud user profile, likes, sets, and tracks into local playlists.
+ */
+@Composable
+internal fun DesktopSoundCloudImportDialog(
+    onImportPlaylist: suspend (title: String, songs: List<Song>) -> String?,
+    onDismiss: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var input by remember { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    var userProfile by remember { mutableStateOf<com.music.bitchord.data.soundcloud.SoundCloudService.SoundCloudUserProfile?>(null) }
+    var importedPlaylists by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val title = DesktopStrings["soundcloud_import_title", "Import SoundCloud Profile"]
+
+    fun fetch() {
+        if (working || input.isBlank()) return
+        working = true
+        failed = false
+        status = DesktopStrings["soundcloud_import_fetching", "Looking up SoundCloud profile…"]
+        userProfile = null
+        importedPlaylists = emptySet()
+        scope.launch {
+            try {
+                val profile = DesktopSoundCloud.resolveUserProfile(input).getOrThrow()
+                userProfile = profile
+                status = null
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                DesktopTrackLog.log("soundcloud import failed: ${failure.message}")
+                status = failure.message ?: DesktopStrings["soundcloud_import_not_found", "Could not find that SoundCloud user or playlist."]
+                failed = true
+            } finally {
+                working = false
+            }
+        }
+    }
+
+    fun importTracks(name: String, tracks: List<Song>) {
+        if (working || tracks.isEmpty()) return
+        working = true
+        status = DesktopStrings.format("soundcloud_import_saving", name, tracks.size, fallback = "Importing '%1\$s' (%2\$d tracks)…")
+        scope.launch {
+            try {
+                val note = onImportPlaylist(name, tracks)
+                importedPlaylists = importedPlaylists + name
+                status = note ?: DesktopStrings.format("soundcloud_import_success", name, fallback = "Imported '%1\$s' into your Library! ✔️")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                DesktopTrackLog.log("soundcloud import saving failed: ${e.message}")
+                status = e.message ?: "Failed to save playlist."
+                failed = true
+            } finally {
+                working = false
+            }
+        }
+    }
+
+    DesktopDialogPanel(onDismiss = { if (!working) onDismiss() }, maxWidth = 460, popup = true) {
+        val profile = userProfile
+        if (profile == null) {
+            DialogHeading(
+                title = title,
+                message = DesktopStrings[
+                    "soundcloud_import_description",
+                    "Enter a SoundCloud username or profile link to import public Likes, Sets, and Tracks into your Library.",
+                ],
+            )
+            DialogField(
+                value = input,
+                onValueChange = {
+                    input = it
+                    if (failed) status = null
+                    failed = false
+                },
+                placeholder = DesktopStrings["soundcloud_import_hint", "e.g. skrillex or soundcloud.com/artist"],
+                enabled = !working,
+                onSubmit = ::fetch,
+                modifier = Modifier.focusRequester(focus),
+            )
+            status?.let {
+                Text(
+                    it,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = panelInset(22.dp), vertical = 6.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (failed) DesktopDestructive else DesktopSecondary,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            DialogActions(
+                confirm = DesktopStrings["soundcloud_import_fetch", "Find Profile"],
+                confirmEnabled = input.isNotBlank() && !working,
+                busy = working,
+                onConfirm = ::fetch,
+                onDismiss = onDismiss,
+            )
+        } else {
+            DialogHeading(
+                title = profile.user.username,
+                message = "${profile.tracks.size} Tracks • ${profile.likes.size} Likes • ${profile.playlists.size} Sets",
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = panelInset(22.dp))
+                    .heightIn(max = 240.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (profile.likes.isNotEmpty()) {
+                    val likeName = "${profile.user.username}'s SoundCloud Likes"
+                    val isImported = likeName in importedPlaylists
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isImported) Color(0xFF30D158).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                            .clickable(enabled = !working && !isImported) {
+                                importTracks(likeName, profile.likes)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Public Likes",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "${profile.likes.size} tracks",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DesktopSecondary,
+                            )
+                        }
+                        Text(
+                            if (isImported) "Imported ✔️" else "Import",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isImported) Color(0xFF30D158) else Color(0xFFFF5500),
+                        )
+                    }
+                }
+
+                if (profile.tracks.isNotEmpty()) {
+                    val tracksName = "${profile.user.username}'s SoundCloud Tracks"
+                    val isImported = tracksName in importedPlaylists
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isImported) Color(0xFF30D158).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                            .clickable(enabled = !working && !isImported) {
+                                importTracks(tracksName, profile.tracks)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Uploaded Tracks",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "${profile.tracks.size} tracks",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DesktopSecondary,
+                            )
+                        }
+                        Text(
+                            if (isImported) "Imported ✔️" else "Import",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isImported) Color(0xFF30D158) else Color(0xFFFF5500),
+                        )
+                    }
+                }
+
+                profile.playlists.forEach { (setName, setSongs) ->
+                    val isImported = setName in importedPlaylists
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isImported) Color(0xFF30D158).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                            .clickable(enabled = !working && !isImported) {
+                                importTracks(setName, setSongs)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                setName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "${setSongs.size} tracks",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DesktopSecondary,
+                            )
+                        }
+                        Text(
+                            if (isImported) "Imported ✔️" else "Import",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isImported) Color(0xFF30D158) else Color(0xFFFF5500),
+                        )
+                    }
+                }
+            }
+
+            status?.let {
+                Text(
+                    it,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = panelInset(22.dp), vertical = 6.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (failed) DesktopDestructive else DesktopSecondary,
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = panelInset(16.dp), vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { userProfile = null; status = null; failed = false }) {
+                    Text("Search Another", color = DesktopSecondary)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(DesktopStrings["done", "Done"], color = DesktopAccent)
+                }
+            }
+        }
+    }
+}
+
 /** The same filled field the playlist dialogs use. */
 @Composable
 private fun DialogField(

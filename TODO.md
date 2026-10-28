@@ -10,9 +10,9 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
   - Paste any `soundcloud.com/<artist>/<track>`, `sets/<playlist>`, or shortlink (`on.soundcloud.com/...`) in the search bar to stream or view tracks directly.
 - [x] **Native Station / Related Tracks in Autoplay** ✔️
   - Intercept SoundCloud tracks and query `/tracks/{id}/related` to queue recommendations before falling back to YouTube Music matching.
-- [ ] **Public Profile Importer into Library**
-  - Enter a SoundCloud username or profile URL to fetch public Likes and Sets.
-  - Add single-click "Import to Library" to persist tracks as local BitMusic playlists.
+- [x] **Public Profile Importer into Library** ✔️
+  - Enter a SoundCloud username or profile URL to fetch public Likes, Sets, and Uploaded tracks.
+  - Single-click "Import to Library" via `DesktopSoundCloudImportDialog` and Library shelf shortcuts to persist tracks as local BitMusic playlists.
 - [ ] **Track Waveform & Comments Indicator**
   - Fetch SoundCloud visual waveform data (`waveform_url`) or timestamped comment counts for enhanced player sheet visuals.
 
@@ -20,9 +20,9 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 
 ## 2. Search & UX Polish
 
-- [ ] **Source Filter Chips in Search**
-  - **Desktop**: Add quick filter pills (`All`, `YouTube`, `SoundCloud`, `Local`) below the search bar to filter between official studio releases, bootlegs, and local files.
-  - **Android / TV**: Upgrade the segmented control into a scrollable filter row supporting all active sources.
+- [x] **Source Filter Chips in Search** ✔️
+  - **Desktop & Shared UI**: Added quick filter pills (`All`, `YouTube`, `SoundCloud`, `Local`) below the search bar to filter between official studio releases, bootlegs, and local files.
+  - Interactive chip state with brand-tinted accents (`SC` orange, `YT` red, `Local` green, `All` M3 primary).
 - [x] **Title Sanitizer for Lyrics Matching** ✔️
   - Strip promotional tags, quality tags, and producer brackets (`[Free DL]`, `(Prod. by ...)`, `[Official Audio]`, `feat. ...`, `Remix 2024`, `VEVO`/channel noise) before querying LRCLIB/Musixmatch.
   - Dramatically improves lyric hit rates for non-standard SoundCloud, YouTube, and local music titles while strictly preserving distinct recording identifiers (`(Live)`, `(Acoustic)`, `(Remix)`, `(Sped Up)`).
@@ -76,9 +76,9 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 - [x] **Desktop Component Expansion (Compose Multiplatform)** ✔️
   - **Floating Player Bar & Modals**: Upgraded `desktopBarGlass` with specular border, M3 dynamic surface tinting, top curvature sheen, and elevation shadow across player bar, command palette, and account modals.
   - **Queue & Card Panes**: Enhanced `playerQueueGlass` in `DesktopNowPlaying` with specular border gradient and dynamic M3 surface adaptation.
-- [ ] **Android & TV Expansion**
-  - **Expanded Glass Adoption**: Extend `LocalLiquidGlassEnabled` beyond the floating nav bar into the full Now Playing sheet header, lyrics backdrop, and modal dialogs.
-  - **Unified Shader Pipeline**: Align Android's `RenderEffect` / Kyant0 backdrop shader and Desktop Skiko's `HazeMaterials` into a unified cross-platform API.
+- [x] **Android & TV Expansion** ✔️
+  - **Expanded Glass Adoption**: Extended `LocalLiquidGlassEnabled` beyond the floating nav bar into the full Now Playing sheet drawer (`PlayerDrawer`), lyrics backdrop, and modal dialogs (`UpdateAvailableDialog`, `LyricsSourcesDialog`, `AppLanguageDialog`, `AudioPipelineDialog`, `CastDialog`, `AccountChannelDialog`).
+  - **Unified Shader Pipeline**: Aligned Android's `RenderEffect` / Kyant0 backdrop shader and Desktop Skiko's `HazeMaterials` via unified `rememberSpecularGlassBorder` and glass edge brushes across platforms.
 - [x] **Accessibility & Performance Safeguards** ✔️
   - **Adaptive Contrast Scrim**: Automatic luminance adaptation (`surface.luminance() > 0.5f`) adjusting border specular alpha and surface tints for light and dark themes.
   - **Reduced Motion & Blur Fallback**: Seamless fallback to clean, opaque M3 tonal surfaces when `reduceDynamicBlur` or battery saver is enabled.

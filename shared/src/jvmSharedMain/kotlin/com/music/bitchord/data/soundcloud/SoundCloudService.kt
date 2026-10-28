@@ -477,4 +477,57 @@ object SoundCloudService {
         val parsed = json.decodeFromString<SoundCloudCollectionResponse<SoundCloudPlaylist>>(response.bodyAsText())
         parsed.collection
     }
+
+    data class SoundCloudUserProfile(
+        val user: SoundCloudUserFull,
+        val tracks: List<Song>,
+        val likes: List<Song>,
+        val playlists: List<Pair<String, List<Song>>>,
+    )
+
+    suspend fun resolveUserProfile(input: String, configId: String? = null): Result<SoundCloudUserProfile> = runCatching {
+        val trimmed = input.trim()
+        val url = when {
+            isSoundCloudUrl(trimmed) -> trimmed
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            else -> "https://soundcloud.com/${trimmed.removePrefix("@")}"
+        }
+        val resolved = resolveUrl(url, configId).getOrThrow()
+        val user = when (resolved) {
+            is SoundCloudResolved.User -> resolved.user
+            is SoundCloudResolved.Track -> SoundCloudUserFull(
+                id = resolved.track.user.id,
+                username = resolved.track.user.username,
+                avatarUrl = resolved.track.user.avatarUrl,
+            )
+            is SoundCloudResolved.Playlist -> SoundCloudUserFull(
+                id = resolved.playlist.user.id,
+                username = resolved.playlist.user.username,
+                avatarUrl = resolved.playlist.user.avatarUrl,
+            )
+        }
+        val fetchedTracks = getUserTracks(user.id, limit = 50).getOrDefault(emptyList()).map { toSong(it, configId) }
+        val tracks = if (resolved is SoundCloudResolved.Track && fetchedTracks.none { it.videoId == resolved.song.videoId }) {
+            listOf(resolved.song) + fetchedTracks
+        } else fetchedTracks
+
+        val likes = getUserLikes(user.id, limit = 50).getOrDefault(emptyList()).map { toSong(it, configId) }
+
+        val fetchedPlaylists = getUserPlaylists(user.id, limit = 50).getOrDefault(emptyList()).map { playlist ->
+            val songs = playlist.tracks.filter { it.title.isNotBlank() }.map { toSong(it, configId) }
+            playlist.title to songs
+        }
+        val directPlaylist = if (resolved is SoundCloudResolved.Playlist) {
+            listOf(resolved.playlist.title to resolved.songs)
+        } else emptyList()
+
+        val allPlaylists = (directPlaylist + fetchedPlaylists).distinctBy { it.first }
+
+        SoundCloudUserProfile(
+            user = user,
+            tracks = tracks,
+            likes = likes,
+            playlists = allPlaylists,
+        )
+    }
 }

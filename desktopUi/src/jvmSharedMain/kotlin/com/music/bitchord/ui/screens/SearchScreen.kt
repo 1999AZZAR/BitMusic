@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.music.bitchord.ui.components.longPressMenuClickable
@@ -48,10 +49,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +72,10 @@ import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.SearchFilter
+import com.music.bitchord.data.model.SearchSourceFilter
+import com.music.bitchord.data.model.AudioSourceOrigin
+import com.music.bitchord.data.model.audioSourceOrigin
+import androidx.compose.ui.text.font.FontWeight
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
@@ -96,6 +105,8 @@ fun SearchScreen(
     currentSong: Song?,
     isPlaying: Boolean,
     onFilterChange: (SearchFilter) -> Unit,
+    sourceFilter: SearchSourceFilter = SearchSourceFilter.ALL,
+    onSourceFilterChange: (SearchSourceFilter) -> Unit = {},
     results: UiState<List<SearchResult>>?,
     loadingMore: Boolean,
     onLoadMore: () -> Unit,
@@ -165,6 +176,8 @@ fun SearchScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var localSourceFilter by remember { mutableStateOf(sourceFilter) }
+    val activeSourceFilter = if (sourceFilter != SearchSourceFilter.ALL) sourceFilter else localSourceFilter
     // Tapping the search tab from the nav bar sets focusRequested;
     // respond by focusing the field and opening the keyboard.
     LaunchedEffect(focusRequested) {
@@ -239,6 +252,14 @@ fun SearchScreen(
             // that finds nothing would take away the control needed to leave it.
             // They are YouTube's categories, so the Library source has none.
             if (results != null && !suggesting && !searchingLibrary && !searchingAddons) {
+                SearchSourceFilterTabs(
+                    sourceFilter = activeSourceFilter,
+                    onSourceFilterChange = {
+                        localSourceFilter = it
+                        onSourceFilterChange(it)
+                    },
+                )
+                Spacer(Modifier.height(4.dp))
                 SearchFilterTabs(filter = filter, onFilterChange = onFilterChange)
             }
         }
@@ -302,15 +323,38 @@ fun SearchScreen(
                 results is UiState.Loading -> songListSkeleton(circular = filter == SearchFilter.ARTISTS)
                 results is UiState.Error -> item { MessageState(results.message) }
                 results is UiState.Success -> {
-                    val tracks = results.data
+                    val filteredData = when (activeSourceFilter) {
+                        SearchSourceFilter.ALL -> results.data
+                        SearchSourceFilter.YOUTUBE -> results.data.filter { row ->
+                            when (row) {
+                                is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.YOUTUBE
+                                is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.YOUTUBE
+                                is SearchResult.Browse -> !row.item.browseId.startsWith("soundcloud:")
+                            }
+                        }
+                        SearchSourceFilter.SOUNDCLOUD -> results.data.filter { row ->
+                            when (row) {
+                                is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.SOUNDCLOUD
+                                is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.SOUNDCLOUD
+                                is SearchResult.Browse -> row.item.browseId.startsWith("soundcloud:")
+                            }
+                        }
+                        SearchSourceFilter.LOCAL -> results.data.filter { row ->
+                            when (row) {
+                                is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.LOCAL
+                                is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.LOCAL
+                                else -> false
+                            }
+                        }
+                    }
+                    val tracks = filteredData
                         .mapNotNull { row -> when (row) {
                             is SearchResult.TopTrack -> row.song
                             is SearchResult.Track -> row.song
                             is SearchResult.Browse -> null
-                            else -> null
                         } }
                     val isCurrentRow = playingRowMatcher(tracks, currentSong)
-                    val topResult = results.data.filterIsInstance<SearchResult.TopTrack>().firstOrNull()
+                    val topResult = filteredData.filterIsInstance<SearchResult.TopTrack>().firstOrNull()
                     if (filter == SearchFilter.ALL && topResult != null) {
                         item(key = "search:top-result:${topResult.song.videoId}") {
                             TopResultCard(
@@ -321,7 +365,7 @@ fun SearchScreen(
                             )
                         }
                     }
-                    searchSections(results.data, filter).forEach { section ->
+                    searchSections(filteredData, filter).forEach { section ->
                         section.title?.let { title ->
                             item(key = "search-section:$title") {
                                 Text(
@@ -979,6 +1023,65 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() ->
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+@Composable
+private fun SearchSourceFilterTabs(
+    sourceFilter: SearchSourceFilter,
+    onSourceFilterChange: (SearchSourceFilter) -> Unit,
+) {
+    val haptics = rememberHaptics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = PAGE_GUTTER, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SearchSourceFilter.entries.forEach { entry ->
+            val selected = entry == sourceFilter
+            val activeColor = when (entry) {
+                SearchSourceFilter.ALL -> MaterialTheme.colorScheme.primary
+                SearchSourceFilter.YOUTUBE -> Color(0xFFFF453A)
+                SearchSourceFilter.SOUNDCLOUD -> Color(0xFFFF5500)
+                SearchSourceFilter.LOCAL -> Color(0xFF30D158)
+            }
+            Surface(
+                modifier = Modifier
+                    .clip(FILTER_PILL_SHAPE)
+                    .clickable {
+                        if (!selected) haptics.play(Haptic.Select)
+                        onSourceFilterChange(entry)
+                    },
+                shape = FILTER_PILL_SHAPE,
+                color = if (selected) activeColor.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = BorderStroke(
+                    width = 0.8.dp,
+                    color = if (selected) activeColor else Color.Transparent,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
+                    )
+                    Text(
+                        text = entry.label,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium),
+                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }

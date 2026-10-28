@@ -34,6 +34,9 @@ internal object DesktopSoundCloud {
     suspend fun resolveUrl(url: String): Result<com.music.bitchord.data.soundcloud.SoundCloudResolved> =
         SoundCloudService.resolveUrl(url)
 
+    suspend fun resolveUserProfile(input: String): Result<SoundCloudService.SoundCloudUserProfile> =
+        SoundCloudService.resolveUserProfile(input)
+
     suspend fun getRelatedTracks(trackId: String, limit: Int = 20): Result<List<Song>> = runCatching {
         SoundCloudService.getRelatedTracks(trackId, limit).getOrDefault(emptyList())
             .map { SoundCloudService.toSong(it) }

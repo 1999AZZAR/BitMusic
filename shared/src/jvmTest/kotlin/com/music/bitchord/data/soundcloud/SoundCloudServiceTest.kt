@@ -75,4 +75,23 @@ class SoundCloudServiceTest {
         assertNotNull(related, "Expected related tracks to be retrieved")
         assertTrue(related.isNotEmpty(), "Expected non-empty related tracks list")
     }
+
+    @Test
+    fun userProfileDataClassStructure() {
+        val user = SoundCloudUserFull(id = 12345L, username = "testuser", trackCount = 10, likesCount = 25)
+        val song1 = SoundCloudService.toSong(SoundCloudTrack(id = 111L, title = "Song 1"))
+        val song2 = SoundCloudService.toSong(SoundCloudTrack(id = 222L, title = "Song 2"))
+        val profile = SoundCloudService.SoundCloudUserProfile(
+            user = user,
+            tracks = listOf(song1),
+            likes = listOf(song2),
+            playlists = listOf("Test Playlist" to listOf(song1, song2)),
+        )
+        assertEquals("testuser", profile.user.username)
+        assertEquals(1, profile.tracks.size)
+        assertEquals(1, profile.likes.size)
+        assertEquals(1, profile.playlists.size)
+        assertEquals("Test Playlist", profile.playlists.first().first)
+        assertEquals(2, profile.playlists.first().second.size)
+    }
 }

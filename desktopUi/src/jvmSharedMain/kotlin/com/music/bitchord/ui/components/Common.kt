@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
 import com.music.bitchord.ui.AppUiHost
 import com.music.bitchord.ui.AppUi
@@ -948,5 +951,36 @@ fun PillTextField(
             keyboardActions = keyboardActions,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** Specular gradient border simulating physical glass refraction and top-left light incidence. */
+@Composable
+fun rememberSpecularGlassBorder(): Brush {
+    val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    return remember(isLight) {
+        if (isLight) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.65f),
+                    Color.White.copy(alpha = 0.25f),
+                    Color.Black.copy(alpha = 0.08f),
+                    Color.Black.copy(alpha = 0.16f),
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.35f),
+                    Color.White.copy(alpha = 0.12f),
+                    Color.White.copy(alpha = 0.04f),
+                    Color.Black.copy(alpha = 0.22f),
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            )
+        }
     }
 }

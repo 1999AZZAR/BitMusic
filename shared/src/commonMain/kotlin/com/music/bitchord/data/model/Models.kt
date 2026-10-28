@@ -413,6 +413,16 @@ enum class SearchFilter(val label: String, val params: String?) {
     PLAYLISTS("Playlists", "EgWKAQIoAWoKEAkQChAFEAMQBA=="),
 }
 
+/**
+ * Filter scope for multi-source search (All sources, official YouTube Music, SoundCloud, or Local files).
+ */
+enum class SearchSourceFilter(val label: String) {
+    ALL("All Sources"),
+    YOUTUBE("YouTube"),
+    SOUNDCLOUD("SoundCloud"),
+    LOCAL("Local"),
+}
+
 /** A card in a home-feed carousel: either a track (videoId) or an album/playlist (browseId). */
 data class ShelfItem(
     val title: String,

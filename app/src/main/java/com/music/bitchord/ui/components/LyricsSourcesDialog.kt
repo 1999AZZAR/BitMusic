@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import com.music.bitchord.R
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.rememberScrollState
@@ -119,6 +120,11 @@ fun LyricsSourcesDialog(
                             style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
                         )
                     },
+                )
+                .border(
+                    GLASS_EDGE_WIDTH,
+                    if (LocalLiquidGlassEnabled.current && isGlassSupported()) rememberGlassEdgeBrush() else GLASS_EDGE_COLOR,
+                    shape,
                 )
                 // Swallows the tap before it reaches the scrim behind, so
                 // touching the card itself never dismisses it.

@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -123,6 +124,11 @@ fun UpdateAvailableDialog(
                             style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
                         )
                     },
+                )
+                .border(
+                    GLASS_EDGE_WIDTH,
+                    if (LocalLiquidGlassEnabled.current && isGlassSupported()) rememberGlassEdgeBrush() else GLASS_EDGE_COLOR,
+                    shape,
                 )
                 // Swallows the tap before it reaches the scrim behind, so
                 // touching the card itself never dismisses it.

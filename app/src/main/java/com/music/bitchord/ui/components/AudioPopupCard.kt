@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -93,6 +94,11 @@ internal fun AudioPopupCard(
                             )
                             .background(Color(0xFF121212).copy(alpha = 0.9f))
                     }
+                )
+                .border(
+                    GLASS_EDGE_WIDTH,
+                    if (LocalLiquidGlassEnabled.current && isGlassSupported()) rememberGlassEdgeBrush() else GLASS_EDGE_COLOR,
+                    POPUP_CARD_SHAPE,
                 )
                 // Swallows the tap before it reaches the scrim behind, so
                 // touching the card itself never dismisses it.

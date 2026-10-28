@@ -9,7 +9,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.music.bitchord.ui.components.rememberSpecularGlassBorder
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -220,6 +222,7 @@ fun PlayerDrawer(
                             .background(Color(0xFF121212).copy(alpha = 0.9f))
                     }
                 )
+                .border(0.75.dp, rememberSpecularGlassBorder(), DRAWER_SHAPE)
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
