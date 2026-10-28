@@ -53,6 +53,6 @@ Release generation is automated via `.github/workflows/release.yml`. When code i
 1. The `prepare` job resolves the release version from `version.txt` (or tag / input).
 2. Linux runner builds the `.deb`, `.rpm`, and `.AppImage`.
 3. Windows runner builds the `.exe`, `.msi`, and portable `.zip`.
-4. macOS runner builds the Apple Silicon (`arm64`) and Intel (`x64`) `.dmg`, `.pkg`, and `.zip`.
+4. macOS runner builds the Apple Silicon (`arm64`) `.dmg`, `.pkg`, and `.zip` (Intel `x64` is omitted from automated releases to prevent runner queue starvation).
 5. Android runner builds the production Leanback `.apk`.
 6. GitHub Actions automatically generates release notes, tags the commit, and publishes the GitHub Release with all 10 distributables attached.
