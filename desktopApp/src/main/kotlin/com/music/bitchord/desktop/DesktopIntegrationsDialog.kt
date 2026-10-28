@@ -58,6 +58,8 @@ internal fun DesktopIntegrationsDialog(
     onOpenLastfm: () -> Unit,
     onOpenListenBrainz: () -> Unit,
     onOpenDiscordToken: () -> Unit,
+    onOpenSoundCloudImport: (() -> Unit)? = null,
+    onOpenSpotifyImport: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     var choosing by remember { mutableStateOf<DiscordChoice?>(null) }
@@ -74,6 +76,30 @@ internal fun DesktopIntegrationsDialog(
                 color = Color.White,
                 modifier = Modifier.padding(start = panelInset(20.dp), end = panelInset(20.dp), top = 18.dp, bottom = 12.dp),
             )
+            if (onOpenSoundCloudImport != null || onOpenSpotifyImport != null) {
+                PanelGroup(
+                    header = "Playlist & Profile Importers",
+                    footer = "Import public user likes, sets, and playlists from SoundCloud or Spotify into your BitMusic library.",
+                ) {
+                    if (onOpenSoundCloudImport != null) {
+                        PanelActionRow(
+                            title = "Import from SoundCloud",
+                            subtitle = "Fetch public likes, uploaded tracks, or playlists by username/URL",
+                            destructive = false,
+                            onClick = onOpenSoundCloudImport,
+                        )
+                    }
+                    if (onOpenSpotifyImport != null) {
+                        if (onOpenSoundCloudImport != null) DesktopCardRule()
+                        PanelActionRow(
+                            title = "Import from Spotify",
+                            subtitle = "Paste a public playlist link to match and save locally",
+                            destructive = false,
+                            onClick = onOpenSpotifyImport,
+                        )
+                    }
+                }
+            }
             SpotifySection(spotify)
             DiscordSection(song, onOpenDiscordToken, onChoose = { choosing = it }, onEdit = { editing = it })
             ScrobblingSection(onOpenLastfm, onOpenListenBrainz)

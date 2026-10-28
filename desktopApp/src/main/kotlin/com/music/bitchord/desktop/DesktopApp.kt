@@ -4218,6 +4218,8 @@ fun BitChordDesktopApp() {
                                     onOpenLastfm = { overlays.lastfmLogin = true },
                                     onOpenListenBrainz = { overlays.listenBrainzToken = true },
                                     onOpenDiscordToken = { overlays.discordToken = true },
+                                    onOpenSoundCloudImport = { soundCloudImportOpen = true },
+                                    onOpenSpotifyImport = { spotifyImportOpen = true },
                                     onDismiss = ::goBack,
                                 )
                                 DesktopSettingsPage.LICENSES -> DesktopLicensesPage(onDismiss = ::goBack)
@@ -4359,7 +4361,7 @@ fun BitChordDesktopApp() {
                             results = when {
                                 searchLoading -> UiState.Loading
                                 searchError != null -> UiState.Error(searchError!!)
-                                searchCommitted -> UiState.Success(searchRows)
+                                searchCommitted || (searchSourceFilter == SearchSourceFilter.LOCAL && searchRows.isNotEmpty()) -> UiState.Success(searchRows)
                                 else -> null
                             },
                             loadingMore = false,

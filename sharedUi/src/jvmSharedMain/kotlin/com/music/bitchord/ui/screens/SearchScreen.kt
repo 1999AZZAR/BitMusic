@@ -247,11 +247,8 @@ fun SearchScreen(
                     }
                 }
             }
-            // The filters only mean something once there is a result set to narrow;
-            // they stay up for an empty or failed search too, or picking a filter
-            // that finds nothing would take away the control needed to leave it.
-            // They are YouTube's categories, so the Library source has none.
-            if (results != null && !suggesting && !searchingLibrary && !searchingAddons) {
+            // Source scope filters (All, YouTube, SoundCloud, Local) are always reachable right under the search box
+            if (!searchingLibrary && !searchingAddons) {
                 SearchSourceFilterTabs(
                     sourceFilter = activeSourceFilter,
                     onSourceFilterChange = {
@@ -259,7 +256,10 @@ fun SearchScreen(
                         onSourceFilterChange(it)
                     },
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
+            }
+            // Category filters (Songs, Videos, Albums, Artists, Playlists) only narrow an active result set
+            if (results != null && !suggesting && !searchingLibrary && !searchingAddons) {
                 SearchFilterTabs(filter = filter, onFilterChange = onFilterChange)
             }
         }
@@ -309,7 +309,15 @@ fun SearchScreen(
                     }
                 }
                 results == null -> if (history.isEmpty()) {
-                    item { MessageState(stringResource(Res.string.search_empty)) }
+                    item {
+                        val emptyMessage = when (activeSourceFilter) {
+                            SearchSourceFilter.ALL -> stringResource(Res.string.search_empty)
+                            SearchSourceFilter.YOUTUBE -> "Search official studio tracks, artists, and albums on YouTube Music."
+                            SearchSourceFilter.SOUNDCLOUD -> "Search SoundCloud tracks, bootlegs, or paste any soundcloud.com link."
+                            SearchSourceFilter.LOCAL -> "Search your scanned local music files."
+                        }
+                        MessageState(emptyMessage)
+                    }
                 } else {
                     recentSearches(
                         history = history,
