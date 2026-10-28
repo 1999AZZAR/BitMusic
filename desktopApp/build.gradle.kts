@@ -606,6 +606,7 @@ compose.desktop {
             }
 
             linux {
+                debPackageVersion = appVersion
                 iconFile.set(project.file("packaging/icons/AppIcon.png"))
                 menuGroup = "Audio"
                 appCategory = "AudioVideo;Audio;Player"
