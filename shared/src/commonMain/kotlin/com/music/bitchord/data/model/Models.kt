@@ -365,6 +365,27 @@ enum class PlaybackSourceType {
     QUEUE,
 }
 
+/** The provider or storage service where this track stream originates. */
+enum class AudioSourceOrigin(
+    val label: String,
+    val shortLabel: String,
+) {
+    SOUNDCLOUD("SoundCloud", "SC"),
+    YOUTUBE("YouTube", "YT"),
+    LOCAL("Local", "LOCAL"),
+    JIOSAAVN("JioSaavn", "SAAVN"),
+    ADDON("Addon", "ADDON"),
+}
+
+val Song.audioSourceOrigin: AudioSourceOrigin
+    get() = when {
+        videoId.startsWith("soundcloud:") -> AudioSourceOrigin.SOUNDCLOUD
+        videoId.startsWith("local:") || videoId.startsWith("file://") || videoId.startsWith("content://") -> AudioSourceOrigin.LOCAL
+        videoId.startsWith("jiosaavn:") -> AudioSourceOrigin.JIOSAAVN
+        videoId.startsWith("src:") -> AudioSourceOrigin.ADDON
+        else -> AudioSourceOrigin.YOUTUBE
+    }
+
 /** A non-track search result: album, artist or playlist. */
 data class BrowseItem(
     val browseId: String,

@@ -23,11 +23,12 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 - [ ] **Source Filter Chips in Search**
   - **Desktop**: Add quick filter pills (`All`, `YouTube`, `SoundCloud`, `Local`) below the search bar to filter between official studio releases, bootlegs, and local files.
   - **Android / TV**: Upgrade the segmented control into a scrollable filter row supporting all active sources.
-- [ ] **Title Sanitizer for Lyrics Matching**
-  - Strip promotional tags, quality tags, and producer brackets (`[Free DL]`, `(Prod. by ...)`, `[Official Audio]`, `feat. ...`, `Remix 2024`) before querying LRCLIB/Musixmatch.
-  - Dramatically improves lyric hit rates for non-standard SoundCloud and local music titles.
-- [ ] **Audio Source Visual Badges**
-  - Display small, crisp source badges (YouTube, SoundCloud, Local, etc.) in queue rows and player bottom sheet.
+- [x] **Title Sanitizer for Lyrics Matching** ✔️
+  - Strip promotional tags, quality tags, and producer brackets (`[Free DL]`, `(Prod. by ...)`, `[Official Audio]`, `feat. ...`, `Remix 2024`, `VEVO`/channel noise) before querying LRCLIB/Musixmatch.
+  - Dramatically improves lyric hit rates for non-standard SoundCloud, YouTube, and local music titles while strictly preserving distinct recording identifiers (`(Live)`, `(Acoustic)`, `(Remix)`, `(Sped Up)`).
+- [x] **Audio Source Visual Badges** ✔️
+  - Display small, crisp, brand-tinted source badges (`SC` SoundCloud orange, `LOCAL` emerald, `ADDON` purple, `SAAVN` teal, and `YT` YouTube) in queue rows, playlist rows, and player panels.
+  - Automatically suppresses badges for standard catalogue YouTube tracks by default to prevent visual clutter, highlighting non-standard and external streams immediately.
 
 ---
 
