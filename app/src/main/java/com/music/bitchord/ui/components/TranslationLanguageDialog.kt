@@ -131,7 +131,7 @@ fun TranslationLanguageDialog(
                 )
                 .border(
                     GLASS_EDGE_WIDTH,
-                    if (LocalLiquidGlassEnabled.current && isGlassSupported()) rememberGlassEdgeBrush() else GLASS_EDGE_COLOR,
+                    rememberGlassBorderBrush(),
                     shape,
                 )
                 .clickable(

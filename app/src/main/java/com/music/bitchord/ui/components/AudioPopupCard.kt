@@ -97,7 +97,7 @@ internal fun AudioPopupCard(
                 )
                 .border(
                     GLASS_EDGE_WIDTH,
-                    if (LocalLiquidGlassEnabled.current && isGlassSupported()) rememberGlassEdgeBrush() else GLASS_EDGE_COLOR,
+                    rememberGlassBorderBrush(),
                     POPUP_CARD_SHAPE,
                 )
                 // Swallows the tap before it reaches the scrim behind, so

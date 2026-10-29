@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -92,6 +93,15 @@ private const val GLASS_RESOLUTION_SCALE = 0.33f
  */
 internal val GLASS_EDGE_WIDTH = 0.5.dp
 internal val GLASS_EDGE_COLOR = Color.White.copy(alpha = 0.10f)
+
+/** Returns specular glass edge brush if liquid glass is active, or fallback solid edge brush. */
+@Composable
+fun rememberGlassBorderBrush(): Brush {
+    val isGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
+    val specular = rememberGlassEdgeBrush()
+    val fallback = remember { SolidColor(GLASS_EDGE_COLOR) }
+    return if (isGlass) specular else fallback
+}
 
 /** Specular gradient border brush simulating physical glass refraction and top-left light incidence. */
 @Composable
