@@ -82,8 +82,14 @@ object Innertube {
         get() = com.music.bitchord.data.LocaleTags.acceptLanguage(currentLocaleTag)
 
     private const val MUSIC_BASE = "https://music.youtube.com/youtubei/v1"
-    private const val MUSIC_ORIGIN = "https://music.youtube.com"
-    private const val YOUTUBE_ORIGIN = "https://www.youtube.com"
+    internal const val MUSIC_ORIGIN = "https://music.youtube.com"
+    internal const val YOUTUBE_ORIGIN = "https://www.youtube.com"
+
+    internal val activeAuthUser: String?
+        get() = channelOverride?.authUser ?: scope?.authUser
+
+    internal val activePageId: String?
+        get() = channelOverride?.pageId ?: scope?.pageId
 
     /**
      * Fallback WEB_REMIX version, used until [SessionScope] reads the live one
@@ -1241,7 +1247,7 @@ object Innertube {
      * origin-scoped hash is documented against, then the third-party form, then
      * the first-party one.
      */
-    private fun sapisidFrom(cookieHeader: String): String? {
+    internal fun sapisidFrom(cookieHeader: String): String? {
         val jar = cookieHeader.split(';')
             .mapNotNull { entry ->
                 val name = entry.substringBefore('=').trim()
@@ -1255,7 +1261,7 @@ object Innertube {
     private val SAPISID_NAMES =
         listOf("SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID")
 
-    private fun sapisidHash(sapisid: String, origin: String = MUSIC_ORIGIN): String {
+    internal fun sapisidHash(sapisid: String, origin: String = MUSIC_ORIGIN): String {
         val timestamp = System.currentTimeMillis() / 1000
         val digest = MessageDigest.getInstance("SHA-1")
             .digest("$timestamp $sapisid $origin".toByteArray())

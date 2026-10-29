@@ -171,7 +171,7 @@ object InnerTubeXResolver {
     private val repository = object : PlayerConfigRepository {
         override val enabled: Boolean get() = prefs != null
         override val sourceUrl: String = PLAYER_CONFIG_URL
-        override val defaultSourceUrl: String = PLAYER_CONFIG_URL
+        override val defaultSourceUrl: String = PLAYER_CONFIG_DEFAULT_URL
         override var cachedJson: String
             get() = prefs?.getString("json").orEmpty()
             set(value) { prefs?.putString("json", value) }
@@ -288,7 +288,9 @@ object InnerTubeXResolver {
     }
 
     private const val PLAYER_CONFIG_URL =
-        "https://raw.githubusercontent.com/ZemerTeam/zemer-cipher/master/library/src/main/assets/player_configs.json"
+        "https://github.com/MetrolistGroup/faraday/releases/download/{playerTag}/{playerHash}.json"
+    private const val PLAYER_CONFIG_DEFAULT_URL =
+        "https://raw.githubusercontent.com/MetrolistGroup/faraday/master/registry/player_configs.json"
     private const val LOW_KBPS = 64
     private const val EXCLUDE_MS = 10 * 60 * 1000L
     private const val MAX_REMEMBERED = 64

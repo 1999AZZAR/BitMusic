@@ -29,6 +29,8 @@ import kotlinx.coroutines.withTimeout
 import netscape.javascript.JSObject
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Collections
@@ -94,6 +96,7 @@ class DesktopPoTokenWebView private constructor(
     }
 
     private val bridge = Bridge()
+    private var userDataDir: File? = null
 
     private fun onConsoleMessage(level: String, msg: String) {
         when (level) {
@@ -125,7 +128,14 @@ class DesktopPoTokenWebView private constructor(
     /** Builds the page and starts BotGuard; on the FX thread. */
     private fun loadHtmlAndObtainBotguard() {
         TrackLog.d(TAG, "loadHtmlAndObtainBotguard() called")
+        val dir = runCatching {
+            Files.createTempDirectory("potoken_fx_").toFile().apply { deleteOnExit() }
+        }.getOrNull()
+        userDataDir = dir
         engine = WebEngine()
+        if (dir != null) {
+            engine.userDataDirectory = dir
+        }
         engine.userAgent = USER_AGENT
         engine.setOnError { event -> onUncaught(event.message ?: "WebEngine error") }
         engine.loadWorker.stateProperty().addListener { _, _, state ->
@@ -343,9 +353,12 @@ class DesktopPoTokenWebView private constructor(
         if (closed) return
         closed = true
         scope.cancel()
+        val dataDir = userDataDir
+        userDataDir = null
         runOnFx {
             runCatching { if (::engine.isInitialized) engine.load("about:blank") }
                 .onFailure { TrackLog.w(TAG, "PO-token WebView teardown failed type=${it::class.simpleName ?: "unknown"}") }
+            runCatching { dataDir?.deleteRecursively() }
         }
     }
 

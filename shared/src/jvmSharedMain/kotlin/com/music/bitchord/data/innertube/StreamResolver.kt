@@ -133,10 +133,33 @@ object StreamResolver {
                 )
             }
             val cookie = Innertube.cookie
-            if (!cookie.isNullOrBlank() && (request.url().contains("youtube.com") || request.url().contains("youtubei.googleapis.com"))) {
+            val reqUrl = request.url()
+            // visitor_id and guide endpoints must stay anonymous — injecting auth
+            // headers causes YouTube to return 400 FAILED_PRECONDITION / "Could not
+            // get visitorData", breaking NewPipe's bootstrap sequence.
+            val isAnonymousEndpoint = reqUrl.contains("/visitor_id") || reqUrl.contains("/guide?")
+            if (!cookie.isNullOrBlank() &&
+                !isAnonymousEndpoint &&
+                (reqUrl.contains("youtube.com") || reqUrl.contains("youtubei.googleapis.com"))
+            ) {
                 val hasCookie = request.headers().keys.any { it.equals("Cookie", ignoreCase = true) }
                 if (!hasCookie) {
                     builder.header("Cookie", cookie)
+                }
+                val hasAuth = request.headers().keys.any { it.equals("Authorization", ignoreCase = true) }
+                if (!hasAuth) {
+                    Innertube.sapisidFrom(cookie)?.let { sid ->
+                        val origin = if (reqUrl.contains("music.youtube.com")) Innertube.MUSIC_ORIGIN else Innertube.YOUTUBE_ORIGIN
+                        builder.header("Authorization", Innertube.sapisidHash(sid, origin))
+                        builder.header("X-Origin", origin)
+                        builder.header("Origin", origin)
+                    }
+                    Innertube.activeAuthUser?.takeIf { it.isNotBlank() }?.let {
+                        builder.header("X-Goog-AuthUser", it)
+                    }
+                    Innertube.activePageId?.takeIf { it.isNotBlank() }?.let {
+                        builder.header("X-Goog-PageId", it)
+                    }
                 }
             }
 
