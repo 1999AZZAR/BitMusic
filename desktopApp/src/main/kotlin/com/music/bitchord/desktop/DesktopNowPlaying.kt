@@ -1,7 +1,6 @@
 package com.music.bitchord.desktop
 
 import com.music.bitchord.data.model.Song
-import com.music.bitchord.playback.PlaybackPosition
 import com.music.bitchord.ui.components.AudioSourceBadge
 import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.compose.animation.core.Spring
@@ -38,7 +37,6 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Videocam
 import com.music.bitchord.data.AudioQualityBadgeFormatter
 import com.music.bitchord.data.AudioQualityTier
 import com.music.bitchord.data.NerdStats
@@ -103,14 +101,6 @@ internal fun DesktopNowPlaying(
     hasNext: Boolean,
     liked: Boolean,
     canRate: Boolean,
-    isVideoMode: Boolean = false,
-    videoStream: DesktopVideoStream? = null,
-    videoLoading: Boolean = false,
-    videoError: String? = null,
-    playbackPosition: PlaybackPosition? = null,
-    preferredVideoResolution: String = "auto",
-    onSelectVideoResolution: ((String) -> Unit)? = null,
-    onToggleVideoMode: () -> Unit = {},
     onToggleLike: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -125,22 +115,16 @@ internal fun DesktopNowPlaying(
     queuePanel: @Composable () -> Unit,
 ) {
     // The right half shows one of the two: lyrics or queue.
-    // In music mode, when lyrics are unavailable, we seamlessly fall back to queue.
     var userPreferredPanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
     var sidePanel by remember { mutableStateOf(if (lyricsAvailable) DesktopSidePanel.LYRICS else DesktopSidePanel.QUEUE) }
-    var panelShown by remember { mutableStateOf(!isVideoMode) }
-    val isExpanded = isVideoMode && !panelShown
-    LaunchedEffect(song.videoId, lyricsAvailable, isVideoMode) {
-        if (isVideoMode) {
-            panelShown = false
-        } else {
-            if (!lyricsAvailable) {
-                sidePanel = DesktopSidePanel.QUEUE
-                panelShown = true
-            } else if (userPreferredPanel == DesktopSidePanel.LYRICS) {
-                sidePanel = DesktopSidePanel.LYRICS
-                panelShown = true
-            }
+    var panelShown by remember { mutableStateOf(true) }
+    LaunchedEffect(song.videoId, lyricsAvailable) {
+        if (!lyricsAvailable) {
+            sidePanel = DesktopSidePanel.QUEUE
+            panelShown = true
+        } else if (userPreferredPanel == DesktopSidePanel.LYRICS) {
+            sidePanel = DesktopSidePanel.LYRICS
+            panelShown = true
         }
     }
     val reduceMotion by DesktopPlayerSettings.reduceAnimation.collectAsState()
@@ -177,126 +161,57 @@ internal fun DesktopNowPlaying(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                if (isVideoMode) {
-                        if (videoStream != null) {
-                            DesktopVideoSurface(
-                                videoStream = videoStream,
-                                isPlaying = isPlaying,
-                                positionMs = positionMs,
-                                playbackPosition = playbackPosition,
-                                preferredResolution = preferredVideoResolution,
-                                onSelectResolution = onSelectVideoResolution,
-                                isExpanded = isExpanded,
-                                modifier = if (isExpanded) {
-                                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
-                                } else {
-                                    Modifier.width(520.dp)
-                                },
-                            )
-                        } else {
-                            Box(
-                                modifier = if (isExpanded) {
-                                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 12.dp)
-                                } else {
-                                    Modifier.width(520.dp).aspectRatio(16f / 9f)
-                                }
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color.Black.copy(alpha = 0.5f))
-                                    .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (videoError != null) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                                        modifier = Modifier.padding(16.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Videocam,
-                                            contentDescription = null,
-                                            tint = DesktopSecondary.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(32.dp),
-                                        )
-                                        Text(
-                                            videoError,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = DesktopSecondary,
-                                            textAlign = TextAlign.Center,
-                                        )
-                                    }
-                                } else {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(28.dp),
-                                            strokeWidth = 2.dp,
-                                            color = tint,
-                                        )
-                                        Text(
-                                            "Loading video...",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = DesktopSecondary,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                    Box(contentAlignment = Alignment.Center) {
-                        // The glow the sleeve seems to cast: the record's tint, wide and soft, from
-                        // behind the artwork rather than around the window.
-                        val glow = tint.copy(alpha = 0.22f)
-                        Box(
-                            Modifier
-                                .matchParentSize()
-                                .drawBehind {
-                                    drawCircle(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(glow, Color.Transparent),
-                                            center = Offset(size.width / 2, size.height / 2),
-                                            radius = size.minDimension * 0.85f,
-                                        ),
-                                    )
-                                },
-                        )
-                        DesktopArtwork(
-                            song.thumbnailUrl,
-                            Modifier
-                                .size(324.dp)
-                                .shadow(24.dp, RoundedCornerShape(20.dp))
-                                .clip(RoundedCornerShape(20.dp))
-                                .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
-                            px = 720,
-                        )
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    // The glow the sleeve seems to cast: the record's tint, wide and soft, from
+                    // behind the artwork rather than around the window.
+                    val glow = tint.copy(alpha = 0.22f)
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(glow, Color.Transparent),
+                                        center = Offset(size.width / 2, size.height / 2),
+                                        radius = size.minDimension * 0.85f,
+                                    ),
+                                )
+                            },
+                    )
+                    DesktopArtwork(
+                        song.thumbnailUrl,
+                        Modifier
+                            .size(324.dp)
+                            .shadow(24.dp, RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(20.dp))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
+                        px = 720,
+                    )
                 }
-                Spacer(Modifier.height(if (isVideoMode) 8.dp else 24.dp))
-                val titleWidth = if (isExpanded && isVideoMode) 640.dp else 500.dp
+                Spacer(Modifier.height(24.dp))
                 Text(
                     song.title,
-                    style = if (isVideoMode) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(titleWidth),
+                    modifier = Modifier.width(500.dp),
                 )
                 Text(
                     song.artist,
-                    style = if (isVideoMode) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium,
                     color = tint,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .width(titleWidth)
+                        .width(500.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onOpenArtist)
                         .padding(horizontal = 8.dp, vertical = 2.dp),
                 )
-                if (!song.albumName.isNullOrBlank() && !isExpanded) {
+                if (!song.albumName.isNullOrBlank()) {
                     Text(
                         song.albumName.orEmpty(),
                         style = MaterialTheme.typography.bodyMedium,
@@ -307,17 +222,14 @@ internal fun DesktopNowPlaying(
                         modifier = Modifier.width(500.dp),
                     )
                 }
-                if (!isVideoMode) {
-                    Spacer(Modifier.height(18.dp))
-                    SpectrumPane(
-                        tint = tint,
-                        modifier = Modifier.width(420.dp).height(54.dp),
-                    )
-                }
-                Spacer(Modifier.height(if (isVideoMode) 8.dp else 14.dp))
-                val controlWidth = if (isExpanded && isVideoMode) 640.dp else 420.dp
+                Spacer(Modifier.height(18.dp))
+                SpectrumPane(
+                    tint = tint,
+                    modifier = Modifier.width(420.dp).height(54.dp),
+                )
+                Spacer(Modifier.height(14.dp))
                 Row(
-                    Modifier.width(controlWidth),
+                    Modifier.width(420.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(timeLabel(if (dragging) dragValue else fraction, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
@@ -335,7 +247,7 @@ internal fun DesktopNowPlaying(
                     )
                     Text(timeLabel(1f, durationMs), color = DesktopSecondary, style = MaterialTheme.typography.labelSmall)
                 }
-                Spacer(Modifier.height(if (isVideoMode) 10.dp else 16.dp))
+                Spacer(Modifier.height(16.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -400,7 +312,7 @@ internal fun DesktopNowPlaying(
                         }
                     }
                 }
-                Spacer(Modifier.height(if (isVideoMode) 8.dp else 14.dp))
+                Spacer(Modifier.height(14.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -417,23 +329,6 @@ internal fun DesktopNowPlaying(
                     }
                     DesktopToolbarButton(onClick = onOpenMenu, size = 36.dp) {
                         Icon(Icons.Rounded.MoreHoriz, "More options", tint = DesktopSecondary, modifier = Modifier.size(19.dp))
-                    }
-                    val canToggleVideo = song.videoId.isNotBlank() && (song.localUri == null || videoStream != null)
-                    DesktopToolbarButton(
-                        onClick = onToggleVideoMode,
-                        enabled = canToggleVideo,
-                        size = 36.dp,
-                    ) {
-                        Icon(
-                            Icons.Rounded.Videocam,
-                            if (isVideoMode) "Switch to song" else "Switch to video",
-                            tint = if (isVideoMode) {
-                                tint
-                            } else {
-                                DesktopSecondary.copy(alpha = if (canToggleVideo) 1f else 0.4f)
-                            },
-                            modifier = Modifier.size(20.dp),
-                        )
                     }
                     DesktopToolbarButton(
                         onClick = {

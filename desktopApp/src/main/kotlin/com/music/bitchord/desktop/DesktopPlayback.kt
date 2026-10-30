@@ -58,35 +58,7 @@ data class DesktopPlaybackState(
     /** How far Automix has got on this track and the next — see the player's line. */
     val smartAnalysis: com.music.bitchord.data.settings.SmartAnalysis =
         com.music.bitchord.data.settings.SmartAnalysis(),
-    /** Active video rendition, if available and resolved for the current track. */
-    val videoStream: DesktopVideoStream? = null,
-    /** Whether the user has toggled into the dedicated video viewport in Now Playing. */
-    val isVideoMode: Boolean = false,
-    /** Whether a video stream is actively resolving. */
-    val videoLoading: Boolean = false,
-    /** Error message if video stream resolution failed for this track. */
-    val videoError: String? = null,
-    /** Preferred resolution ceiling (e.g. "auto", "1080p", "720p", "480p"). */
-    val preferredVideoResolution: String = "auto",
 )
-
-/**
- * Metadata and playback stream descriptor for dedicated desktop video playback.
- */
-data class DesktopVideoStream(
-    val url: String,
-    val resolution: String,
-    val width: Int,
-    val height: Int,
-    val fps: Int = 30,
-    val mimeType: String = "video/mp4",
-    val headers: Map<String, String> = emptyMap(),
-    val availableResolutions: List<String> = emptyList(),
-    val activeResolution: String = resolution,
-) {
-    val aspectRatio: Float
-        get() = width.toFloat() / height.coerceAtLeast(1)
-}
 
 internal data class DesktopStream(
     val url: String,
@@ -236,38 +208,6 @@ internal object DesktopStreamClient {
     }
 
     suspend fun resolveUrl(song: Song): Result<String> = resolve(song).map(DesktopStream::url)
-
-    suspend fun resolveVideo(
-        song: Song,
-        targetResolution: String? = null,
-    ): Result<DesktopVideoStream> = runCatching {
-        if (song.localUri != null || song.videoId.isBlank()) {
-            error("No video stream for local or non-YouTube track '${song.title}'")
-        }
-        val videoIdToResolve = if (song.isVideo) {
-            song.videoId
-        } else {
-            val videoVersion = YtMusicRepository.resolveVideo(song)
-            videoVersion?.videoId ?: error("Track '${song.title}' is pure music with no video")
-        }
-        val candidates = StreamResolver.resolveVideoCandidates(videoIdToResolve)
-        val video = com.music.bitchord.data.innertube.VideoStreamSelector.selectStream(
-            candidates,
-            targetResolution = targetResolution,
-        ) ?: error("No playable video stream found for '${song.title}'")
-        val available = com.music.bitchord.data.innertube.VideoStreamSelector.availableResolutions(candidates)
-        DesktopVideoStream(
-            url = video.url,
-            resolution = video.resolutionTier,
-            width = video.width,
-            height = video.height,
-            fps = video.fps,
-            mimeType = video.mimeType,
-            headers = StreamResolver.mediaHeadersFor(video.url),
-            availableResolutions = available,
-            activeResolution = targetResolution ?: "auto",
-        )
-    }
 
     /**
      * The ceiling a resolve on this thread was asked for, read by

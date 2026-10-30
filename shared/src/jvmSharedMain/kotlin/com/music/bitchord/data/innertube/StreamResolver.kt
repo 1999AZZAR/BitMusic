@@ -1134,9 +1134,6 @@ object StreamResolver {
      * around it while staying well inside the window where the URL is good.
      */
     private val recent = ConcurrentHashMap<String, Resolved>()
-    private val recentVideoCandidates = ConcurrentHashMap<String, ResolvedVideoCandidates>()
-
-    private class ResolvedVideoCandidates(val candidates: List<VideoStreamInfo>, val at: Long)
 
     private const val URL_TTL_MS = 20 * 60 * 1000L
 
@@ -1150,69 +1147,5 @@ object StreamResolver {
             if (recent.size >= MAX_REMEMBERED) recent.clear()
         }
         recent[videoId] = Resolved(url, MonotonicClock.nowMs(), kbps)
-    }
-
-    private fun rememberVideoCandidates(videoId: String, candidates: List<VideoStreamInfo>) {
-        if (recentVideoCandidates.size >= MAX_REMEMBERED) {
-            val cutoff = MonotonicClock.nowMs() - URL_TTL_MS
-            recentVideoCandidates.entries.removeAll { it.value.at < cutoff }
-            if (recentVideoCandidates.size >= MAX_REMEMBERED) recentVideoCandidates.clear()
-        }
-        recentVideoCandidates[videoId] = ResolvedVideoCandidates(candidates, MonotonicClock.nowMs())
-    }
-
-    /**
-     * Resolves all available video renditions (progressive and adaptive up to 1080p) for [videoId].
-     */
-    suspend fun resolveVideoCandidates(videoId: String): List<VideoStreamInfo> {
-        recentVideoCandidates[videoId]
-            ?.takeIf { MonotonicClock.nowMs() - it.at < URL_TTL_MS }
-            ?.let { return it.candidates }
-
-        return try {
-            val candidates = withContext(Dispatchers.IO) {
-                extractionGate.withLock {
-                    val extractor = ServiceList.YouTube.getStreamExtractor(
-                        "https://www.youtube.com/watch?v=$videoId",
-                    )
-                    extractor.fetchPage()
-                    val progressive = extractor.videoStreams.orEmpty().map { it to false }
-                    val videoOnly = extractor.videoOnlyStreams.orEmpty().map { it to true }
-                    (progressive + videoOnly)
-                        .filter { !it.first.content.isNullOrBlank() }
-                        .map { (stream, isOnly) ->
-                            val h = stream.height
-                            VideoStreamInfo(
-                                url = stream.content,
-                                resolution = "${h}p",
-                                width = stream.width,
-                                height = h,
-                                fps = stream.fps,
-                                mimeType = stream.format?.mimeType ?: "video/mp4",
-                                videoCodec = stream.codec,
-                                audioCodec = if (isOnly) null else "mp4a.40.2",
-                                isVideoOnly = isOnly,
-                            )
-                        }
-                }
-            }
-
-            if (candidates.isNotEmpty()) {
-                rememberVideoCandidates(videoId, candidates)
-            }
-            candidates
-        } catch (e: Exception) {
-            TrackLog.w(TAG, "Video resolution failed for $videoId: ${e.message}")
-            emptyList()
-        }
-    }
-
-    /**
-     * Resolves a video stream matching [targetResolution] (up to 1080p) for [videoId],
-     * or null if no playable video rendition is available.
-     */
-    suspend fun resolveVideoStream(videoId: String, targetResolution: String? = null): VideoStreamInfo? {
-        val candidates = resolveVideoCandidates(videoId)
-        return VideoStreamSelector.selectStream(candidates, targetResolution = targetResolution)
     }
 }
