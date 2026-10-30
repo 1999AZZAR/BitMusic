@@ -194,7 +194,7 @@ jobs:
   macos:
     name: macOS · dmg, pkg, zip (arm64)
     needs: [prepare]
-    runs-on: macos-14
+    runs-on: macos-latest
     env:
       ANDROID_HOME: ""
       ANDROID_SDK_ROOT: ""
