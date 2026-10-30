@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -88,6 +89,8 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.screens.MOOD_CARD_ASPECT
 import com.music.bitchord.ui.screens.MoodGenreSleeve
+import com.music.bitchord.ui.tv.focus.TvFocusSpec
+import com.music.bitchord.ui.tv.theme.LocalTvColors
 import com.music.bitchord.ui.tv.theme.TvDimensions
 import com.music.bitchord.ui.tv.theme.TvGlass
 import com.music.bitchord.ui.tv.theme.TvType
@@ -144,6 +147,70 @@ fun Modifier.tvLift(
             ambientShadowColor = Color.Black
             spotShadowColor = Color.Black
         }
+}
+
+/**
+ * 10-foot TV Focus & Glowing Accent Border Modifier:
+ * Applies a 1.05x scale bounce with smooth spring transitions, elevated depth,
+ * and a high-visibility theme-aware accent focus ring.
+ */
+@Composable
+fun Modifier.tvFocusBorder(
+    interactionSource: MutableInteractionSource,
+    shape: Shape,
+    focusedScale: Float = TvFocusSpec.FOCUSED_SCALE,
+    elevation: Dp = 16.dp,
+    borderWidth: Dp = 2.5.dp,
+    borderColor: Color? = null,
+): Modifier {
+    val focused by interactionSource.collectIsFocusedAsState()
+    val pressed by interactionSource.collectIsPressedAsState()
+    val chrome = LocalTvChrome.current
+    val requester = remember { FocusRequester() }
+    val colors = LocalTvColors.current
+    val activeBorderColor = borderColor ?: colors.borderFocused
+
+    LaunchedEffect(focused) { if (focused) chrome.lastFocused = requester }
+
+    val scale = animateFloatAsState(
+        targetValue = TvFocusSpec.calculateScale(isFocused = focused, isPressed = pressed),
+        animationSpec = LiftSpring,
+        label = "tvFocusBorderScale",
+    )
+    val shadow = animateDpAsState(
+        targetValue = if (focused && !pressed) elevation else 0.dp,
+        animationSpec = LiftDpSpring,
+        label = "tvFocusBorderShadow",
+    )
+    val animatedBorderWidth by animateDpAsState(
+        targetValue = if (focused) borderWidth else 0.dp,
+        animationSpec = LiftDpSpring,
+        label = "tvFocusBorderWidth",
+    )
+
+    return this
+        .focusRequester(requester)
+        .zIndex(if (focused) 1f else 0f)
+        .graphicsLayer {
+            scaleX = scale.value
+            scaleY = scale.value
+            shadowElevation = shadow.value.toPx()
+            this.shape = shape
+            clip = false
+            ambientShadowColor = Color.Black
+            spotShadowColor = Color.Black
+        }
+        .then(
+            if (animatedBorderWidth > 0.dp) {
+                Modifier.border(
+                    width = animatedBorderWidth,
+                    color = activeBorderColor,
+                    shape = shape,
+                )
+            } else {
+                Modifier
+            }
+        )
 }
 
 /** Click (and optional long-press) with no ripple; on TV this is also the focus target. */
@@ -448,7 +515,7 @@ fun TvLockup(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(aspectRatio)
-                .tvLift(interaction, shape)
+                .tvFocusBorder(interaction, shape, focusedScale = 1.05f)
                 .tvClick(interaction, onLongClick = onLongClick, onClick = onClick),
         ) {
             TvArtwork(
@@ -847,7 +914,7 @@ fun TvMoodCard(
         titleStyle = TvType.Body.copy(fontSize = 14.sp),
         modifier = modifier
             .aspectRatio(MOOD_CARD_ASPECT)
-            .tvLift(interaction, RoundedCornerShape(13.dp), focusedScale = 1.07f)
+            .tvFocusBorder(interaction, RoundedCornerShape(13.dp), focusedScale = 1.05f)
             .tvClick(interaction, onClick = onClick),
     )
 }

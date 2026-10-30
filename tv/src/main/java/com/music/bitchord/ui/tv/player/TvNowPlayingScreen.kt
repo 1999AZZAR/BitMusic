@@ -42,6 +42,8 @@ import com.music.bitchord.playback.toggleAutoplay
 import com.music.bitchord.playback.toggleShuffle
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.tv.dialogs.TvSongActionMenuDialog
+import com.music.bitchord.ui.tv.drawer.TvDrawerTab
+import com.music.bitchord.ui.tv.drawer.TvNowPlayingDrawerState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -117,6 +119,7 @@ fun TvNowPlayingScreen(
     val hasLyrics = !lyrics.isNullOrEmpty()
     val showLyrics = hasLyrics && !lyricsHidden
 
+    val drawerState = remember { TvNowPlayingDrawerState() }
     var controlsVisible by remember { mutableStateOf(true) }
     var upNextOpen by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
@@ -160,7 +163,10 @@ fun TvNowPlayingScreen(
             commitScrub()
         }
     }
-    val revealControls: () -> Unit = { controlsVisible = true }
+    val revealControls: () -> Unit = {
+        if (drawerState.isOpen) drawerState.close()
+        controlsVisible = true
+    }
     val hideControls: () -> Unit = {
         upNextOpen = false
         controlsVisible = false
@@ -168,17 +174,19 @@ fun TvNowPlayingScreen(
 
     // The transport steps away after a few idle seconds — never while Up Next
     // or a sheet is open, a scrub is pending, or the music is paused.
-    LaunchedEffect(controlsVisible, lastInput, upNextOpen, sheet, isPlaying, scrubTarget) {
-        if (controlsVisible && !upNextOpen && sheet == null && isPlaying && scrubTarget == null) {
+    LaunchedEffect(controlsVisible, lastInput, upNextOpen, drawerState.isOpen, sheet, isPlaying, scrubTarget) {
+        if (controlsVisible && !upNextOpen && !drawerState.isOpen && sheet == null && isPlaying && scrubTarget == null) {
             delay(ControlsTimeoutMs)
             hideControls()
         }
     }
     // Focus follows what's on screen: the scrubber when the transport rises,
     // the stage (which takes the remote's presses) when it goes.
-    LaunchedEffect(controlsVisible) {
-        delay(60)
-        runCatching { if (controlsVisible) scrubberFocus.requestFocus() else stageFocus.requestFocus() }
+    LaunchedEffect(controlsVisible, drawerState.isOpen) {
+        if (!drawerState.isOpen) {
+            delay(60)
+            runCatching { if (controlsVisible) scrubberFocus.requestFocus() else stageFocus.requestFocus() }
+        }
     }
     LaunchedEffect(upNextOpen) {
         if (upNextOpen) {
@@ -191,6 +199,7 @@ fun TvNowPlayingScreen(
 
     BackHandler(enabled = sheet == null) {
         when {
+            drawerState.isOpen -> drawerState.close()
             upNextOpen -> upNextOpen = false
             controlsVisible -> hideControls()
             else -> onBack()
@@ -215,6 +224,15 @@ fun TvNowPlayingScreen(
                     KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { skipPrevious(); true }
                     KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { revealControls(); scrubBy(ScrubStepMs); true }
                     KeyEvent.KEYCODE_MEDIA_REWIND -> { revealControls(); scrubBy(-ScrubStepMs); true }
+                    KeyEvent.KEYCODE_MENU -> {
+                        if (drawerState.isOpen) {
+                            drawerState.close()
+                        } else {
+                            hideControls()
+                            drawerState.open()
+                        }
+                        true
+                    }
                     else -> false
                 }
             },
@@ -228,10 +246,15 @@ fun TvNowPlayingScreen(
                 .fillMaxSize()
                 .focusRequester(stageFocus)
                 .onKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown || controlsVisible) return@onKeyEvent false
+                    if (event.type != KeyEventType.KeyDown || controlsVisible || drawerState.isOpen) return@onKeyEvent false
                     when (event.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            hideControls()
+                            drawerState.open(TvDrawerTab.QUEUE)
+                            true
+                        }
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
-                        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> { revealControls(); true }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> { revealControls(); true }
                         KeyEvent.KEYCODE_DPAD_LEFT -> { skipPrevious(); true }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> { skipNext(); true }
                         else -> false
@@ -240,7 +263,7 @@ fun TvNowPlayingScreen(
                 .focusable(),
         )
 
-        val dim by animateFloatAsState(if (upNextOpen) 0.12f else 1f, tween(280), label = "stageDim")
+        val dim by animateFloatAsState(if (upNextOpen || drawerState.isOpen) 0.12f else 1f, tween(280), label = "stageDim")
         TvNowPlayingStage(
             song = song,
             isPlaying = isPlaying,
@@ -277,7 +300,10 @@ fun TvNowPlayingScreen(
                 },
                 onOpenUpNext = { upNextOpen = true },
                 onToggleLike = { viewModel.toggleLike(song.videoId) },
-                onToggleLyrics = { lyricsHidden = !lyricsHidden },
+                onToggleLyrics = {
+                    hideControls()
+                    drawerState.open(TvDrawerTab.LYRICS)
+                },
                 onToggleUpNext = { upNextOpen = !upNextOpen },
                 onMore = { sheet = PlayerSheet.Menu },
                 upNext = {
@@ -309,6 +335,20 @@ fun TvNowPlayingScreen(
                 },
             )
         }
+
+        TvNowPlayingDrawer(
+            drawerState = drawerState,
+            queue = playerState.queue,
+            currentIndex = playerState.queueIndex,
+            lyrics = lyrics,
+            position = position,
+            onJumpToTrack = { index ->
+                mediaController?.seekToDefaultPosition(index)
+                mediaController?.play()
+            },
+            onSeek = { mediaController?.seekTo(it) },
+            modifier = Modifier.align(Alignment.CenterEnd),
+        )
 
         TvFlashGlyph(
             flash = flash,

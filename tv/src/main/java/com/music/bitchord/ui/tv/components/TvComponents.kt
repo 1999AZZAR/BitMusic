@@ -193,7 +193,7 @@ fun TvCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .tvLift(interaction, RoundedCornerShape(11.dp), focusedScale = 1.07f, elevation = 18.dp)
+                .tvFocusBorder(interaction, RoundedCornerShape(11.dp), focusedScale = 1.05f, elevation = 18.dp)
                 .tvClick(interaction, onLongClick = onLongClick, onClick = onClick)
                 .drawBehind { drawRect(footer.value) },
         ) {
