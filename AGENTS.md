@@ -8,7 +8,6 @@ This document is the authoritative guide for AI coding agents (OpenCode, OpenAI 
 
 BitMusic is a bloat-free, high-performance music application crafted strictly for **Big-Screen devices**:
 - **Linux Desktop**: Low-latency native audio capture via PulseAudio / PipeWire directly feeding the spectrum analyzer.
-- **Android TV**: 10-foot Leanback interface, 100% remote D-pad navigation, QR-code authentication, refresh rate matching.
 - **Windows Desktop**: WASAPI loopback capture, Compose Multiplatform desktop.
 - **macOS Desktop**: CoreAudio capture, Compose Multiplatform desktop.
 
@@ -45,7 +44,7 @@ All development must follow this strict branch lifecycle:
 - `:shared` (`shared/`) — Core business logic, repositories, playback models, YouTube Music & Spotify connectors.
 - `native/` — C/C++ audio analysis engine (`cavacore`), PulseAudio loopback capture, CMake scripts, JNI bindings.
 - `backend/` — Optional Go 1.22+ Listen Together party synchronization server.
-- `.cursor/rules/` — Detailed sub-rules for Cursor (`rules.mdc`, `git-workflow.mdc`, `desktop-audio.mdc`, `android-tv.mdc`).
+- `.cursor/rules/` — Detailed sub-rules for Cursor (`rules.mdc`, `git-workflow.mdc`, `desktop-audio.mdc`).
 
 ---
 
