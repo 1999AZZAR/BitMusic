@@ -1,6 +1,5 @@
 package com.music.bitchord.desktop
 
-import com.music.bitchord.data.model.Song
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer

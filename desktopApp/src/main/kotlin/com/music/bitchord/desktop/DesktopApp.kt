@@ -3265,6 +3265,20 @@ fun BitChordDesktopApp() {
         partySyncHolder[0]?.onLocalIntent()
     }
 
+    DisposableEffect(Unit) {
+        DesktopKeyboardShortcuts.onPlayPause = ::togglePlayPauseFromUser
+        DesktopKeyboardShortcuts.onNext = ::playNext
+        DesktopKeyboardShortcuts.onPrevious = ::playPrevious
+        DesktopKeyboardShortcuts.onSeekBack = { seekPlayer((playback.positionMs - 5_000L).coerceAtLeast(0L)) }
+        DesktopKeyboardShortcuts.onSeekForward = { seekPlayer(playback.positionMs + 5_000L) }
+        onDispose {
+            DesktopKeyboardShortcuts.onPlayPause = null
+            DesktopKeyboardShortcuts.onNext = null
+            DesktopKeyboardShortcuts.onPrevious = null
+            DesktopKeyboardShortcuts.onSeekBack = null
+            DesktopKeyboardShortcuts.onSeekForward = null
+        }
+    }
     MaterialTheme(
         colorScheme = rememberDynamicDesktopColorScheme(selectedSong?.thumbnailUrl),
         typography = desktopTypography(),

@@ -6,7 +6,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
-import kotlin.io.path.extension
 
 /**
  * Disk cache for whole audio streams, so a track that was played once can be replayed offline and
