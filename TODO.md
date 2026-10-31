@@ -60,8 +60,8 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 
 - [x] **Desktop Linux / Wayland** ✔️
   - MPRIS media keys and capabilities hardened; track changes now publish Freedesktop notifications with artwork.
-- [ ] **macOS Native Keybinds & Media Center**
-  - NowPlayingInfoCenter integration for macOS Control Center playback controls.
+- [x] **macOS Native Keybinds & Media Center** ✔️
+  - NowPlayingInfoCenter integration (best-effort JNA bridge) plus in-app keyboard shortcuts on all platforms.
 
 ---
 
