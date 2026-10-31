@@ -85,8 +85,13 @@ internal object DesktopLinuxNotifications {
                 )
                 val hints = linkedMapOf<String, Variant<*>>()
                 artworkPath?.takeIf(String::isNotBlank)?.let { path ->
-                    val file = if (path.startsWith("file://")) File(URI(path)) else File(path)
-                    if (file.isFile) hints["image-path"] = Variant(file.absolutePath)
+                    if (path.startsWith("http://") || path.startsWith("https://")) {
+                        // Freedesktop accepts a URI here; the daemon fetches it.
+                        hints["image-path"] = Variant(path)
+                    } else {
+                        val file = if (path.startsWith("file://")) runCatching { File(URI(path)) }.getOrNull() else File(path)
+                        if (file != null && file.isFile) hints["image-path"] = Variant(file.absolutePath)
+                    }
                 }
                 val id = remote.Notify(
                     "BitMusic",
