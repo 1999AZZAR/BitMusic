@@ -58,8 +58,8 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 
 ## 5. Platform-Specific Optimizations
 
-- [ ] **Desktop Linux / Wayland**
-  - MPRIS media key enhancements and track artwork synchronization with desktop notifications.
+- [x] **Desktop Linux / Wayland** ✔️
+  - MPRIS media keys and capabilities hardened; track changes now publish Freedesktop notifications with artwork.
 - [ ] **macOS Native Keybinds & Media Center**
   - NowPlayingInfoCenter integration for macOS Control Center playback controls.
 

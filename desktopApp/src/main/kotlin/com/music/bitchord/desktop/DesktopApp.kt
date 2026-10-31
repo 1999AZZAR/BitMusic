@@ -2009,6 +2009,16 @@ fun BitChordDesktopApp() {
         canvas = withContext(Dispatchers.IO) { DesktopCanvasClient.lookup(current) }
     }
 
+    DisposableEffect(Unit) {
+        DesktopLinuxNotifications.start()
+        onDispose { DesktopLinuxNotifications.stop() }
+    }
+    LaunchedEffect(playback.song?.videoId, playback.isPlaying) {
+        val song = playback.song ?: return@LaunchedEffect
+        if (playback.isPlaying) {
+            DesktopLinuxNotifications.notifyTrack(song.title, song.artist, song.thumbnailUrl)
+        }
+    }
     LaunchedEffect(
         playback.song?.videoId,
         playback.isPlaying,
