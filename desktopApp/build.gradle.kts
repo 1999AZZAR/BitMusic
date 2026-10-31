@@ -99,7 +99,7 @@ dependencies {
         "macos" -> if (isArm64) "mac-aarch64" else "mac"
         else -> "linux"
     }
-    listOf("base", "graphics", "controls", "media", "web").forEach { module ->
+    listOf("base", "graphics", "controls", "web").forEach { module ->
         implementation("org.openjfx:javafx-$module:21.0.10:$javafxClassifier")
     }
 
