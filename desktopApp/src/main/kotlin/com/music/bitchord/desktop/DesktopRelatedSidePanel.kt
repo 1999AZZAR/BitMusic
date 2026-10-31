@@ -162,7 +162,7 @@ internal fun DesktopRelatedSidePanel(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 8.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp),
     ) {
         // --- Card 1: About the Artist (Spotify Now Playing View) ---
         item(key = "about-artist") {
