@@ -1,11 +1,8 @@
 package com.music.bitchord.desktop
 
+import com.music.bitchord.data.Http
 import com.music.bitchord.data.innertube.StreamResolver
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
+import okhttp3.Request
 
 /** Reads a remote file in bounded windows rather than as one open-ended request. */
 internal class DesktopRangeStream(
@@ -51,52 +48,75 @@ internal class DesktopRangeStream(
     private fun holds(at: Long): Boolean =
         windowStart >= 0 && at >= windowStart && at < windowStart + window.size
 
-    /** Fetches the window containing [at]. */
+    /** Fetches the window containing [at], with automatic retry and error handling. */
     private fun fetchWindowFor(at: Long): Boolean {
         val start = at - (at % windowBytes)
         val end = start + windowBytes - 1
-        val request = HttpRequest.newBuilder(URI.create(url))
-            .timeout(Duration.ofSeconds(20))
+        val builder = Request.Builder()
+            .url(url)
             .header("Range", "bytes=$start-$end")
             .header("Accept", "*/*")
-            // Anything else would arrive compressed and the byte offsets the caller is counting in
-            // would stop meaning anything.
             .header("Accept-Encoding", "identity")
-        headers.forEach { (name, value) -> runCatching { request.header(name, value) } }
+        headers.forEach { (name, value) -> builder.header(name, value) }
+        val request = builder.build()
 
-        val response = runCatching {
-            client.send(request.GET().build(), HttpResponse.BodyHandlers.ofByteArray())
-        }.getOrNull() ?: return false
-        if (response.statusCode() !in 200..299) {
-            // A URL cleared before playback has been refused mid-track: tell the resolver, as the
-            // phone's ChunkedDataSource does, so it forgets it and benches the client that minted it.
-            StreamResolver.onPlaybackRefused(url, response.statusCode())
-            return false
-        }
+        var attempts = 0
+        val maxAttempts = 4
+        while (attempts < maxAttempts) {
+            attempts++
+            try {
+                Http.client.newCall(request).execute().use { response ->
+                    val code = response.code
+                    if (code == 403 || code == 404 || code == 410) {
+                        StreamResolver.onPlaybackRefused(url, code)
+                        return false
+                    }
+                    if (code !in 200..299) {
+                        if (attempts < maxAttempts && (code in 500..599 || code == 429)) {
+                            Thread.sleep(350L * attempts)
+                            return@use
+                        }
+                        StreamResolver.onPlaybackRefused(url, code)
+                        return false
+                    }
 
-        val body = response.body()
-        // A server that honoured the range says where the bytes came from and how many there are in
-        // total.
-        val stated = response.headers().firstValue("content-range").orElse(null)
-        if (stated != null) {
-            windowStart = stated.substringAfter("bytes ").substringBefore('-').trim().toLongOrNull() ?: start
-            length = stated.substringAfterLast('/').trim().toLongOrNull() ?: length
-        } else {
-            windowStart = 0
-            length = body.size.toLong()
+                    val body = response.body.bytes()
+                    val stated = response.header("Content-Range")
+                    if (stated != null) {
+                        windowStart = stated.substringAfter("bytes ")
+                            .substringBefore('-')
+                            .trim()
+                            .toLongOrNull() ?: start
+                        length = stated.substringAfterLast('/')
+                            .trim()
+                            .toLongOrNull() ?: length
+                    } else {
+                        windowStart = 0
+                        length = body.size.toLong()
+                    }
+                    window = body
+                    if (length < 0) length = windowStart + body.size
+                    return body.isNotEmpty()
+                }
+            } catch (e: Exception) {
+                Http.client.connectionPool.evictAll()
+                if (attempts >= maxAttempts) {
+                    DesktopTrackLog.log("DesktopRangeStream fetch failed at byte $start after $attempts attempts: ${e.message}")
+                    return false
+                }
+                try {
+                    Thread.sleep(400L * attempts)
+                } catch (ie: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
         }
-        window = body
-        if (length < 0) length = windowStart + body.size
-        return body.isNotEmpty()
+        return false
     }
 
     private companion object {
         /** Comfortably inside what Google will serve. */
         const val DEFAULT_WINDOW = 512 * 1024
-
-        val client: HttpClient = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(Duration.ofSeconds(15))
-            .build()
     }
 }

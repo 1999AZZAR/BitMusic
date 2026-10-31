@@ -130,12 +130,48 @@ object Http {
         chain.proceed(request)
     }
 
+    val connectionPool: ConnectionPool = ConnectionPool(16, 5, TimeUnit.MINUTES)
+
+    private val resilientRetryInterceptor = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        var attempts = 0
+        val maxAttempts = 3
+        while (true) {
+            attempts++
+            try {
+                return@Interceptor chain.proceed(request)
+            } catch (e: java.io.IOException) {
+                if (request.body?.isOneShot() == true ||
+                    (e is java.io.InterruptedIOException && e !is java.net.SocketTimeoutException)
+                ) {
+                    throw e
+                }
+                connectionPool.evictAll()
+                if (attempts >= maxAttempts) {
+                    throw e
+                }
+                val delayMs = if (attempts == 1) 350L else 1000L
+                try {
+                    Thread.sleep(delayMs)
+                } catch (ie: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw e
+                }
+            }
+        }
+        @Suppress("UNREACHABLE_CODE")
+        chain.proceed(request)
+    }
+
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .pingInterval(10, TimeUnit.SECONDS)
+        .dns(ResilientDns)
         .retryOnConnectionFailure(true)
         .dispatcher(Dispatcher().apply { maxRequestsPerHost = 16 })
-        .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
+        .connectionPool(connectionPool)
+        .addInterceptor(resilientRetryInterceptor)
         .addInterceptor(webDavInterceptor)
         .apply { if (USAGE_LOGGING_ENABLED) addNetworkInterceptor(usageInterceptor) }
         .build()
