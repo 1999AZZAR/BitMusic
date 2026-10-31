@@ -410,47 +410,34 @@ internal fun DesktopNowPlaying(
                     when (sidePanel) {
                         // The lyric sheet stands on the window itself, as the original's does.
                         DesktopSidePanel.LYRICS -> Box(Modifier.fillMaxSize()) { lyricsPanel() }
-                        // The queue floats: a rounded card of lighter glass than the bars use —
-                        // the mesh is meant to breathe through it — with a hairline edge and a
-                        // fade that lets the last row dissolve instead of stopping mid-picture.
-                        DesktopSidePanel.QUEUE -> Box(
-                            Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(20.dp))
-                                .playerQueueGlass()
-                                .border(0.75.dp, rememberSpecularGlassBorder(), RoundedCornerShape(20.dp)),
-                        ) {
+                        // The queue and related panels blend seamlessly on the player window canvas,
+                        // just like the lyrics sheet, rather than being trapped in a rigid card box.
+                        DesktopSidePanel.QUEUE -> Box(Modifier.fillMaxSize()) {
                             queuePanel()
-                            // The dissolve: the list's last rows wash out into the card rather
-                            // than being cut by its rounded floor.
+                            // The dissolve: the list's last rows wash out into the floor rather
+                            // than being cut abruptly by the window edge.
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .height(40.dp)
+                                    .height(48.dp)
                                     .background(
                                         Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
                                         ),
                                     ),
                             )
                         }
-                        DesktopSidePanel.RELATED -> Box(
-                            Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(20.dp))
-                                .playerQueueGlass()
-                                .border(0.75.dp, rememberSpecularGlassBorder(), RoundedCornerShape(20.dp)),
-                        ) {
+                        DesktopSidePanel.RELATED -> Box(Modifier.fillMaxSize()) {
                             relatedPanel()
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .height(40.dp)
+                                    .height(48.dp)
                                     .background(
                                         Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
                                         ),
                                     ),
                             )
@@ -475,30 +462,6 @@ private fun timeLabel(fraction: Float, durationMs: Long): String {
 }
 
 /**
- * The queue card's own glass: lighter than the bars' — a wide blur with a shallow tint, so the
- * mesh behind it colourises the card instead of a near-black slab sitting on it — and, when
- * dynamic blur is off, a translucent fill in the same spirit.
- */
-@Composable
-private fun Modifier.playerQueueGlass(): Modifier {
-    val haze = LocalDesktopHaze.current
-    val reduceDynamicBlur by DesktopAppearanceSettings.reduceDynamicBlur.collectAsState()
-    val surface = MaterialTheme.colorScheme.surface
-    val isLight = surface.luminance() > 0.5f
-    return if (haze == null || reduceDynamicBlur) {
-        background(surface.copy(alpha = if (isLight) 0.88f else 0.82f))
-    } else {
-        hazeEffect(state = haze) {
-            blurEnabled = true
-            backgroundColor = surface
-            blurRadius = 36.dp
-            tints = listOf(HazeTint(surface.copy(alpha = if (isLight) 0.45f else 0.28f)))
-            noiseFactor = 0.02f
-        }
-    }
-}
-
-/**
  * The queue, drawn for a window rather than a phone column: artwork big enough to read,
  * a head that names the queue and counts what is left, the playing row in a pill of the
  * record's tint with the equalizer glyph beside it, and a remove that appears where the
@@ -514,9 +477,9 @@ internal fun PlayerQueuePane(
     tint: Color,
 ) {
     val upcoming = (queue.size - index - 1).coerceAtLeast(0)
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 12.dp),
+            Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

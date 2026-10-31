@@ -42,9 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -246,115 +248,218 @@ private fun AboutArtistCard(
     modifier: Modifier = Modifier,
 ) {
     var expandedBio by remember { mutableStateOf(false) }
+    val avatarUrl = artistDetails?.thumbnailUrl
+    val hasHeroImage = !avatarUrl.isNullOrBlank()
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(0.75.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
-            .padding(14.dp),
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.08f),
+                        Color.White.copy(alpha = 0.03f),
+                        Color.Transparent,
+                    ),
+                ),
+            )
+            .border(
+                width = 0.5.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.16f),
+                        Color.White.copy(alpha = 0.04f),
+                        Color.Transparent,
+                    ),
+                ),
+                shape = RoundedCornerShape(18.dp),
+            ),
     ) {
         Column(Modifier.fillMaxWidth()) {
-            Text(
-                text = DesktopStrings["about_the_artist", "About the Artist"],
-                color = DesktopSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.4.sp,
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val avatarUrl = artistDetails?.thumbnailUrl
-                if (!avatarUrl.isNullOrBlank()) {
+            if (hasHeroImage) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
+                ) {
                     DesktopArtwork(
                         url = avatarUrl,
-                        modifier = Modifier.size(52.dp).clip(CircleShape),
-                        px = 128,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        px = 480,
                     )
-                } else {
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(26.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = artistName,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Black.copy(alpha = 0.2f),
+                                        Color.Black.copy(alpha = 0.45f),
+                                        Color.Black.copy(alpha = 0.88f),
+                                    ),
+                                ),
+                            ),
                     )
-                    val listenerCount = artistDetails?.monthlyListenerCount
-                    val subscriberCount = artistDetails?.subscriberCountText
-                    val stat = listenerCount ?: subscriberCount
-                    if (!stat.isNullOrBlank()) {
-                        Spacer(Modifier.height(2.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
                         Text(
-                            text = stat,
-                            color = DesktopSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            text = DesktopStrings["about_the_artist", "About the Artist"],
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 0.4.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Color.Black.copy(alpha = 0.45f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
                         )
+                        Column {
+                            Text(
+                                text = artistName,
+                                color = Color.White,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val listenerCount = artistDetails?.monthlyListenerCount
+                            val subscriberCount = artistDetails?.subscriberCountText
+                            val stat = listenerCount ?: subscriberCount
+                            if (!stat.isNullOrBlank()) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stat,
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    fontSize = 11.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        text = DesktopStrings["about_the_artist", "About the Artist"],
+                        color = DesktopSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.4.sp,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = artistName,
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val listenerCount = artistDetails?.monthlyListenerCount
+                            val subscriberCount = artistDetails?.subscriberCountText
+                            val stat = listenerCount ?: subscriberCount
+                            if (!stat.isNullOrBlank()) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stat,
+                                    color = DesktopSecondary,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            val bio = artistDetails?.description
-            if (!bio.isNullOrBlank()) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = bio,
-                    color = Color.White.copy(alpha = 0.82f),
-                    fontSize = 12.5.sp,
-                    lineHeight = 17.sp,
-                    maxLines = if (expandedBio) 12 else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .animateContentSize()
-                        .clickable { expandedBio = !expandedBio },
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onOpenArtist)
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(
-                    text = DesktopStrings["open_artist", "View Artist Profile"],
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = DesktopSecondary,
-                    modifier = Modifier.size(16.dp),
-                )
+                val bio = artistDetails?.description
+                if (!bio.isNullOrBlank()) {
+                    Text(
+                        text = bio,
+                        color = Color.White.copy(alpha = 0.82f),
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp,
+                        maxLines = if (expandedBio) 12 else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .animateContentSize()
+                            .clickable { expandedBio = !expandedBio },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                var buttonHovered by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (buttonHovered) Color.White.copy(alpha = 0.08f) else Color.Transparent)
+                        .clickable(onClick = onOpenArtist)
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    when (awaitPointerEvent().type) {
+                                        PointerEventType.Enter -> buttonHovered = true
+                                        PointerEventType.Exit -> buttonHovered = false
+                                    }
+                                }
+                            }
+                        }
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = DesktopStrings["open_artist", "View Artist Profile"],
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = if (buttonHovered) Color.White else DesktopSecondary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
@@ -368,13 +473,42 @@ private fun AlbumContextCard(
     onOpenAlbum: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var hovered by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(0.75.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (hovered) 0.08f else 0.05f),
+                        Color.White.copy(alpha = if (hovered) 0.04f else 0.02f),
+                    ),
+                ),
+            )
+            .border(
+                width = 0.5.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (hovered) 0.18f else 0.12f),
+                        Color.White.copy(alpha = 0.02f),
+                        Color.Transparent,
+                    ),
+                ),
+                shape = RoundedCornerShape(16.dp),
+            )
             .clickable(onClick = onOpenAlbum)
+            .pointerInput(albumName) {
+                awaitPointerEventScope {
+                    while (true) {
+                        when (awaitPointerEvent().type) {
+                            PointerEventType.Enter -> hovered = true
+                            PointerEventType.Exit -> hovered = false
+                        }
+                    }
+                }
+            }
             .padding(12.dp),
     ) {
         Row(
@@ -415,7 +549,7 @@ private fun AlbumContextCard(
             Icon(
                 Icons.Rounded.ChevronRight,
                 contentDescription = null,
-                tint = DesktopSecondary,
+                tint = if (hovered) Color.White else DesktopSecondary,
                 modifier = Modifier.size(16.dp),
             )
         }
