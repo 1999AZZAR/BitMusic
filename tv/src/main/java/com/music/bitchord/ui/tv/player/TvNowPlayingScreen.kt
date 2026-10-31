@@ -342,6 +342,9 @@ fun TvNowPlayingScreen(
             currentIndex = playerState.queueIndex,
             lyrics = lyrics,
             position = position,
+            song = song,
+            isPlaying = isPlaying,
+            lyricsLoading = !lyricsChecked && lyrics == null && !lyricsHidden,
             onJumpToTrack = { index ->
                 mediaController?.seekToDefaultPosition(index)
                 mediaController?.play()

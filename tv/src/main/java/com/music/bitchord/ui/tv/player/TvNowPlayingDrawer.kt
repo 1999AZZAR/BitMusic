@@ -70,6 +70,9 @@ fun TvNowPlayingDrawer(
     currentIndex: Int,
     lyrics: List<LyricLine>?,
     position: PlaybackPosition,
+    song: Song? = null,
+    isPlaying: Boolean = true,
+    lyricsLoading: Boolean = false,
     onJumpToTrack: (Int) -> Unit,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -206,8 +209,11 @@ fun TvNowPlayingDrawer(
                             ) {
                                 SyncedLyricsPanel(
                                     lines = lyrics,
+                                    trackKey = song?.videoId.orEmpty(),
                                     position = position,
-                                    onSeek = onSeek,
+                                    looking = lyricsLoading,
+                                    isPlaying = isPlaying,
+                                    onSeekToLine = onSeek,
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
