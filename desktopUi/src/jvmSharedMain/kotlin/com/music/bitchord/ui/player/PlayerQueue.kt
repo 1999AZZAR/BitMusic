@@ -53,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -234,6 +235,7 @@ internal fun InlineQueue(
     collapsePlayerOnScroll: Boolean = false,
     onRevealPlayer: () -> Unit = {},
     onHidePlayer: () -> Unit = {},
+    onToggleAutoplay: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -307,6 +309,13 @@ internal fun InlineQueue(
                 color = Color.White,
                 modifier = Modifier.weight(1f),
             )
+            if (onToggleAutoplay != null) {
+                AutoplayQueueToggle(
+                    checked = autoplayEnabled,
+                    onToggle = onToggleAutoplay,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             if (tracks.user.isNotEmpty()) {
                 QueueClearButton(MaterialTheme.typography.titleMedium, controlsLocked, onClear)
             }
@@ -390,7 +399,12 @@ internal fun InlineQueue(
                 }
                 if (autoplayEnabled || tracks.autoplay.isNotEmpty()) {
                     item(key = "autoplay-heading") {
-                        AutoplayHeading(hasTracks = tracks.autoplay.isNotEmpty(), modifier = queueMotion())
+                        AutoplayHeading(
+                            hasTracks = tracks.autoplay.isNotEmpty(),
+                            autoplayEnabled = autoplayEnabled,
+                            onToggleAutoplay = onToggleAutoplay,
+                            modifier = queueMotion(),
+                        )
                     }
                     queueSection(tracks.autoplay, QueueSection.AUTOPLAY, drag, controlsLocked, onJumpTo, onRemove)
                 }
@@ -492,7 +506,12 @@ private fun QueueClearButton(style: TextStyle, locked: Boolean, onClear: () -> U
 }
 
 @Composable
-private fun AutoplayHeading(hasTracks: Boolean, modifier: Modifier = Modifier) {
+private fun AutoplayHeading(
+    hasTracks: Boolean,
+    autoplayEnabled: Boolean,
+    onToggleAutoplay: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -502,11 +521,11 @@ private fun AutoplayHeading(hasTracks: Boolean, modifier: Modifier = Modifier) {
         Icon(
             BitChordIcons.Infinity,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.75f),
+            tint = if (autoplayEnabled) Color.White else Color.White.copy(alpha = 0.45f),
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(8.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = stringResource(Res.string.autoplay),
                 style = MaterialTheme.typography.titleMedium,
@@ -514,10 +533,48 @@ private fun AutoplayHeading(hasTracks: Boolean, modifier: Modifier = Modifier) {
             )
             Text(
                 text = stringResource(
-                    if (hasTracks) Res.string.autoplay_queue_description else Res.string.autoplay_empty_description,
+                    if (hasTracks && autoplayEnabled) Res.string.autoplay_queue_description else Res.string.autoplay_empty_description,
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.55f),
+            )
+        }
+        if (onToggleAutoplay != null) {
+            AutoplayQueueToggle(
+                checked = autoplayEnabled,
+                onToggle = onToggleAutoplay,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AutoplayQueueToggle(
+    checked: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (checked) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f))
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                BitChordIcons.Infinity,
+                contentDescription = null,
+                tint = if (checked) Color.White else Color.White.copy(alpha = 0.45f),
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+                text = if (checked) "On" else "Off",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (checked) Color.White else Color.White.copy(alpha = 0.55f),
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }

@@ -113,6 +113,7 @@ internal fun DesktopNowPlaying(
     onClose: () -> Unit,
     lyricsPanel: @Composable () -> Unit,
     queuePanel: @Composable () -> Unit,
+    relatedPanel: @Composable () -> Unit = {},
 ) {
     // The right half shows one of the two: lyrics or queue.
     var userPreferredPanel by remember { mutableStateOf(DesktopSidePanel.LYRICS) }
@@ -373,6 +374,25 @@ internal fun DesktopNowPlaying(
                             modifier = Modifier.size(19.dp),
                         )
                     }
+                    DesktopToolbarButton(
+                        onClick = {
+                            if (panelShown && sidePanel == DesktopSidePanel.RELATED) {
+                                panelShown = false
+                            } else {
+                                userPreferredPanel = DesktopSidePanel.RELATED
+                                sidePanel = DesktopSidePanel.RELATED
+                                panelShown = true
+                            }
+                        },
+                        size = 36.dp,
+                    ) {
+                        Icon(
+                            BitChordIcons.Explore,
+                            "Related",
+                            tint = if (panelShown && sidePanel == DesktopSidePanel.RELATED) tint else DesktopSecondary,
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
                 }
             }
             // The other half of the window, as the original player split it: the lyric sheet
@@ -403,6 +423,26 @@ internal fun DesktopNowPlaying(
                             queuePanel()
                             // The dissolve: the list's last rows wash out into the card rather
                             // than being cut by its rounded floor.
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .height(40.dp)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                                        ),
+                                    ),
+                            )
+                        }
+                        DesktopSidePanel.RELATED -> Box(
+                            Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .playerQueueGlass()
+                                .border(0.75.dp, rememberSpecularGlassBorder(), RoundedCornerShape(20.dp)),
+                        ) {
+                            relatedPanel()
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)

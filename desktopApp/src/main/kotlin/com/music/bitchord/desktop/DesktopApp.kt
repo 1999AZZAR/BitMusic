@@ -594,6 +594,10 @@ fun BitChordDesktopApp() {
     var homeIdentity by remember { mutableStateOf<String?>(null) }
     var exploreState by remember { mutableStateOf<UiState<List<MoodGenreSection>>>(UiState.Loading) }
     var selectedMoodGenre by remember { mutableStateOf<MoodGenre?>(null) }
+    var homeMoods by remember { mutableStateOf<List<MoodGenre>>(emptyList()) }
+    var selectedHomeMood by remember { mutableStateOf<MoodGenre?>(null) }
+    var homeMoodShelves by remember { mutableStateOf<UiState<List<HomeShelf>>>(UiState.Loading) }
+    val homeMoodListState = rememberLazyListState()
     // Bumped by a retry so the loaders below re-run without the state they are keyed on having to
     // change to something and back again.
     var exploreReloads by remember { mutableStateOf(0) }
@@ -3042,6 +3046,32 @@ fun BitChordDesktopApp() {
         )
     }
 
+    LaunchedEffect(Unit) {
+        DesktopSearchClient.moodAndGenres().onSuccess { sections ->
+            val allItems = sections.flatMap { it.items }
+            val preferredNames = listOf("Relax", "Chill", "Energy", "Workout", "Focus", "Commute", "Party", "Feel Good", "Sleep")
+            val filtered = allItems.filter { item ->
+                preferredNames.any { name -> item.title.contains(name, ignoreCase = true) }
+            }.distinctBy { it.title }
+            homeMoods = if (filtered.isNotEmpty()) filtered else allItems.take(8)
+        }
+    }
+
+    LaunchedEffect(selectedHomeMood) {
+        val item = selectedHomeMood ?: return@LaunchedEffect
+        homeMoodShelves = UiState.Loading
+        DesktopSearchClient.moodGenreShelves(item.browseId, item.params).fold(
+            onSuccess = { shelves ->
+                homeMoodShelves = if (shelves.isEmpty()) {
+                    UiState.Error("Nothing to explore here yet")
+                } else {
+                    UiState.Success(shelves)
+                }
+            },
+            onFailure = { homeMoodShelves = UiState.Error(it.message ?: "Could not load this mood category") },
+        )
+    }
+
     // The menu the shared player's "…" opens.
     var playerMenuOpen by remember(selectedSong?.videoId) { mutableStateOf(false) }
     // The player's own overflow (volume, the lyrics/output/queue row, the lyric
@@ -3370,6 +3400,7 @@ fun BitChordDesktopApp() {
                         // A second click on the same button puts the column away, as in Apple Music.
                         onOpenLyrics = { overlays.toggleSidePanel(DesktopSidePanel.LYRICS) },
                         onOpenQueue = { overlays.toggleSidePanel(DesktopSidePanel.QUEUE) },
+                        onOpenRelated = { overlays.toggleSidePanel(DesktopSidePanel.RELATED) },
                         sidePanel = overlays.sidePanel,
                         accountAvatar = activeAccount?.profiles?.firstOrNull { it.profileId == activeProfileId }?.avatar?.takeIf { it.isNotBlank() }
                             ?: activeAccount?.avatar?.takeIf { it.isNotBlank() }
@@ -3444,6 +3475,26 @@ fun BitChordDesktopApp() {
                                 onRemove = ::removeFromQueue,
                                 onMove = ::moveInQueue,
                                 onClear = ::clearQueue,
+                                onToggleAutoplay = { setAutoplay(!autoplay) },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            DesktopSidePanel.RELATED -> DesktopRelatedSidePanel(
+                                song = current,
+                                onPlaySong = { s -> playSong(s) },
+                                onOpenArtist = { id -> openArtist(id, current.artist) },
+                                onOpenAlbum = { id, name ->
+                                    openCollection(
+                                        id,
+                                        BrowseItem(
+                                            browseId = id,
+                                            title = name,
+                                            subtitle = current.artist,
+                                            thumbnailUrl = current.thumbnailUrl,
+                                            type = BrowseType.ALBUM,
+                                        ),
+                                    )
+                                },
+                                onAddToQueue = { s -> addToQueue(s) },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -3627,6 +3678,33 @@ fun BitChordDesktopApp() {
                                     onRemove = ::removeFromQueue,
                                     onClear = ::clearQueue,
                                     tint = desktopPlayingTint(),
+                                )
+                            },
+                            relatedPanel = {
+                                DesktopRelatedSidePanel(
+                                    song = playerSong,
+                                    onPlaySong = { s -> playSong(s) },
+                                    onOpenArtist = { id ->
+                                        DesktopWindowMode.exit()
+                                        overlays.nowPlaying = false
+                                        openArtist(id, playerSong.artist)
+                                    },
+                                    onOpenAlbum = { id, name ->
+                                        DesktopWindowMode.exit()
+                                        overlays.nowPlaying = false
+                                        openCollection(
+                                            id,
+                                            BrowseItem(
+                                                browseId = id,
+                                                title = name,
+                                                subtitle = playerSong.artist,
+                                                thumbnailUrl = playerSong.thumbnailUrl,
+                                                type = BrowseType.ALBUM,
+                                            ),
+                                        )
+                                    },
+                                    onAddToQueue = { s -> addToQueue(s) },
+                                    modifier = Modifier.fillMaxSize(),
                                 )
                             },
                         )
@@ -4290,24 +4368,46 @@ fun BitChordDesktopApp() {
                             downloadInProgress = downloadInProgress,
                             contentPadding = contentPadding,
                         )
-                        destination == DesktopDestination.LISTEN_NOW -> HomeScreen(
-                            state = homeState,
-                            listState = homeListState,
-                            onItemClick = { item, shelfTitle -> openShelfItem(item, shelfTitle) },
-                            onRetry = ::loadHome,
-                            refreshing = false,
-                            onRefresh = ::loadHome,
-                            pullState = rememberPullToRefreshState(),
-                            contentPadding = sharedPagePadding,
-                            title = null,
-                            signedIn = youtubeSignedIn,
-                            onSignIn = { overlays.accounts = true },
-                            onItemLongPress = { item -> if (item.videoId != null) openMenu(item.toSong()) },
-                            onLoadMore = ::loadMoreHome,
-                            loadingMore = homeLoadingMore,
-                            recentlyPlayedLoading = homeRecentsLoading,
-                            leadHero = false,
-                        )
+                        destination == DesktopDestination.LISTEN_NOW -> Column(Modifier.fillMaxSize()) {
+                            HomeMoodChipsRow(
+                                selectedMood = selectedHomeMood,
+                                availableMoods = homeMoods,
+                                onSelectMood = { selectedHomeMood = it },
+                            )
+                            if (selectedHomeMood == null) {
+                                HomeScreen(
+                                    state = homeState,
+                                    listState = homeListState,
+                                    onItemClick = { item, shelfTitle -> openShelfItem(item, shelfTitle) },
+                                    onRetry = ::loadHome,
+                                    refreshing = false,
+                                    onRefresh = ::loadHome,
+                                    pullState = rememberPullToRefreshState(),
+                                    contentPadding = sharedPagePadding,
+                                    title = null,
+                                    signedIn = youtubeSignedIn,
+                                    onSignIn = { overlays.accounts = true },
+                                    onItemLongPress = { item -> if (item.videoId != null) openMenu(item.toSong()) },
+                                    onLoadMore = ::loadMoreHome,
+                                    loadingMore = homeLoadingMore,
+                                    recentlyPlayedLoading = homeRecentsLoading,
+                                    leadHero = false,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            } else {
+                                MoodGenrePlaylistsScreen(
+                                    title = selectedHomeMood!!.title,
+                                    state = homeMoodShelves,
+                                    listState = homeMoodListState,
+                                    onItemClick = { item -> openShelfItem(item, selectedHomeMood?.title) },
+                                    onRetry = {
+                                        homeMoodShelves = UiState.Loading
+                                    },
+                                    contentPadding = PaddingValues(bottom = sharedPagePadding.calculateBottomPadding()),
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
                         destination == DesktopDestination.EXPLORE && selectedMoodGenre != null -> Column(Modifier.fillMaxSize()) {
                             MoodGenrePlaylistsScreen(
                                 title = selectedMoodGenre!!.title,
@@ -4577,7 +4677,8 @@ private fun DesktopTopBar(
     onOpenAudioOutput: () -> Unit,
     onOpenLyrics: () -> Unit,
     onOpenQueue: () -> Unit,
-    /** Which of the two the column beside the page is showing, lit on its button. */
+    onOpenRelated: () -> Unit,
+    /** Which of the three the column beside the page is showing, lit on its button. */
     sidePanel: DesktopSidePanel?,
     accountAvatar: String?,
     onOpenAccounts: () -> Unit,
@@ -4871,6 +4972,14 @@ private fun DesktopTopBar(
                             BitChordIcons.Queue,
                             DesktopStrings["queue", "Queue"],
                             tint = if (sidePanel == DesktopSidePanel.QUEUE) Color.White else DesktopSecondary,
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
+                    DesktopToolbarButton(onClick = onOpenRelated, size = 32.dp) {
+                        Icon(
+                            BitChordIcons.Explore,
+                            DesktopStrings["related", "Related"],
+                            tint = if (sidePanel == DesktopSidePanel.RELATED) Color.White else DesktopSecondary,
                             modifier = Modifier.size(19.dp),
                         )
                     }
@@ -8548,3 +8657,75 @@ private fun formatCollectionDuration(totalSeconds: Long): String {
 }
 
 private fun formatSleepTimer(ms: Long): String = formatTime(ms)
+
+@Composable
+private fun HomeMoodChipsRow(
+    selectedMood: MoodGenre?,
+    availableMoods: List<MoodGenre>,
+    onSelectMood: (MoodGenre?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val defaultTitles = listOf("Relax", "Energize", "Workout", "Focus", "Commute", "Party")
+    val chips = if (availableMoods.isNotEmpty()) {
+        availableMoods
+    } else {
+        defaultTitles.map { MoodGenre(it, "FEmusic_moods_and_genres", null) }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val isAllSelected = selectedMood == null
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (isAllSelected) Color.White else Color.White.copy(alpha = 0.08f))
+                .border(
+                    width = 1.dp,
+                    color = if (isAllSelected) Color.White else Color.White.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(16.dp),
+                )
+                .clickable { onSelectMood(null) }
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = DesktopStrings["all", "All"],
+                color = if (isAllSelected) Color.Black else Color.White,
+                fontSize = 12.5.sp,
+                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+            )
+        }
+
+        chips.forEach { mood ->
+            val isSelected = selectedMood?.title.equals(mood.title, ignoreCase = true)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.08f))
+                    .border(
+                        width = 1.dp,
+                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+                    .clickable {
+                        onSelectMood(if (isSelected) null else mood)
+                    }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = mood.title,
+                    color = if (isSelected) Color.Black else Color.White,
+                    fontSize = 12.5.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                )
+            }
+        }
+    }
+}

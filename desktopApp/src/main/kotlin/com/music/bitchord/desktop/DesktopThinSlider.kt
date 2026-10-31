@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.unit.Dp
@@ -57,8 +58,10 @@ internal fun DesktopThinSlider(
     markerColor: Color = Color.White.copy(alpha = 0.5f),
 ) {
     var dragging by remember { mutableStateOf(false) }
+    var hovered by remember { mutableStateOf(false) }
+    val isActive = dragging || hovered
     val height by animateDpAsState(
-        targetValue = if (dragging) activeHeight else idleHeight,
+        targetValue = if (isActive) activeHeight else idleHeight,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
@@ -70,6 +73,17 @@ internal fun DesktopThinSlider(
         modifier = modifier
             // Generous invisible hit target — the visible bar is only ~7dp.
             .height(activeHeight + 22.dp)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Enter -> hovered = true
+                            PointerEventType.Exit -> hovered = false
+                        }
+                    }
+                }
+            }
             // One gesture loop for both clicks and drags.
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -125,6 +139,21 @@ internal fun DesktopThinSlider(
                     size = Size(filled.coerceAtLeast(size.height), size.height),
                     cornerRadius = radius,
                 )
+                // Spotify thumb: an illuminated circular knob at the played head while active
+                if (isActive) {
+                    val thumbRadius = (size.height * 0.72f).coerceIn(4.dp.toPx(), 7.dp.toPx())
+                    val center = Offset(filled.coerceIn(thumbRadius, (size.width - thumbRadius).coerceAtLeast(thumbRadius)), size.height / 2f)
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.32f),
+                        radius = thumbRadius + 1.5f,
+                        center = center,
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = thumbRadius,
+                        center = center,
+                    )
+                }
             }
         }
         // Composed only while mixing rather than drawn conditionally inside the Canvas above.
