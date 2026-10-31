@@ -41,9 +41,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -281,24 +286,49 @@ private fun AboutArtistCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(130.dp)
+                        .height(136.dp)
                         .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
                 ) {
+                    // Blurred ambient underlay that diffuses artist artwork colors into the background
                     DesktopArtwork(
                         url = avatarUrl,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(20.dp),
+                        contentScale = ContentScale.Crop,
+                        px = 128,
+                    )
+                    // Sharp artist photo on top with progressive alpha dissolve into the blur
+                    DesktopArtwork(
+                        url = avatarUrl,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0.0f to Color.Black,
+                                        0.50f to Color.Black,
+                                        0.80f to Color.Black.copy(alpha = 0.25f),
+                                        1.0f to Color.Transparent,
+                                    ),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
                         contentScale = ContentScale.Crop,
                         px = 480,
                     )
+                    // Atmospheric black gradient overlay blending into card body
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
                                     listOf(
-                                        Color.Black.copy(alpha = 0.2f),
+                                        Color.Black.copy(alpha = 0.15f),
                                         Color.Black.copy(alpha = 0.45f),
-                                        Color.Black.copy(alpha = 0.88f),
+                                        Color.Black.copy(alpha = 0.90f),
                                     ),
                                 ),
                             ),
@@ -329,8 +359,8 @@ private fun AboutArtistCard(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            val listenerCount = artistDetails?.monthlyListenerCount
-                            val subscriberCount = artistDetails?.subscriberCountText
+                            val listenerCount = artistDetails.monthlyListenerCount
+                            val subscriberCount = artistDetails.subscriberCountText
                             val stat = listenerCount ?: subscriberCount
                             if (!stat.isNullOrBlank()) {
                                 Spacer(Modifier.height(2.dp))

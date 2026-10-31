@@ -72,8 +72,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.ExperimentalHazeApi
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 
 /**
  * The desktop's own full player. The phone's screen, shared, played the role until now; this is
@@ -407,37 +411,61 @@ internal fun DesktopNowPlaying(
                         .graphicsLayer { alpha = panelFraction }
                         .padding(top = 12.dp, bottom = 12.dp, end = 20.dp),
                 ) {
+                    @OptIn(ExperimentalHazeApi::class)
+                    val panelHaze = remember { HazeState() }
                     when (sidePanel) {
                         // The lyric sheet stands on the window itself, as the original's does.
                         DesktopSidePanel.LYRICS -> Box(Modifier.fillMaxSize()) { lyricsPanel() }
                         // The queue and related panels blend seamlessly on the player window canvas,
-                        // just like the lyrics sheet, rather than being trapped in a rigid card box.
-                        DesktopSidePanel.QUEUE -> Box(Modifier.fillMaxSize()) {
+                        // with progressive backdrop blur and a soft black gradient dissolve.
+                        DesktopSidePanel.QUEUE -> Box(
+                            Modifier
+                                .fillMaxSize()
+                                .hazeSource(panelHaze),
+                        ) {
                             queuePanel()
-                            // The dissolve: the list's last rows wash out into the floor rather
+                            // The dissolve: the list's last rows blur and wash out into the floor rather
                             // than being cut abruptly by the window edge.
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .height(56.dp)
+                                    .hazeEffect(panelHaze) {
+                                        blurRadius = 24.dp
+                                        progressive = HazeProgressive.verticalGradient(
+                                            startIntensity = 0f,
+                                            endIntensity = 0.95f,
+                                        )
+                                    }
                                     .background(
                                         Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f)),
                                         ),
                                     ),
                             )
                         }
-                        DesktopSidePanel.RELATED -> Box(Modifier.fillMaxSize()) {
+                        DesktopSidePanel.RELATED -> Box(
+                            Modifier
+                                .fillMaxSize()
+                                .hazeSource(panelHaze),
+                        ) {
                             relatedPanel()
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .height(56.dp)
+                                    .hazeEffect(panelHaze) {
+                                        blurRadius = 24.dp
+                                        progressive = HazeProgressive.verticalGradient(
+                                            startIntensity = 0f,
+                                            endIntensity = 0.95f,
+                                        )
+                                    }
                                     .background(
                                         Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f)),
                                         ),
                                     ),
                             )
