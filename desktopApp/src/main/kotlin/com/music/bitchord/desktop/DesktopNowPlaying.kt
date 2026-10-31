@@ -67,19 +67,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.chrisbanes.haze.ExperimentalHazeApi
-import dev.chrisbanes.haze.HazeInputScale
-import dev.chrisbanes.haze.HazeProgressive
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 
 /**
  * The desktop's own full player. The phone's screen, shared, played the role until now; this is
@@ -406,8 +398,6 @@ internal fun DesktopNowPlaying(
             // the window animates, so putting it away hands the space back to the sleeve in
             // one motion rather than a jump.
             if (panelFraction > 0.01f) {
-                @OptIn(ExperimentalHazeApi::class)
-                val panelHaze = remember { HazeState() }
                 Box(
                     Modifier
                         .weight(panelFraction)
@@ -415,22 +405,14 @@ internal fun DesktopNowPlaying(
                         .graphicsLayer { alpha = panelFraction }
                         .padding(top = 12.dp, bottom = 12.dp, end = 20.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .hazeSource(panelHaze),
-                    ) {
-                        when (sidePanel) {
-                            DesktopSidePanel.LYRICS -> lyricsPanel()
-                            DesktopSidePanel.QUEUE -> queuePanel()
-                            DesktopSidePanel.RELATED -> relatedPanel()
-                        }
+                    when (sidePanel) {
+                        // The lyric sheet, queue, and related panels all stand directly
+                        // on the window canvas with zero artificial overlays, creating
+                        // a completely interconnected and unified ambient experience.
+                        DesktopSidePanel.LYRICS -> Box(Modifier.fillMaxSize()) { lyricsPanel() }
+                        DesktopSidePanel.QUEUE -> Box(Modifier.fillMaxSize()) { queuePanel() }
+                        DesktopSidePanel.RELATED -> Box(Modifier.fillMaxSize()) { relatedPanel() }
                     }
-                    DesktopBottomFadeBlur(
-                        hazeState = panelHaze,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        height = 80.dp,
-                    )
                 }
             }
         }
@@ -442,56 +424,6 @@ internal fun DesktopNowPlaying(
             Icon(Icons.Rounded.Close, "Close", tint = DesktopSecondary, modifier = Modifier.size(20.dp))
         }
     }
-}
-
-/**
- * Progressive backdrop blur and cubic-eased scrim at the floor of the side panel.
- *
- * Built with [EaseInCubic] across 16 stops: the alpha holds under 2% for the first half
- * of the strip, preventing the eye from finding where the layer starts. Content scrolling
- * through dissolves smoothly without creating a noticeable cut or dark band.
- */
-@OptIn(ExperimentalHazeApi::class)
-@Composable
-internal fun DesktopBottomFadeBlur(
-    hazeState: HazeState,
-    modifier: Modifier = Modifier,
-    height: Dp = 80.dp,
-) {
-    val reduceDynamicBlur by DesktopAppearanceSettings.reduceDynamicBlur.collectAsState()
-    val brush = remember {
-        val stops = 16
-        Brush.verticalGradient(
-            colorStops = Array(stops) { i ->
-                val t = i / (stops - 1f)
-                val alpha = 0.28f * EaseInCubic.transform(t)
-                t to Color.Black.copy(alpha = alpha)
-            },
-        )
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .then(
-                if (reduceDynamicBlur) {
-                    Modifier
-                } else {
-                    Modifier.hazeEffect(state = hazeState) {
-                        blurRadius = 20.dp
-                        inputScale = HazeInputScale.Fixed(0.33f)
-                        progressive = HazeProgressive.verticalGradient(
-                            easing = EaseInCubic,
-                            startIntensity = 0f,
-                            endIntensity = 0.65f,
-                        )
-                        noiseFactor = 0f
-                    }
-                },
-            )
-            .background(brush),
-    )
 }
 
 private fun timeLabel(fraction: Float, durationMs: Long): String {
