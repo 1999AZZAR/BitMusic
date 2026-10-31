@@ -24,6 +24,19 @@ else
     sed -i "/^\[Application\]/a app.options=-Dbitchord.version=$version" "$cfg"
 fi
 
+# Wrap the native binary so standard system libraries (like libGL, libX11, libstdc++)
+# are found by the dynamic linker on all host environments.
+bin="$root/opt/bitmusic/bin/BitMusic"
+if [ -f "$bin" ] && [ ! -f "$root/opt/bitmusic/bin/BitMusic.bin" ]; then
+    mv "$bin" "$root/opt/bitmusic/bin/BitMusic.bin"
+    cat << 'EOF' > "$bin"
+#!/bin/sh
+export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec /opt/bitmusic/bin/BitMusic.bin "$@"
+EOF
+    chmod +x "$bin"
+fi
+
 # Package standard desktop icon theme files into /usr/share/icons and /usr/share/pixmaps
 mkdir -p "$root/usr/share/pixmaps"
 mkdir -p "$root/usr/share/icons/hicolor/scalable/apps"
