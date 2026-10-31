@@ -9,6 +9,7 @@ import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.innertube.potoken.PoTokenGenerator
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.spotify.SpotifyLibrary
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -154,6 +155,47 @@ private fun desktopMain() = application {
     ) {
         val composeWindow = window
         val openingSize = remember { state.size }
+        DisposableEffect(composeWindow) {
+            val listener = object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    when (e.keyCode) {
+                        java.awt.event.KeyEvent.VK_SPACE -> {
+                            if (e.keyCode == java.awt.event.KeyEvent.VK_SPACE) {
+                                val focus = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
+                                val contentPane = composeWindow.contentPane
+                                if (focus != null && focus !== contentPane &&
+                                    (focus.javaClass.name.contains("Text", ignoreCase = true) ||
+                                        focus.javaClass.name.contains("Editor", ignoreCase = true) ||
+                                        focus.javaClass.name.contains("Button", ignoreCase = true))) {
+                                    return
+                                }
+                            }
+                            DesktopKeyboardShortcuts.onPlayPause?.invoke()
+                            e.consume()
+                        }
+
+                        java.awt.event.KeyEvent.VK_LEFT -> {
+                            if (e.isAltDown) {
+                                DesktopKeyboardShortcuts.onSeekBack?.invoke()
+                                e.consume()
+                            }
+                        }
+                        java.awt.event.KeyEvent.VK_RIGHT -> {
+                            if (e.isAltDown) {
+                                DesktopKeyboardShortcuts.onSeekForward?.invoke()
+                                e.consume()
+                            }
+                        }
+                    }
+                }
+            }
+            composeWindow.addKeyListener(listener)
+            (composeWindow.contentPane as? javax.swing.JComponent)?.addKeyListener(listener)
+            onDispose {
+                composeWindow.removeKeyListener(listener)
+                (composeWindow.contentPane as? javax.swing.JComponent)?.removeKeyListener(listener)
+            }
+        }
         LaunchedEffect(composeWindow) {
             DesktopWindowVisibility.attachWindow(composeWindow)
             // AWT's default is white, and it is what shows for the frame or two a moved or resized

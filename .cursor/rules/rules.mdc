@@ -8,7 +8,6 @@ alwaysApply: true
 ## 1. Target Platforms & Big Screen Focus
 BitMusic is strictly crafted for **Big Screen** devices:
 - **Linux Desktop** (PulseAudio & PipeWire low-latency native audio capture)
-- **Android TV** (Leanback UI, 10-foot remote D-pad navigation, refresh rate switching)
 - **Windows** (WASAPI loopback, Compose Multiplatform desktop)
 - **macOS** (CoreAudio, Compose Multiplatform desktop)
 
@@ -27,7 +26,6 @@ All development must follow this strict branch lifecycle:
 ## 3. Project Architecture & Modules
 - `:desktopApp` - Desktop JVM application entry point, native visualizer loader, packaging.
 - `:desktopUi` - Large viewport Compose Multiplatform UI, synchronized lyrics, frosted-glass panels, media controls.
-- `:tv` - Android TV Leanback interface, D-pad navigation, Leanback cards, QR login.
 - `:shared` - Core business logic, repositories, playback models, YouTube Music & Spotify connectors.
 - `native/` - C/C++ audio analysis engine (`cavacore`), PulseAudio loopback capture, CMake build scripts.
 - `backend/` - Optional Go 1.22+ Listen Together party synchronization server.
@@ -43,7 +41,6 @@ All development must follow this strict branch lifecycle:
 - **Java Runtime**: JDK 21 (Eclipse Temurin 21 recommended for desktop development).
 - **Desktop Run**: `./gradlew :desktopApp:run`
 - **Desktop Tests**: `./gradlew :desktopApp:test`
-- **Android TV Build**: `./gradlew :tv:assembleDevDebug` (requires Android SDK compileSdk 36, minSdk 26).
 - **CI Workflows**: GitHub Actions in `.github/workflows/check.yml` run automated tests and build checks on `master` and `staging`.
 - Validate all changes with `./gradlew :desktopApp:test` before submitting PRs.
 

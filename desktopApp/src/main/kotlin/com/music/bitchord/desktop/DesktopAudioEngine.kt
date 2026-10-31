@@ -291,17 +291,29 @@ class DesktopPlaybackEngine(
     /** Opens a decoder on [stream], off the audio thread. */
     private suspend fun openTrack(song: Song, stream: DesktopStream, startAtMs: Long): Result<Track> =
         withContext(Dispatchers.IO) {
+            // Universal audio cache: prefer an already-cached copy for non-YouTube streams, so
+            // replay is instant and works offline. Falls through to the network stream otherwise.
+            val cachedPath = if (DesktopAudioCache.isCacheable(stream.url)) {
+                DesktopAudioCache.existing(stream.url)?.toAbsolutePath()?.toString()
+            } else null
+            val urlToOpen = cachedPath ?: stream.url
             val decoder = DesktopAudioDecoder()
             decoder.open(
-                url = stream.url,
-                headers = stream.headers,
+                url = urlToOpen,
+                headers = if (cachedPath != null) emptyMap() else stream.headers,
                 // Float throughout: the processors work in it and the sink converts once, at the
                 // end.
                 requested = DesktopPcmFormat(44_100, 2, bytesPerSample = 4, isFloat = true),
-                windowed = stream.windowedReads,
-                transport = stream.transport,
+                windowed = if (cachedPath != null) false else stream.windowedReads,
+                transport = if (cachedPath != null) null else stream.transport,
             ).map {
                 if (startAtMs > 0) decoder.seek(startAtMs * 1_000)
+                // Cache the stream in the background for next time, without blocking playback.
+                if (cachedPath == null && DesktopAudioCache.isCacheable(stream.url)) {
+                    scope.launch(Dispatchers.IO) {
+                        DesktopAudioCache.fileFor(stream.url, stream.headers)
+                    }
+                }
                 // From here the decoder belongs to its own read-ahead thread: the audio thread only
                 // ever takes what has already been decoded, so a slow network read is not a gap.
                 val ahead = DesktopDecodeAhead(

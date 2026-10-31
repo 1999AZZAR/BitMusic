@@ -92,20 +92,27 @@ internal object DesktopAccounts {
             DesktopYouTubeAuth.adopt(null)
             return null
         }
-        DesktopYouTubeSession.adoptSessionScope(stored.cookie)?.let { live ->
-            val session = healedIdentity(account, profile, stored, live)
-            DesktopYouTubeAuth.adopt(session)
-            return session
+        when (val result = DesktopYouTubeSession.resolveSessionScope(stored.cookie)) {
+            is DesktopYouTubeSession.ScopeResult.Success -> {
+                val session = healedIdentity(account, profile, stored, result.session)
+                DesktopYouTubeAuth.adopt(session)
+                return session
+            }
+            is DesktopYouTubeSession.ScopeResult.NetworkError -> {
+                DesktopTrackLog.log("network error verifying session (${result.error.message}); keeping stored session")
+                DesktopYouTubeAuth.adopt(stored)
+                return stored
+            }
+            is DesktopYouTubeSession.ScopeResult.SignedOut -> {
+                DesktopTrackLog.log("the stored session has expired; looking for a fresh one in the browser it came from")
+                val renewed = renewFromBrowser(account)
+                if (renewed == null) {
+                    DesktopTrackLog.log("could not renew the session; browsing as a guest until it is signed in again")
+                    DesktopYouTubeAuth.adopt(null)
+                }
+                return renewed
+            }
         }
-
-        DesktopTrackLog.log("the stored session has expired; looking for a fresh one in the browser it came from")
-        val renewed = renewFromBrowser(account)
-        if (renewed == null) {
-            // Anonymous rather than broken.
-            DesktopTrackLog.log("could not renew the session; browsing as a guest until it is signed in again")
-            DesktopYouTubeAuth.adopt(null)
-        }
-        return renewed
     }
 
     /**

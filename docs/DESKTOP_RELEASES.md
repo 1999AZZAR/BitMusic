@@ -1,6 +1,6 @@
 # Desktop and TV Releases Protocol
 
-This document defines how BitMusic builds, versions, and packages release artifacts for Linux, Android TV, Windows, and macOS.
+This document defines how BitMusic builds, versions, and packages release artifacts for Linux, Windows, and macOS.
 
 ---
 
@@ -25,7 +25,6 @@ Every release build produces the following canonical binaries:
 | **Linux Desktop** | `.AppImage` | `./gradlew :desktopApp:createDistributable` + `appimage.sh` | `dist/BitMusic-<version>-linux-x86_64.AppImage` |
 | **Linux Desktop** | `.deb` | `./gradlew :desktopApp:packageDeb` | `desktopApp/build/compose/binaries/main/deb/` |
 | **Linux Desktop** | `.rpm` | `./gradlew :desktopApp:packageRpm` | `desktopApp/build/compose/binaries/main/rpm/` |
-| **Android TV** | `.apk` | `./gradlew :tv:assembleProdRelease` | `tv/build/outputs/apk/prod/release/` |
 | **Windows Desktop** | `.exe` | `gradlew.bat :desktopApp:packageExe` | `desktopApp/build/compose/binaries/main/exe/` |
 | **Windows Desktop** | `.msi` | `gradlew.bat :desktopApp:packageMsi` | `desktopApp/build/compose/binaries/main/msi/` |
 | **Windows Desktop** | `.zip` | `gradlew.bat :desktopApp:createDistributable` | `desktopApp/build/compose/binaries/main/app/` (zipped) |

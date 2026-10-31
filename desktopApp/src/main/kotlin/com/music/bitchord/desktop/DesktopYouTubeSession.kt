@@ -1,7 +1,8 @@
 package com.music.bitchord.desktop
 
+import com.music.bitchord.data.Http
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -26,7 +27,9 @@ internal object DesktopYouTubeSession {
 
     private val visitorData = AtomicReference<String?>(null)
     private val visitorPattern = Regex("""Cg[A-Za-z0-9_%-]{40,}""")
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(OkHttp) {
+        engine { preconfigured = Http.client }
+    }
 
     /**
      * Whether the visitor id in hand came from the signed-in shell rather than being minted
@@ -34,6 +37,12 @@ internal object DesktopYouTubeSession {
      */
     @Volatile
     private var sessionBound = false
+
+    sealed class ScopeResult {
+        data class Success(val session: DesktopYouTubeAuth.Session) : ScopeResult()
+        object SignedOut : ScopeResult()
+        data class NetworkError(val error: Throwable) : ScopeResult()
+    }
 
     /** Returns the current visitor id, minting one once for this process. */
     suspend fun ensureVisitorData(refresh: Boolean = false): String? {
@@ -53,10 +62,11 @@ internal object DesktopYouTubeSession {
 
     /**
      * Reads who the stored cookie actually acts as out of the signed-in music.youtube.com shell,
-     * and adopts its visitor id.
+     * and adopts its visitor id. Returns ScopeResult distinguishing success, explicit signed out,
+     * and network failures.
      */
-    suspend fun adoptSessionScope(cookie: String): DesktopYouTubeAuth.Session? {
-        val html = runCatching {
+    suspend fun resolveSessionScope(cookie: String): ScopeResult {
+        val html = try {
             client.get("https://music.youtube.com/") {
                 header("User-Agent", WEB_USER_AGENT)
                 header("Accept-Language", "en-US,en;q=0.9")
@@ -64,23 +74,23 @@ internal object DesktopYouTubeSession {
                 DesktopYouTubeAuth.signatureFor(cookie, DesktopYouTubeAuth.MUSIC_ORIGIN)
                     ?.let { header("Authorization", it) }
             }.bodyAsText()
-        }.getOrElse {
-            DesktopTrackLog.log("could not read the session scope: ${it.message}")
-            return null
+        } catch (t: Throwable) {
+            DesktopTrackLog.log("could not read the session scope: ${t.message}")
+            return ScopeResult.NetworkError(t)
         }
 
         // The one value that must not be guessed.
         val signedIn = CONFIG_LOGGED_IN.find(html)?.groupValues?.get(1) == "true"
         if (!signedIn) {
             DesktopTrackLog.log("music.youtube.com served a signed-out shell; not scoping requests")
-            return null
+            return ScopeResult.SignedOut
         }
         // The shell's own visitor id, bound to this session — see [sessionBound].
         CONFIG_VISITOR_DATA.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let {
             visitorData.set(it)
             sessionBound = true
         }
-        return DesktopYouTubeAuth.Session(
+        val session = DesktopYouTubeAuth.Session(
             cookie = cookie,
             authUser = CONFIG_SESSION_INDEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: "0",
             pageId = CONFIG_PAGE_ID.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() },
@@ -90,7 +100,11 @@ internal object DesktopYouTubeSession {
                 ?.substringBefore("||")
                 ?.takeIf { it.isNotBlank() },
         )
+        return ScopeResult.Success(session)
     }
+
+    suspend fun adoptSessionScope(cookie: String): DesktopYouTubeAuth.Session? =
+        (resolveSessionScope(cookie) as? ScopeResult.Success)?.session
 
     private val CONFIG_LOGGED_IN = Regex(""""LOGGED_IN"\s*:\s*(true|false)""")
     private val CONFIG_DATASYNC_ID = Regex(""""DATASYNC_ID"\s*:\s*"([^"]+)"""")
@@ -106,9 +120,13 @@ internal object DesktopYouTubeSession {
             ?.let { visitorData.compareAndSet(null, it) }
     }
 
+    /**
+     * Digs a visitor id out of sw.js_data's nested arrays: `["...","Cg..."]` where the second
+     * string is YouTube's 40+-character visitor token.
+     */
     private fun findVisitorData(element: JsonElement): String? = when (element) {
+        is JsonPrimitive -> element.contentOrNull?.takeIf { visitorPattern.matches(it) }
         is JsonArray -> element.firstNotNullOfOrNull(::findVisitorData)
-        is JsonPrimitive -> element.contentOrNull?.takeIf(visitorPattern::matches)
-        else -> null
+        is JsonObject -> element.values.firstNotNullOfOrNull(::findVisitorData)
     }
 }

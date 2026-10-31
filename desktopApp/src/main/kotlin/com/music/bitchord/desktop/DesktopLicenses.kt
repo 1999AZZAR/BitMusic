@@ -24,7 +24,7 @@ internal object DesktopLicenses {
                     "BitMusic",
                     "GPL-3.0-or-later",
                     "https://github.com/1999AZZAR/BitMusic",
-                    "Aesthetic YouTube Music client for Big Screens (Linux Desktop & Android TV).",
+                    "Aesthetic YouTube Music client for Desktop (Linux, Windows, macOS).",
                 ),
                 DesktopLicense(
                     "BitChord (Upstream)",
