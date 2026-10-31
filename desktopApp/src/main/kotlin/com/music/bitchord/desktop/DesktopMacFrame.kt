@@ -335,6 +335,32 @@ internal object DesktopMacFrame {
         }.getOrDefault(false)
     }
 
+    /** Minimizes the window to the macOS Dock using native AppKit miniaturization. */
+    fun minimize(): Boolean {
+        if (!DesktopPlatform.isMac) return false
+        val o = objc ?: return false
+        val send = msgSend ?: return false
+        val nsWindow = windowPtr ?: return false
+        return runCatching {
+            val selMiniaturize = o.sel_registerName("miniaturize:")
+            send.invoke(arrayOf(nsWindow, selMiniaturize, Pointer.NULL))
+            true
+        }.getOrDefault(false)
+    }
+
+    /** Zooms or restores the window using native AppKit zoom. */
+    fun toggleMaximize(): Boolean {
+        if (!DesktopPlatform.isMac) return false
+        val o = objc ?: return false
+        val send = msgSend ?: return false
+        val nsWindow = windowPtr ?: return false
+        return runCatching {
+            val selZoom = o.sel_registerName("zoom:")
+            send.invoke(arrayOf(nsWindow, selZoom, Pointer.NULL))
+            true
+        }.getOrDefault(false)
+    }
+
     /**
      * Activates the macOS application process and restores/orders the window to the front.
      * Called when the app is reopened from the macOS Dock, Spotlight, or system tray.
@@ -442,6 +468,15 @@ internal object DesktopMacFrame {
 
             val selInvalidateShadow = o.sel_registerName("invalidateShadow")
             send.invoke(arrayOf(nsWindow, selInvalidateShadow))
+
+            val selStyleMask = o.sel_registerName("styleMask")
+            val selSetStyleMask = o.sel_registerName("setStyleMask:")
+            val currentMask = (send.invoke(Long::class.java, arrayOf(nsWindow, selStyleMask)) as? Number)?.toLong() ?: 0L
+            // Ensure NSWindowStyleMaskMiniaturizable (4L), NSWindowStyleMaskResizable (8L) and NSWindowStyleMaskFullSizeContentView (32768L) are present
+            val newMask = currentMask or 4L or 8L or 32768L
+            if (newMask != currentMask) {
+                send.invoke(arrayOf(nsWindow, selSetStyleMask, newMask))
+            }
 
             windowConfigured = true
         }

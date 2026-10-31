@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -75,12 +76,17 @@ internal fun DesktopSidePanelColumn(
         animationSpec = if (reduceAnimation) snap() else tween(CROSSFADE_MS),
         label = "sidePanelAlpha",
     )
-    if (width > 0.dp && shown != null) {
-        Row(Modifier.width(width).fillMaxHeight()) {
+    if (width > 0.5.dp && shown != null) {
+        Row(
+            Modifier
+                .width(width)
+                .fillMaxHeight()
+                .clipToBounds(),
+        ) {
             Box(Modifier.width(1.dp).fillMaxHeight().background(DesktopDivider))
             Box(
                 Modifier
-                    .weight(1f)
+                    .width(SIDE_PANEL_WIDTH - 1.dp)
                     .fillMaxHeight()
                     .graphicsLayer { alpha = contentAlpha },
             ) {

@@ -4729,7 +4729,7 @@ private fun DesktopTopBar(
                         // crystal — not a flat slab with a corner radius.
                         Surface(
                             modifier = Modifier
-                                .widthIn(min = 300.dp, max = 520.dp)
+                                .widthIn(min = 120.dp, max = 520.dp)
                                 .fillMaxWidth()
                                 .height(46.dp)
                                 .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(percent = 50))
@@ -4759,7 +4759,7 @@ private fun DesktopTopBar(
                                             px = ROW_ART_PX,
                                         )
                                         Column(
-                                            Modifier.weight(1f).padding(start = 12.dp, end = 56.dp),
+                                            Modifier.weight(1f).padding(horizontal = 8.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                         ) {
                                             Text(
@@ -4998,7 +4998,7 @@ private fun DesktopSidebar(
     val hiddenSidebar by DesktopSidebarVisibility.hidden.collectAsState()
     val collapsed by DesktopSidebarCollapse.collapsed.collectAsState()
     val sidebarWidth by animateDpAsState(
-        targetValue = if (collapsed) 64.dp else 220.dp,
+        targetValue = if (collapsed) 72.dp else 220.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
         label = "sidebarWidth",
     )
@@ -5006,6 +5006,7 @@ private fun DesktopSidebar(
         Modifier
             .width(sidebarWidth)
             .fillMaxHeight()
+            .clipToBounds()
             .desktopWindowGlass(DesktopChromeEdge.END, fade = 0.07f),
     ) {
         Column(Modifier.fillMaxSize()) {
@@ -5016,7 +5017,7 @@ private fun DesktopSidebar(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .padding(start = if (DesktopPlatform.isMac) 16.dp else 10.dp),
+                            .padding(start = if (collapsed) 2.dp else if (DesktopPlatform.isMac) 16.dp else 10.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         DesktopWindowButtons()
@@ -5546,7 +5547,7 @@ private fun DesktopFrame(
                 DesktopTitleBar()
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
-                        val compact = maxWidth < 980.dp
+                        val compact = maxWidth < 600.dp
                         // The sidebar runs the full height of the window, its head the window's
                         // caption; the player's bar and the page share the column beside it.
                         Row(Modifier.fillMaxSize()) {

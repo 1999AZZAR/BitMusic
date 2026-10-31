@@ -172,21 +172,16 @@ private fun desktopMain() = application {
                 (composeWindow.contentPane as? javax.swing.JComponent)?.isOpaque = false
                 composeWindow.rootPane.isOpaque = false
             }
-            // AWT measures this in device pixels while Compose's window state is in dp. Keeping
-            // the scale in the conversion makes the usable minimum consistent on every display.
-            val transform = composeWindow.graphicsConfiguration.defaultTransform
+            // Modern Java AWT (Java 9+) Dimensions operate in logical points/dp on all platforms,
+            // matching Compose's window state. Scaling by defaultTransform scale twice caused
+            // massive double-scaling bugs on Windows (1.5x) and macOS Retina (2.0x).
             composeWindow.minimumSize = Dimension(
-                (MIN_WINDOW_WIDTH_DP * transform.scaleX).roundToInt(),
-                (MIN_WINDOW_HEIGHT_DP * transform.scaleY).roundToInt(),
+                MIN_WINDOW_WIDTH_DP.toInt(),
+                MIN_WINDOW_HEIGHT_DP.toInt(),
             )
-            // Setting AWT's minimum during the first composition can resize the native peer to
-            // that minimum without updating Compose's state. Compose would then keep laying out a
-            // 1220dp surface inside a 900dp window, cropping the right edge and putting its resize
-            // boundary off-screen until a maximize/restore cycle synchronised the two. Re-assert
-            // the requested opening size on the native peer so both layers start in agreement.
             composeWindow.size = Dimension(
-                (openingSize.width.value * transform.scaleX).roundToInt(),
-                (openingSize.height.value * transform.scaleY).roundToInt(),
+                openingSize.width.value.toInt(),
+                openingSize.height.value.toInt(),
             )
             if (DesktopPlatform.isWindows && DesktopWindowsFrame.install("BitMusic")) {
                 DesktopWindowBackdrop.apply()
@@ -197,10 +192,12 @@ private fun desktopMain() = application {
         val actions = remember {
             DesktopWindowActions(
                 minimize = {
-                    if (!DesktopWindowsFrame.minimize()) state.isMinimized = true
+                    if (!DesktopWindowsFrame.minimize() && !(DesktopPlatform.isMac && DesktopMacFrame.minimize())) {
+                        state.isMinimized = true
+                    }
                 },
                 toggleMaximize = {
-                    if (!DesktopWindowsFrame.toggleMaximize()) {
+                    if (!DesktopWindowsFrame.toggleMaximize() && !(DesktopPlatform.isMac && DesktopMacFrame.toggleMaximize())) {
                         // An undecorated AWT window otherwise maximizes to the monitor bounds on
                         // Windows when the native frame bridge is unavailable. Give AWT the
                         // monitor's usable work area before Compose switches the placement.
@@ -233,8 +230,8 @@ private fun desktopMain() = application {
     }
 }
 
-private const val MIN_WINDOW_WIDTH_DP = 900.0
-private const val MIN_WINDOW_HEIGHT_DP = 600.0
+private const val MIN_WINDOW_WIDTH_DP = 720.0
+private const val MIN_WINDOW_HEIGHT_DP = 520.0
 
 /** Where the window's size and place are remembered between runs, as "w|h|x|y". */
 private const val KEY_WINDOW_GEOMETRY = "window_geometry"
