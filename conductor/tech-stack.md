@@ -1,15 +1,14 @@
 # Technology Stack: BitMusic
 
 ## Core Languages & Runtimes
-- **Kotlin 2.3.20**: Primary language across `:desktopApp`, `:desktopUi`, `:tv`, and `:shared` modules. Utilizes Kotlin Coroutines and Kotlinx Serialization.
+- **Kotlin 2.3.20**: Primary language across `:desktopApp`, `:desktopUi`, and `:shared` modules. Utilizes Kotlin Coroutines and Kotlinx Serialization.
 - **Java 21 (JDK 21 / Eclipse Temurin)**: Runtime baseline for desktop JVM execution and Media3 compatibility.
 - **C/C++ (C++17)**: Native audio analysis engine (`cavacore`), windowed-sinc anti-aliasing resampler, PulseAudio loopback monitor capture, and JNI bridges.
 - **Go 1.22+**: Lightweight backend service for Listen Together party synchronization (`backend/`).
 
 ## Frameworks & UI Architecture
 - **Compose Multiplatform (Desktop)**: Hardware-accelerated UI rendering with `Haze` frosted-glass effects, animated lyrics canvas, and wide viewport responsiveness.
-- **Android TV Leanback**: TV UI using Leanback catalog cards, D-pad remote focus trees, and QR code login components.
-- **Media3 / ExoPlayer**: Audio playback foundation on Android with custom FFmpeg decoders.
+
 
 ## Audio Processing & Analysis
 - **PulseAudio & PipeWire Native Capture**: Low-latency monitor source loopback capture on Linux.

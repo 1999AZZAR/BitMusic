@@ -4,7 +4,7 @@
 
 # BitMusic
 
-BitMusic is a high-fidelity YouTube Music client designed specifically for large displays: Linux desktop, Android TV, Windows, and macOS.
+BitMusic is a high-fidelity YouTube Music client designed specifically for desktop: Linux, Windows, and macOS.
 
 The project is an independent fork of [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh and contributors. BitMusic decouples the core codebase from mobile phones to focus entirely on large viewports, high-fidelity desktop audio pipelines, multi-source stream aggregation, and remote-driven television interfaces.
 
@@ -31,7 +31,6 @@ The project is an independent fork of [BitChord](https://github.com/kushagrasing
 | Platform | Interface | Audio Pipeline | Distribution Formats |
 |---|---|---|---|
 | **Linux** | Compose Multiplatform Desktop | Native PulseAudio / PipeWire monitor capture + ALSA | `.AppImage`, `.deb`, `.rpm` |
-| **Android TV** | Compose for TV (`androidx.tv.material3`) | Android Media3 / ExoPlayer (Leanback D-pad remote) | `.apk` (Universal Leanback) |
 | **Windows** | Compose Multiplatform Desktop | WASAPI loopback capture | `.exe` (installer), `.msi`, Portable `.zip` |
 | **macOS** | Compose Multiplatform Desktop | CoreAudio capture | `.dmg` (Apple Silicon & Intel), `.pkg` |
 
@@ -40,7 +39,6 @@ The project is an independent fork of [BitChord](https://github.com/kushagrasing
 ## Core Capabilities
 
 - **Desktop Audio Engine**: Low-latency capture with real-time spectrum analysis powered by native `cavacore` integration (PulseAudio/PipeWire on Linux, WASAPI on Windows, CoreAudio on macOS).
-- **Android TV Interface**: Full remote D-pad navigation, focus management, display refresh-rate switching, and QR-code authentication from a phone.
 - **Playback Architecture**: Gapless track playback, configurable crossfade (0–12 seconds), and hardware-aligned audio buffers.
 - **Synchronized Lyrics**: Word-level and line-level animated lyrics rendered with Skia/Skiko, with multi-provider fallback (LRCLIB, Musixmatch, Genius) and on-demand translation.
 - **Account & Metadata Integration**: Google account login, Spotify playlist import, Discord Rich Presence, and scrobbling to Last.fm and ListenBrainz.
@@ -74,10 +72,7 @@ cd BitMusic
   ```bash
   ./gradlew :desktopApp:packageDeb
   ```
-- **Android TV debug APK**:
-  ```bash
-  ./gradlew :tv:assembleDevDebug
-  ```
+
 
 For detailed platform guides and release packaging instructions, see:
 - [Desktop Platform Guide](DESKTOP.md)

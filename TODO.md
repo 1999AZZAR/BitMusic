@@ -38,8 +38,8 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
   - If a SoundCloud HLS stream (`hls/aac`) experiences buffer under-runs or network drops, automatically fall back to progressive MP3 (`http/mp3`) at the current timestamp without interrupting playback.
 - [ ] **Source Transition Smoothing**
   - Enhance crossfade and gapless transitions when switching between different audio containers/codecs (e.g., Opus in WebM from YouTube into AAC in MPEG-TS from SoundCloud).
-- [ ] **Universal Audio Cache**
-  - Extend the existing disk/memory caching engine to transparently cache non-YouTube audio streams for offline replay and bandwidth conservation.
+- [x] **Universal Audio Cache** ✔️
+  - Extended the existing disk caching engine (`DesktopAudioCache`) to transparently cache non-YouTube audio streams for offline replay and bandwidth conservation. Cached copies are preferred on playback and warmed in the background.
 
 ---
 
