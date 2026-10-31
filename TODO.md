@@ -60,8 +60,6 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 
 - [ ] **Desktop Linux / Wayland**
   - MPRIS media key enhancements and track artwork synchronization with desktop notifications.
-- [ ] **Android TV Remote / D-pad Navigation**
-  - Optimize focus traversal across source filter chips and deep playlist grids.
 - [ ] **macOS Native Keybinds & Media Center**
   - NowPlayingInfoCenter integration for macOS Control Center playback controls.
 
@@ -76,9 +74,6 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 - [x] **Desktop Component Expansion (Compose Multiplatform)** ✔️
   - **Floating Player Bar & Modals**: Upgraded `desktopBarGlass` with specular border, M3 dynamic surface tinting, top curvature sheen, and elevation shadow across player bar, command palette, and account modals.
   - **Queue & Card Panes**: Enhanced `playerQueueGlass` in `DesktopNowPlaying` with specular border gradient and dynamic M3 surface adaptation.
-- [x] **Android & TV Expansion** ✔️
-  - **Expanded Glass Adoption**: Extended `LocalLiquidGlassEnabled` beyond the floating nav bar into the full Now Playing sheet drawer (`PlayerDrawer`), lyrics backdrop, and modal dialogs (`UpdateAvailableDialog`, `LyricsSourcesDialog`, `AppLanguageDialog`, `AudioPipelineDialog`, `CastDialog`, `AccountChannelDialog`).
-  - **Unified Shader Pipeline**: Aligned Android's `RenderEffect` / Kyant0 backdrop shader and Desktop Skiko's `HazeMaterials` via unified `rememberSpecularGlassBorder` and glass edge brushes across platforms.
 - [x] **Accessibility & Performance Safeguards** ✔️
   - **Adaptive Contrast Scrim**: Automatic luminance adaptation (`surface.luminance() > 0.5f`) adjusting border specular alpha and surface tints for light and dark themes.
   - **Reduced Motion & Blur Fallback**: Seamless fallback to clean, opaque M3 tonal surfaces when `reduceDynamicBlur` or battery saver is enabled.
