@@ -6445,6 +6445,16 @@ private fun DesktopSettingsScreen(
                         spatialAudio,
                         onSpatialAudioChange,
                     )
+                    val loudness by DesktopAppearanceSettings.loudnessNormalization.collectAsState()
+                    SettingsToggle(
+                        DesktopStrings["d_loudness", "Loudness normalization"],
+                        DesktopStrings[
+                            "d_loudness_subtitle",
+                            "Level the volume between tracks, measured from each track's opening",
+                        ],
+                        loudness,
+                        DesktopAppearanceSettings::setLoudnessNormalization,
+                    )
                     SettingsToggle(
                         DesktopStrings["dolby_atmos", "Dolby Atmos"],
                         if (DesktopCodecs.supportsDolbyAtmos) {
@@ -6737,37 +6747,27 @@ private fun DesktopSettingsScreen(
                             ambientBackdrop,
                             DesktopAppearanceSettings::setAmbientBackdrop,
                         )
-                        val dynamicColor by DesktopAppearanceSettings.dynamicColor.collectAsState()
-                        SettingsToggle(
-                            DesktopStrings["d_dynamic_color", "Dynamic colour"],
-                            DesktopStrings[
-                                "d_dynamic_color_subtitle",
-                                "Material You: tint the app with the colors of the playing artwork",
-                            ],
-                            dynamicColor,
-                            DesktopAppearanceSettings::setDynamicColor,
-                        )
-                        val visualizer by DesktopAppearanceSettings.visualizer.collectAsState()
-                        SettingsToggle(
-                            DesktopStrings["d_audio_visualizer", "Audio visualizer"],
-                            DesktopStrings[
-                                "d_audio_visualizer_subtitle",
-                                "A live spectrum of the playing audio inside the now-playing bar",
-                            ],
-                            visualizer,
-                            DesktopAppearanceSettings::setVisualizer,
-                        )
-                        val loudness by DesktopAppearanceSettings.loudnessNormalization.collectAsState()
-                        SettingsToggle(
-                            DesktopStrings["d_loudness", "Loudness normalization"],
-                            DesktopStrings[
-                                "d_loudness_subtitle",
-                                "Level the volume between tracks, measured from each track's opening",
-                            ],
-                            loudness,
-                            DesktopAppearanceSettings::setLoudnessNormalization,
-                        )
                     }
+                    val dynamicColor by DesktopAppearanceSettings.dynamicColor.collectAsState()
+                    SettingsToggle(
+                        DesktopStrings["d_dynamic_color", "Dynamic colour"],
+                        DesktopStrings[
+                            "d_dynamic_color_subtitle",
+                            "Material You: tint the app with the colors of the playing artwork",
+                        ],
+                        dynamicColor,
+                        DesktopAppearanceSettings::setDynamicColor,
+                    )
+                    val visualizer by DesktopAppearanceSettings.visualizer.collectAsState()
+                    SettingsToggle(
+                        DesktopStrings["d_audio_visualizer", "Audio visualizer"],
+                        DesktopStrings[
+                            "d_audio_visualizer_subtitle",
+                            "A live spectrum of the playing audio inside the now-playing bar",
+                        ],
+                        visualizer,
+                        DesktopAppearanceSettings::setVisualizer,
+                    )
                     SettingsToggle(
                         DesktopStrings["full_screen_cover_art", "Full-screen cover art"],
                         DesktopStrings["full_screen_cover_art_subtitle", "Runs the cover to the edges of the player instead of a square sleeve"],
