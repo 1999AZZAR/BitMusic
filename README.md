@@ -76,7 +76,7 @@ cd BitMusic
 
 For detailed platform guides and release packaging instructions, see:
 - [Desktop Platform Guide](DESKTOP.md)
-- [Android TV Guide](tv/README.md)
+
 - [Release Protocol](docs/DESKTOP_RELEASES.md)
 
 ---
