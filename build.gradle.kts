@@ -48,7 +48,7 @@ extra["bitchordVersionName"] = "1.3.2"
  * Bump this before cutting each test build ("beta0", "beta1", ...)
  * and blank it out before cutting the real production release.
  */
-extra["bitchordBetaSuffix"] = "-beta-0"
+extra["bitchordBetaSuffix"] = "-beta-1"
 
 plugins {
     id("com.android.application") version "8.10.1" apply false

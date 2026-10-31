@@ -18,9 +18,10 @@ val appVersion: String = providers.gradleProperty("bitchord.version").orNull
         } catch (_: Exception) {
             "staging"
         }
+        val betaSuffix = (rootProject.extra["bitchordBetaSuffix"] as? String)?.takeIf { it.isNotBlank() } ?: "-beta-1"
         when {
             branch == "master" || branch == "main" || branch.startsWith("v") || branch == "HEAD" -> baseVersion
-            branch == "staging" -> "$baseVersion-beta-0"
+            branch == "staging" -> "$baseVersion$betaSuffix"
             branch.startsWith("feature/") -> "$baseVersion-beta-${branch.removePrefix("feature/").replace('/', '-')}-0"
             branch.startsWith("fix/") -> "$baseVersion-beta-${branch.removePrefix("fix/").replace('/', '-')}-0"
             else -> "$baseVersion-beta-${branch.replace('/', '-')}-0"
