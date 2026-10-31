@@ -1776,6 +1776,10 @@ fun BitChordDesktopApp() {
         )
         onDispose { DesktopWindowsMedia.stop() }
     }
+    DisposableEffect(playbackEngine) {
+        if (DesktopPlatform.isMac) DesktopMacMediaCenter.start()
+        onDispose { if (DesktopPlatform.isMac) DesktopMacMediaCenter.stop() }
+    }
 
     LaunchedEffect(playbackSpeed) { playbackEngine.setPlaybackSpeed(playbackSpeed) }
     LaunchedEffect(volume) { playbackEngine.setVolume(volume) }
@@ -2009,6 +2013,16 @@ fun BitChordDesktopApp() {
         canvas = withContext(Dispatchers.IO) { DesktopCanvasClient.lookup(current) }
     }
 
+    DisposableEffect(Unit) {
+        DesktopLinuxNotifications.start()
+        onDispose { DesktopLinuxNotifications.stop() }
+    }
+    LaunchedEffect(playback.song?.videoId, playback.isPlaying) {
+        val song = playback.song ?: return@LaunchedEffect
+        if (playback.isPlaying) {
+            DesktopLinuxNotifications.notifyTrack(song.title, song.artist, song.thumbnailUrl)
+        }
+    }
     LaunchedEffect(
         playback.song?.videoId,
         playback.isPlaying,
@@ -2033,6 +2047,7 @@ fun BitChordDesktopApp() {
     LaunchedEffect(playback.song?.videoId, playback.isPlaying, playback.durationMs) {
         DesktopScrobbling.onPlaybackStateChanged(playback)
         DesktopWindowsMedia.publish(playback)
+        if (DesktopPlatform.isMac) DesktopMacMediaCenter.publish(playback)
     }
     // Refetched on opening the page rather than cached for the session: the
     // point of it is that something played elsewhere shows up here.
@@ -3250,6 +3265,20 @@ fun BitChordDesktopApp() {
         partySyncHolder[0]?.onLocalIntent()
     }
 
+    DisposableEffect(Unit) {
+        DesktopKeyboardShortcuts.onPlayPause = ::togglePlayPauseFromUser
+        DesktopKeyboardShortcuts.onNext = ::playNext
+        DesktopKeyboardShortcuts.onPrevious = ::playPrevious
+        DesktopKeyboardShortcuts.onSeekBack = { seekPlayer((playback.positionMs - 5_000L).coerceAtLeast(0L)) }
+        DesktopKeyboardShortcuts.onSeekForward = { seekPlayer(playback.positionMs + 5_000L) }
+        onDispose {
+            DesktopKeyboardShortcuts.onPlayPause = null
+            DesktopKeyboardShortcuts.onNext = null
+            DesktopKeyboardShortcuts.onPrevious = null
+            DesktopKeyboardShortcuts.onSeekBack = null
+            DesktopKeyboardShortcuts.onSeekForward = null
+        }
+    }
     MaterialTheme(
         colorScheme = rememberDynamicDesktopColorScheme(selectedSong?.thumbnailUrl),
         typography = desktopTypography(),

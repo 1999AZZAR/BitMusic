@@ -38,8 +38,8 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
   - If a SoundCloud HLS stream (`hls/aac`) experiences buffer under-runs or network drops, automatically fall back to progressive MP3 (`http/mp3`) at the current timestamp without interrupting playback.
 - [ ] **Source Transition Smoothing**
   - Enhance crossfade and gapless transitions when switching between different audio containers/codecs (e.g., Opus in WebM from YouTube into AAC in MPEG-TS from SoundCloud).
-- [ ] **Universal Audio Cache**
-  - Extend the existing disk/memory caching engine to transparently cache non-YouTube audio streams for offline replay and bandwidth conservation.
+- [x] **Universal Audio Cache** ✔️
+  - Extended the existing disk caching engine (`DesktopAudioCache`) to transparently cache non-YouTube audio streams for offline replay and bandwidth conservation. Cached copies are preferred on playback and warmed in the background.
 
 ---
 
@@ -58,12 +58,10 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 
 ## 5. Platform-Specific Optimizations
 
-- [ ] **Desktop Linux / Wayland**
-  - MPRIS media key enhancements and track artwork synchronization with desktop notifications.
-- [ ] **Android TV Remote / D-pad Navigation**
-  - Optimize focus traversal across source filter chips and deep playlist grids.
-- [ ] **macOS Native Keybinds & Media Center**
-  - NowPlayingInfoCenter integration for macOS Control Center playback controls.
+- [x] **Desktop Linux / Wayland** ✔️
+  - MPRIS media keys and capabilities hardened; track changes now publish Freedesktop notifications with artwork.
+- [x] **macOS Native Keybinds & Media Center** ✔️
+  - NowPlayingInfoCenter integration (best-effort JNA bridge) plus in-app keyboard shortcuts on all platforms.
 
 ---
 
@@ -76,9 +74,6 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 - [x] **Desktop Component Expansion (Compose Multiplatform)** ✔️
   - **Floating Player Bar & Modals**: Upgraded `desktopBarGlass` with specular border, M3 dynamic surface tinting, top curvature sheen, and elevation shadow across player bar, command palette, and account modals.
   - **Queue & Card Panes**: Enhanced `playerQueueGlass` in `DesktopNowPlaying` with specular border gradient and dynamic M3 surface adaptation.
-- [x] **Android & TV Expansion** ✔️
-  - **Expanded Glass Adoption**: Extended `LocalLiquidGlassEnabled` beyond the floating nav bar into the full Now Playing sheet drawer (`PlayerDrawer`), lyrics backdrop, and modal dialogs (`UpdateAvailableDialog`, `LyricsSourcesDialog`, `AppLanguageDialog`, `AudioPipelineDialog`, `CastDialog`, `AccountChannelDialog`).
-  - **Unified Shader Pipeline**: Aligned Android's `RenderEffect` / Kyant0 backdrop shader and Desktop Skiko's `HazeMaterials` via unified `rememberSpecularGlassBorder` and glass edge brushes across platforms.
 - [x] **Accessibility & Performance Safeguards** ✔️
   - **Adaptive Contrast Scrim**: Automatic luminance adaptation (`surface.luminance() > 0.5f`) adjusting border specular alpha and surface tints for light and dark themes.
   - **Reduced Motion & Blur Fallback**: Seamless fallback to clean, opaque M3 tonal surfaces when `reduceDynamicBlur` or battery saver is enabled.

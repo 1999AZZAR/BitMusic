@@ -31,19 +31,12 @@ val CMP_DESKTOP =
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
-    id("com.android.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {
-    androidTarget {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -57,12 +50,9 @@ kotlin {
     }
 
     sourceSets {
-        // Both targets are JVMs, so the UI is written once against the JDK here
-        // rather than in commonMain.
         val jvmSharedMain by creating {
             dependsOn(commonMain.get())
         }
-        androidMain.get().dependsOn(jvmSharedMain)
         jvmMain.get().dependsOn(jvmSharedMain)
 
         commonMain.dependencies {
@@ -81,10 +71,6 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
         }
-        // Compiled against what the desktop actually resolves, not the phone's
-        // pin — see the CMP_DESKTOP comment at the top of this file. Skia's
-        // Matrix33 changed shape between skiko 0.9 and 0.15, and bytecode built
-        // against 0.9 NoSuchMethodError'd the desktop's 0.15 at draw time.
         jvmMain.dependencies {
             api("org.jetbrains.compose.ui:ui-desktop:$CMP_DESKTOP")
         }
@@ -92,21 +78,6 @@ kotlin {
             implementation(kotlin("test"))
             implementation("junit:junit:4.13.2")
         }
-        androidMain.dependencies {
-            // The phone's own versions, so nothing here moves them.
-            implementation("androidx.activity:activity-compose:1.9.3")
-            implementation("androidx.core:core-ktx:1.15.0")
-            implementation("androidx.appcompat:appcompat:1.7.0")
-            implementation("androidx.palette:palette-ktx:1.0.0")
-        }
-    }
-}
-
-android {
-    namespace = "com.music.bitchord.sharedui"
-    compileSdk = 36
-    defaultConfig {
-        minSdk = 26
     }
 }
 
