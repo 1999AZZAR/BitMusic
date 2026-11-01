@@ -302,13 +302,17 @@ internal object DesktopMacFrame {
     /** Adjusts the vibrancy view corner radius to match the Compose window placement. */
     fun updateCornerRadius(maximized: Boolean) {
         if (!DesktopPlatform.isMac) return
-        val o = objc ?: return
-        val send = msgSend ?: return
-        val view = effectViewPtr ?: return
-        val selLayer = o.sel_registerName("layer")
-        val layer = send.invokePointer(arrayOf(view, selLayer)) ?: return
-        val selSetCornerRadius = o.sel_registerName("setCornerRadius:")
-        send.invoke(arrayOf(layer, selSetCornerRadius, if (maximized) 0.0 else 10.0))
+        runCatching {
+            javax.swing.SwingUtilities.invokeAndWait {
+                val o = objc ?: return@invokeAndWait
+                val send = msgSend ?: return@invokeAndWait
+                val view = effectViewPtr ?: return@invokeAndWait
+                val selLayer = o.sel_registerName("layer")
+                val layer = send.invokePointer(arrayOf(view, selLayer)) ?: return@invokeAndWait
+                val selSetCornerRadius = o.sel_registerName("setCornerRadius:")
+                send.invoke(arrayOf(layer, selSetCornerRadius, if (maximized) 0.0 else 10.0))
+            }
+        }
     }
 
     /**
