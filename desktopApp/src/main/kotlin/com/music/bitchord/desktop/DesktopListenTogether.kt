@@ -120,11 +120,12 @@ internal object DesktopListenTogether {
         isLenient = true
     }
 
-    /** Where the party server lives, injected at build time like the other endpoints. */
+    /** Where the party server lives. A build-time override wins; otherwise the server that ships
+     *  inside this build (localhost) is used, and [DesktopPartyServer] keeps it alive. */
     private val DEFAULT_SERVER: String by lazy {
-        normalizeServerUrl(System.getProperty("bitchord.listentogether.server").orEmpty())
-            .getOrNull()
-            .orEmpty()
+        val override = normalizeServerUrl(System.getProperty("bitchord.listentogether.server").orEmpty()).getOrNull().orEmpty()
+        if (override.isNotBlank()) override
+        else if (DesktopPartyServer.isAvailable()) "http://127.0.0.1:8000" else ""
     }
 
     private val http = HttpClient(CIO) {
@@ -163,6 +164,9 @@ internal object DesktopListenTogether {
     @Volatile private var activePartyServerBase: String? = null
 
     init {
+        // Keep the bundled party server alive whenever this build ships one, so "Use built-in"
+        // works without a separate process.
+        DesktopPartyServer.start()
         // A process cannot resume the old socket safely, and leaving its token around occupies a
         // party slot until the server's grace period expires. Android hands that stale slot back
         // during init; desktop does the same before offering a new room.

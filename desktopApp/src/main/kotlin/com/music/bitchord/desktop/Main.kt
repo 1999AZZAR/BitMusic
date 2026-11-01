@@ -74,6 +74,8 @@ fun main() {
     )
     // The public "apps open right now" count; see Presence.
     DesktopPresence.install()
+    // Keep the bundled Listen Together party server alive so "Use built-in" works out of the box.
+    DesktopPartyServer.start()
     desktopMain()
 }
 
