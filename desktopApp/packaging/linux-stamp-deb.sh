@@ -31,7 +31,7 @@ if [ -f "$bin" ] && [ ! -f "$root/opt/bitmusic/bin/BitMusic.bin" ]; then
     mv "$bin" "$root/opt/bitmusic/bin/BitMusic.bin"
     cat << 'EOF' > "$bin"
 #!/bin/sh
-export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="/opt/bitmusic/lib/app:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec /opt/bitmusic/bin/BitMusic.bin "$@"
 EOF
     chmod +x "$bin"
