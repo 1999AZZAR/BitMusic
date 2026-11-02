@@ -52,6 +52,7 @@ import com.music.bitchord.ui.player.rememberMixPulse
 import androidx.compose.runtime.SideEffect
 import com.music.bitchord.data.model.QueueTier
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -8874,11 +8875,14 @@ private fun HomeMoodChipsRow(
     onSelectMood: (MoodGenre?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val defaultTitles = listOf("Relax", "Energize", "Workout", "Focus", "Commute", "Party")
+    val defaultTitles = listOf(
+        "All", "Relax", "Energize", "Workout", "Focus", "Commute", "Party",
+        "Chill", "Sleep", "Romance", "Sad", "Happy", "Ambient", "Jazz",
+    )
     val chips = if (availableMoods.isNotEmpty()) {
         availableMoods
     } else {
-        defaultTitles.map { MoodGenre(it, "FEmusic_moods_and_genres", null) }
+        defaultTitles.drop(1).map { MoodGenre(it, "FEmusic_moods_and_genres", null) }
     }
 
     Row(
@@ -8886,53 +8890,61 @@ private fun HomeMoodChipsRow(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 6.dp)
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val isAllSelected = selectedMood == null
+        val allBg by animateColorAsState(
+            if (isAllSelected) Color.White else Color.Transparent,
+            label = "allBg",
+        )
+        val allText by animateColorAsState(
+            if (isAllSelected) Color.Black else Color.White.copy(alpha = 0.72f),
+            label = "allText",
+        )
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(if (isAllSelected) Color.White else Color.White.copy(alpha = 0.08f))
-                .border(
-                    width = 1.dp,
-                    color = if (isAllSelected) Color.White else Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(16.dp),
-                )
+                .height(35.dp)
+                .clip(RoundedCornerShape(17.dp))
+                .background(allBg)
                 .clickable { onSelectMood(null) }
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .padding(horizontal = 15.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = DesktopStrings["all", "All"],
-                color = if (isAllSelected) Color.Black else Color.White,
-                fontSize = 12.5.sp,
-                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                color = allText,
+                fontSize = 13.sp,
+                fontWeight = if (isAllSelected) FontWeight.SemiBold else FontWeight.Medium,
             )
         }
 
         chips.forEach { mood ->
             val isSelected = selectedMood?.title.equals(mood.title, ignoreCase = true)
+            val bg by animateColorAsState(
+                if (isSelected) Color.White else Color.Transparent,
+                label = "moodBg",
+            )
+            val text by animateColorAsState(
+                if (isSelected) Color.Black else Color.White.copy(alpha = 0.72f),
+                label = "moodText",
+            )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.08f))
-                    .border(
-                        width = 1.dp,
-                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(16.dp),
-                    )
+                    .height(35.dp)
+                    .clip(RoundedCornerShape(17.dp))
+                    .background(bg)
                     .clickable {
                         onSelectMood(if (isSelected) null else mood)
                     }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 15.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = mood.title,
-                    color = if (isSelected) Color.Black else Color.White,
-                    fontSize = 12.5.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = text,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 )
             }
         }
