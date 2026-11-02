@@ -52,6 +52,7 @@ import com.music.bitchord.ui.player.rememberMixPulse
 import androidx.compose.runtime.SideEffect
 import com.music.bitchord.data.model.QueueTier
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -3400,11 +3401,14 @@ fun BitChordDesktopApp() {
                         isLoading = playback.isLoading,
                         previousEnabled = liveQueue.hasPrevious ||
                             playback.positionMs > BACK_RESTARTS_AFTER_MS,
+                        positionMs = playback.positionMs,
+                        durationMs = playback.durationMs,
                         progress = if (playback.durationMs > 0L) {
-                            playback.positionMs.toFloat() / playback.durationMs.toFloat()
+                            (playback.positionMs.toFloat() / playback.durationMs.toFloat()).coerceIn(0f, 1f)
                         } else {
                             0f
                         },
+                        onSeek = ::seekPlayer,
                         volume = playback.volume,
                         shuffle = shuffle,
                         repeatMode = repeatMode,
@@ -4698,7 +4702,10 @@ private fun DesktopTopBar(
     isPlaying: Boolean,
     isLoading: Boolean,
     previousEnabled: Boolean,
+    positionMs: Long,
+    durationMs: Long,
     progress: Float,
+    onSeek: (Long) -> Unit,
     volume: Float,
     shuffle: Boolean,
     repeatMode: DesktopRepeatMode,
@@ -4729,309 +4736,412 @@ private fun DesktopTopBar(
 ) {
     val titleBarEnabled by DesktopTitleBarSetting.enabled.collectAsState()
     val inlineCaption = DesktopPlatform.drawsOwnWindowFrame && !titleBarEnabled
-    // The same claim the player's scrubber runs through an Automix blend, but breathing slowly and
-    // gently rather than strobing on the beat — the desktop's calm reading of a mix.
-    val mixBlend = DesktopPlayerSettings.smartMixBlend.collectAsState()
-    val reduceAnimation by DesktopPlayerSettings.reduceAnimation.collectAsState()
-    val mixPulse = rememberMixPulse({ mixBlend.value }, enabled = !reduceAnimation, slow = true)
-    val currentProgress by rememberUpdatedState(progress)
-    val isPlayingProgress by rememberUpdatedState(isPlaying)
-    // Read in composition, drawn in the draw scope: the tint follows the record's own colour
-    // while Dynamic colour is on, and the bar must not recompose to redraw it.
     val playingTint by rememberUpdatedState(desktopPlayingTint())
+    val safeProgress = progress.coerceIn(0f, 1f)
 
-    // Apple Music uses one calm strip for both player controls and window furniture. The left
-    // sidebar owns the traffic lights; the rest is a balanced transport / now-playing / utility
-    // layout with deliberately smaller glyphs than the phone player.
-    DesktopTitleBarDragArea(Modifier.fillMaxWidth().height(64.dp)) {
+    DesktopTitleBarDragArea(Modifier.fillMaxWidth().height(78.dp)) {
         Box(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            // The window's own buttons live at the head of the sidebar; a compact window has no
-            // sidebar, so there they lead this bar instead.
-            if (compact && inlineCaption) {
-                Box(
+                if (compact && inlineCaption) {
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .desktopWindowGlass(DesktopChromeEdge.BOTTOM)
+                            .padding(start = if (DesktopPlatform.isMac) 16.dp else 10.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        DesktopWindowButtons()
+                    }
+                }
+                Row(
                     Modifier
+                        .weight(1f)
                         .fillMaxHeight()
                         .desktopWindowGlass(DesktopChromeEdge.BOTTOM)
-                        .padding(start = if (DesktopPlatform.isMac) 16.dp else 10.dp),
-                    contentAlignment = Alignment.CenterStart,
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    DesktopWindowButtons()
-                }
-            }
-            Row(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .desktopWindowGlass(DesktopChromeEdge.BOTTOM)
-                    .padding(start = 14.dp, end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // The mark leads the player's own controls, now that the sidebar runs to the top.
-                Image(
-                    painter = painterResource(Res.drawable.logo_mark),
-                    contentDescription = "BitMusic",
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(14.dp))
-                DesktopToolbarButton(onClick = onBack, enabled = canGoBack, size = 32.dp) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.ArrowBack,
-                        DesktopStrings["back", "Back"],
-                        tint = if (canGoBack) Color.White else DesktopSecondary.copy(alpha = 0.40f),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                Spacer(Modifier.width(6.dp))
-                if (!compact) {
+                    // Left Zone: Navigation + Active Track Metadata
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                        modifier = Modifier.weight(0.28f),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        DesktopToolbarButton(onClick = { onShuffleChange(!shuffle) }, size = 32.dp) {
+                        DesktopToolbarButton(onClick = onBack, enabled = canGoBack, size = 32.dp) {
                             Icon(
-                                BitChordIcons.Shuffle,
-                                DesktopStrings["shuffle", "Shuffle"],
-                                tint = if (shuffle) DesktopAccent else DesktopSecondary,
-                                modifier = Modifier.size(18.dp),
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                DesktopStrings["back", "Back"],
+                                tint = if (canGoBack) Color.White else DesktopSecondary.copy(alpha = 0.40f),
+                                modifier = Modifier.size(19.dp),
                             )
                         }
-                        DesktopToolbarButton(onClick = onPrevious, enabled = previousEnabled, size = 32.dp) {
-                            Icon(
-                                Icons.Rounded.FastRewind,
-                                DesktopStrings["widget_previous", "Previous"],
-                                tint = if (previousEnabled) Color.White else DesktopSecondary.copy(alpha = 0.40f),
-                                modifier = Modifier.size(21.dp),
-                            )
-                        }
-                        DesktopToolbarButton(onClick = onPlayPause, size = 34.dp) {
-                            // Spotify's play control: a coloured disc with the glyph in black —
-                            // green until Dynamic colour dresses it in the record's own accent.
-                            Box(
-                                Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(playingTint),
-                                contentAlignment = Alignment.Center,
+                        Spacer(Modifier.width(8.dp))
+                        if (song != null) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(onClick = onOpenNowPlaying)
+                                    .padding(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        color = Color.Black,
-                                        strokeWidth = 2.dp,
+                                DesktopArtwork(
+                                    song.thumbnailUrl,
+                                    Modifier
+                                        .size(50.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                                    px = ROW_ART_PX,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f, fill = false)) {
+                                    Text(
+                                        song.title,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
                                     )
-                                } else {
+                                    Text(
+                                        song.artist,
+                                        color = DesktopSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            if (canRate) {
+                                DesktopToolbarButton(onClick = onToggleLike, size = 30.dp) {
                                     Icon(
-                                        if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                        if (isPlaying) "Pause" else "Play",
-                                        tint = Color.Black,
+                                        if (liked) BitChordIcons.HeartFilled else BitChordIcons.Heart,
+                                        if (liked) DesktopStrings["remove_from_liked", "Remove from liked songs"] else DesktopStrings["like", "Like"],
+                                        tint = if (liked) playingTint else DesktopSecondary,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
                             }
-                        }
-                        DesktopToolbarButton(onClick = onNext, size = 32.dp) {
-                            Icon(
-                                Icons.Rounded.FastForward,
-                                DesktopStrings["widget_next", "Next"],
-                                tint = Color.White,
-                                modifier = Modifier.size(21.dp),
-                            )
-                        }
-                        DesktopToolbarButton(
-                            onClick = { onRepeatModeChange(repeatMode.next()) },
-                            size = 32.dp,
-                        ) {
-                            val tint = if (repeatMode != DesktopRepeatMode.OFF) DesktopAccent else DesktopSecondary
-                            if (repeatMode == DesktopRepeatMode.ONE) {
-                                Text(
-                                    "1",
-                                    color = tint,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier.semantics { contentDescription = "Repeat one" },
-                                )
-                            } else {
+                            DesktopToolbarButton(onClick = onOpenMenu, size = 30.dp) {
                                 Icon(
-                                    BitChordIcons.Repeat,
-                                    "Repeat ${repeatMode.label()}",
-                                    tint = tint,
+                                    Icons.Rounded.MoreHoriz,
+                                    DesktopStrings["more_options", "More options"],
+                                    tint = DesktopSecondary,
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
                     }
 
-                    Box(
-                        Modifier.weight(1f).padding(horizontal = 14.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // Liquid glass: a pill of translucent, tinted glass with a specular
-                        // hairline, sitting in the frosted bar the way a watch face sits in its
-                        // crystal — not a flat slab with a corner radius.
-                        Surface(
+                    // Center Zone: Split Audio Graph + Transport Controls + Interactive Seek Bar
+                    if (!compact) {
+                        Column(
                             modifier = Modifier
-                                .widthIn(min = 120.dp, max = 520.dp)
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(percent = 50))
-                                .clip(RoundedCornerShape(percent = 50))
-                                .clickable(onClick = onOpenNowPlaying),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                            tonalElevation = 0.dp,
+                                .weight(0.44f)
+                                .padding(horizontal = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                         ) {
-                            Box(Modifier.fillMaxSize()) {
-                                if (song == null) {
-                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                WaveformHalfPane(
+                                    songKey = song?.videoId,
+                                    progress = safeProgress,
+                                    isPlaying = isPlaying,
+                                    isLeftHalf = true,
+                                    activeColor = playingTint,
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    DesktopToolbarButton(onClick = { onShuffleChange(!shuffle) }, size = 30.dp) {
                                         Icon(
-                                            BitChordIcons.MusicNote,
-                                            DesktopStrings["playback_channel_name", "Now playing"],
-                                            tint = DesktopSecondary.copy(alpha = 0.65f),
-                                            modifier = Modifier.size(21.dp),
+                                            BitChordIcons.Shuffle,
+                                            DesktopStrings["shuffle", "Shuffle"],
+                                            tint = if (shuffle) playingTint else DesktopSecondary,
+                                            modifier = Modifier.size(16.dp),
                                         )
                                     }
-                                } else {
-                                    // The visualizer rides behind everything in the capsule:
-                                    // artwork and text over it, the progress line along its base.
-                                    SpectrumPane(tint = playingTint, modifier = Modifier.matchParentSize())
-                                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                                        DesktopArtwork(
-                                            song.thumbnailUrl,
-                                            Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)),
-                                            px = ROW_ART_PX,
+                                    DesktopToolbarButton(onClick = onPrevious, enabled = previousEnabled, size = 30.dp) {
+                                        Icon(
+                                            Icons.Rounded.FastRewind,
+                                            DesktopStrings["widget_previous", "Previous"],
+                                            tint = if (previousEnabled) Color.White else DesktopSecondary.copy(alpha = 0.40f),
+                                            modifier = Modifier.size(19.dp),
                                         )
-                                        Column(
-                                            Modifier.weight(1f).padding(horizontal = 8.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                    }
+                                    DesktopToolbarButton(onClick = onPlayPause, size = 38.dp) {
+                                        Box(
+                                            Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White),
+                                            contentAlignment = Alignment.Center,
                                         ) {
+                                            if (isLoading) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    color = Color.Black,
+                                                    strokeWidth = 2.dp,
+                                                )
+                                            } else {
+                                                Icon(
+                                                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                                    if (isPlaying) "Pause" else "Play",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    DesktopToolbarButton(onClick = onNext, size = 30.dp) {
+                                        Icon(
+                                            Icons.Rounded.FastForward,
+                                            DesktopStrings["widget_next", "Next"],
+                                            tint = Color.White,
+                                            modifier = Modifier.size(19.dp),
+                                        )
+                                    }
+                                    DesktopToolbarButton(
+                                        onClick = { onRepeatModeChange(repeatMode.next()) },
+                                        size = 30.dp,
+                                    ) {
+                                        val tint = if (repeatMode != DesktopRepeatMode.OFF) playingTint else DesktopSecondary
+                                        if (repeatMode == DesktopRepeatMode.ONE) {
                                             Text(
-                                                song.title,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.SemiBold,
+                                                "1",
+                                                color = tint,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                modifier = Modifier.semantics { contentDescription = "Repeat one" },
                                             )
-                                            Text(
-                                                song.artist,
-                                                color = DesktopSecondary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                style = MaterialTheme.typography.labelSmall,
+                                        } else {
+                                            Icon(
+                                                BitChordIcons.Repeat,
+                                                "Repeat ${repeatMode.label()}",
+                                                tint = tint,
+                                                modifier = Modifier.size(16.dp),
                                             )
                                         }
                                     }
-                                    // Drawn rather than sized: through a blend the line covers
-                                    // the full width and pulses on the beat, as the player's
-                                    // scrubber does, and reading either in draw keeps the frame
-                                    // clock from recomposing the whole bar.
-                                    Box(
-                                        Modifier
-                                            .align(Alignment.BottomStart)
-                                            .padding(start = 44.dp)
-                                            .fillMaxWidth()
-                                            .height(2.dp)
-                                            .drawBehind {
-                                                val base = currentProgress.coerceIn(0f, 1f)
-                                                val fraction = base + (1f - base) * mixPulse.cover
-                                                drawRect(
-                                                    color = if (isPlayingProgress) playingTint.copy(alpha = mixPulse.alpha(0.95f)) else Color.White.copy(alpha = mixPulse.alpha(0.48f)),
-                                                    size = Size(size.width * fraction, size.height),
-                                                )
-                                            },
-                                    )
                                 }
+                                WaveformHalfPane(
+                                    songKey = song?.videoId,
+                                    progress = safeProgress,
+                                    isPlaying = isPlaying,
+                                    isLeftHalf = false,
+                                    activeColor = playingTint,
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = formatPlayerTimestamp(positionMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = DesktopSecondary,
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(12.dp)
+                                        .pointerInput(durationMs) {
+                                            if (durationMs <= 0L) return@pointerInput
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    val change = event.changes.firstOrNull() ?: continue
+                                                    if (change.pressed && size.width > 0) {
+                                                        val fraction = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                                        onSeek((fraction * durationMs).toLong())
+                                                        change.consume()
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    Canvas(Modifier.fillMaxWidth().height(3.dp)) {
+                                        val trackRadius = CornerRadius(size.height / 2f)
+                                        drawRoundRect(
+                                            color = Color.White.copy(alpha = 0.16f),
+                                            size = size,
+                                            cornerRadius = trackRadius,
+                                        )
+                                        val activeWidth = size.width * safeProgress
+                                        if (activeWidth > 0f) {
+                                            drawRoundRect(
+                                                color = playingTint,
+                                                size = Size(activeWidth, size.height),
+                                                cornerRadius = trackRadius,
+                                            )
+                                        }
+                                        drawCircle(
+                                            color = Color.White,
+                                            radius = 4.dp.toPx(),
+                                            center = Offset(activeWidth.coerceIn(0f, size.width), size.height / 2f),
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = formatPlayerTimestamp(durationMs),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = DesktopSecondary,
+                                )
                             }
                         }
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // The full player's song actions on the bar itself, led by the song they act
-                    // on: the like in the playing tint the moment it lands, the options beside it.
-                    if (!compact && song != null && canRate) {
-                        DesktopToolbarButton(onClick = onToggleLike, size = 32.dp) {
-                            Icon(
-                                if (liked) BitChordIcons.HeartFilled else BitChordIcons.Heart,
-                                if (liked) {
-                                    DesktopStrings["remove_from_liked", "Remove from liked songs"]
-                                } else {
-                                    DesktopStrings["like", "Like"]
-                                },
-                                tint = if (liked) playingTint else DesktopSecondary,
-                                modifier = Modifier.size(19.dp),
-                            )
-                        }
-                    }
-                    if (!compact && song != null) {
-                        DesktopToolbarButton(onClick = onOpenMenu, size = 32.dp) {
-                            Icon(
-                                Icons.Rounded.MoreHoriz,
-                                DesktopStrings["more_options", "More options"],
-                                tint = DesktopSecondary,
-                                modifier = Modifier.size(19.dp),
-                            )
-                        }
-                    }
-                    Icon(
-                        Icons.Rounded.VolumeUp,
-                        DesktopStrings["d_volume", "Volume"],
-                        tint = DesktopSecondary,
-                        modifier = Modifier.size(17.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    DesktopThinSlider(
-                        value = volume,
-                        onValueChange = onVolumeChange,
-                        idleHeight = 4.dp,
-                        activeHeight = 8.dp,
-                        modifier = Modifier.width(78.dp),
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    DesktopToolbarButton(onClick = onOpenAudioOutput, size = 32.dp) {
+                    // Right Zone: Volume + Output / Lyrics / Queue / Account
+                    Row(
+                        modifier = Modifier.weight(0.28f),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Icon(
-                            Icons.Rounded.Headphones,
-                            DesktopStrings["audio_output", "Audio output"],
+                            Icons.Rounded.VolumeUp,
+                            DesktopStrings["d_volume", "Volume"],
                             tint = DesktopSecondary,
-                            modifier = Modifier.size(19.dp),
+                            modifier = Modifier.size(17.dp),
                         )
-                    }
-                    DesktopToolbarButton(onClick = onOpenLyrics, size = 32.dp) {
-                        Icon(
-                            BitChordIcons.LyricsQuote,
-                            DesktopStrings["lyrics", "Lyrics"],
-                            tint = if (sidePanel == DesktopSidePanel.LYRICS) Color.White else DesktopSecondary,
-                            modifier = Modifier.size(19.dp),
+                        Spacer(Modifier.width(8.dp))
+                        DesktopThinSlider(
+                            value = volume,
+                            onValueChange = onVolumeChange,
+                            idleHeight = 4.dp,
+                            activeHeight = 8.dp,
+                            modifier = Modifier.width(82.dp),
                         )
+                        Spacer(Modifier.width(6.dp))
+                        DesktopToolbarButton(onClick = onOpenAudioOutput, size = 32.dp) {
+                            Icon(
+                                Icons.Rounded.Headphones,
+                                DesktopStrings["audio_output", "Audio output"],
+                                tint = DesktopSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DesktopToolbarButton(onClick = onOpenLyrics, size = 32.dp) {
+                            Icon(
+                                BitChordIcons.LyricsQuote,
+                                DesktopStrings["lyrics", "Lyrics"],
+                                tint = if (sidePanel == DesktopSidePanel.LYRICS) Color.White else DesktopSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DesktopToolbarButton(onClick = onOpenQueue, size = 32.dp) {
+                            Icon(
+                                BitChordIcons.Queue,
+                                DesktopStrings["queue", "Queue"],
+                                tint = if (sidePanel == DesktopSidePanel.QUEUE) Color.White else DesktopSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DesktopToolbarButton(onClick = onOpenRelated, size = 32.dp) {
+                            Icon(
+                                BitChordIcons.Explore,
+                                DesktopStrings["related", "Related"],
+                                tint = if (sidePanel == DesktopSidePanel.RELATED) Color.White else DesktopSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        DesktopAccountButton(avatar = accountAvatar, onClick = onOpenAccounts)
                     }
-                    DesktopToolbarButton(onClick = onOpenQueue, size = 32.dp) {
-                        Icon(
-                            BitChordIcons.Queue,
-                            DesktopStrings["queue", "Queue"],
-                            tint = if (sidePanel == DesktopSidePanel.QUEUE) Color.White else DesktopSecondary,
-                            modifier = Modifier.size(19.dp),
-                        )
-                    }
-                    DesktopToolbarButton(onClick = onOpenRelated, size = 32.dp) {
-                        Icon(
-                            BitChordIcons.Explore,
-                            DesktopStrings["related", "Related"],
-                            tint = if (sidePanel == DesktopSidePanel.RELATED) Color.White else DesktopSecondary,
-                            modifier = Modifier.size(19.dp),
-                        )
-                    }
-                    DesktopAccountButton(avatar = accountAvatar, onClick = onOpenAccounts)
                 }
-            }
             }
             HorizontalDivider(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
                 thickness = 1.dp,
                 color = desktopChromeDivider(),
+            )
+        }
+    }
+}
+
+private fun formatPlayerTimestamp(ms: Long): String {
+    if (ms <= 0L) return "0:00"
+    val totalSeconds = ms / 1_000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
+/**
+ * Renders one side of the split symmetrical waveform around the transport controls, blending
+ * live spectrum energy with a deterministic track envelope and supporting direct click-to-seek.
+ */
+@Composable
+private fun WaveformHalfPane(
+    songKey: String?,
+    progress: Float,
+    isPlaying: Boolean,
+    isLeftHalf: Boolean,
+    activeColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val visualizerEnabled by DesktopAppearanceSettings.visualizer.collectAsState()
+    val liveBands by DesktopAudioSpectrum.bands.collectAsState()
+    val seed = remember(songKey) { (songKey ?: "bitmusic").hashCode() }
+
+    Canvas(
+        modifier = modifier,
+    ) {
+        val barCount = 28
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        val step = size.width / barCount
+        val barWidth = (step * 0.54f).coerceAtLeast(2.dp.toPx())
+        val centerY = size.height / 2f
+        val maxAmp = size.height * 0.88f
+
+        for (i in 0 until barCount) {
+            val globalFrac = if (isLeftHalf) {
+                (i.toFloat() / barCount) * 0.5f
+            } else {
+                0.5f + (i.toFloat() / barCount) * 0.5f
+            }
+            val hash = ((seed xor (i * 7349) xor (if (isLeftHalf) 0x3A5F else 0x7C1B)) and 0x7FFFFFFF)
+            val baseEnvelope = 0.18f + (hash % 72) / 100f
+            val taper = if (isLeftHalf) {
+                (i.toFloat() / barCount).coerceIn(0.25f, 1f)
+            } else {
+                (1f - (i.toFloat() / barCount)).coerceIn(0.25f, 1f)
+            }
+            val liveBoost = if (isPlaying && visualizerEnabled && liveBands.isNotEmpty()) {
+                liveBands[(i + if (isLeftHalf) 0 else barCount) % liveBands.size] * 0.45f
+            } else {
+                0f
+            }
+            val amplitude = if (isPlaying) {
+                ((baseEnvelope * taper) + liveBoost).coerceIn(0.12f, 1f)
+            } else {
+                0.12f
+            }
+            val barHeight = (maxAmp * amplitude).coerceAtLeast(3.dp.toPx())
+            val isPlayed = globalFrac <= progress
+            val color = if (isPlayed) {
+                activeColor.copy(alpha = 0.90f)
+            } else {
+                Color.White.copy(alpha = 0.24f)
+            }
+            val x = i * step + (step - barWidth) / 2f
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(x, centerY - barHeight / 2f),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f),
             )
         }
     }
@@ -7961,10 +8071,10 @@ internal fun rememberSpecularGlassBorder(): Brush {
         if (isLight) {
             Brush.linearGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.65f),
-                    Color.White.copy(alpha = 0.25f),
-                    Color.Black.copy(alpha = 0.08f),
-                    Color.Black.copy(alpha = 0.16f),
+                    Color.White.copy(alpha = 0.75f),
+                    Color.White.copy(alpha = 0.35f),
+                    Color.Black.copy(alpha = 0.06f),
+                    Color.Black.copy(alpha = 0.14f),
                 ),
                 start = Offset.Zero,
                 end = Offset.Infinite,
@@ -7972,10 +8082,10 @@ internal fun rememberSpecularGlassBorder(): Brush {
         } else {
             Brush.linearGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.35f),
-                    Color.White.copy(alpha = 0.12f),
-                    Color.White.copy(alpha = 0.04f),
-                    Color.Black.copy(alpha = 0.22f),
+                    Color.White.copy(alpha = 0.50f),
+                    Color.White.copy(alpha = 0.20f),
+                    Color.White.copy(alpha = 0.08f),
+                    Color.Black.copy(alpha = 0.18f),
                 ),
                 start = Offset.Zero,
                 end = Offset.Infinite,
@@ -7993,8 +8103,8 @@ internal fun Modifier.desktopBarGlass(shape: Shape): Modifier {
 
     return this
         .desktopFrosted(
-            opaque = surface.copy(alpha = if (isLight) 0.88f else 0.82f),
-            tintAlpha = if (isLight) 0.65f else 0.52f,
+            opaque = surface.copy(alpha = if (isLight) 0.78f else 0.72f),
+            tintAlpha = if (isLight) 0.78f else 0.65f,
         )
         .border(0.75.dp, specularBorder, shape)
         .drawBehind {
@@ -8030,8 +8140,8 @@ internal fun Modifier.desktopChromeGlass(
     // and top bar are made of follows the playing record's tint with everything else.
     val surface = MaterialTheme.colorScheme.surface
     return desktopFrosted(
-        opaque = surface.copy(alpha = 0.88f),
-        tintAlpha = 0.46f,
+        opaque = surface.copy(alpha = 0.78f),
+        tintAlpha = 0.60f,
         edge = edge,
         fade = fade,
     )
@@ -8109,7 +8219,7 @@ private fun Modifier.desktopFrosted(
         // Spelled out rather than taken from a preset.
         blurEnabled = true
         backgroundColor = surface
-        blurRadius = 30.dp
+        blurRadius = 40.dp
         // Dark enough that white text on the pane always wins, translucent enough that the
         // colour of what is behind it still comes through.
         tints = listOf(HazeTint(surface.copy(alpha = tintAlpha)))
@@ -8765,65 +8875,70 @@ private fun HomeMoodChipsRow(
     onSelectMood: (MoodGenre?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val defaultTitles = listOf("Relax", "Energize", "Workout", "Focus", "Commute", "Party")
-    val chips = if (availableMoods.isNotEmpty()) {
-        availableMoods
-    } else {
-        defaultTitles.map { MoodGenre(it, "FEmusic_moods_and_genres", null) }
-    }
+    // No hardcoded fallbacks: the chips come straight from the Explore mood feed, so they
+    // always match the real categories the backend offers (see loadExplore / homeMoods).
+    val chips = availableMoods
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 6.dp)
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val isAllSelected = selectedMood == null
+        val allBg by animateColorAsState(
+            if (isAllSelected) Color.White else Color.Transparent,
+            label = "allBg",
+        )
+        val allText by animateColorAsState(
+            if (isAllSelected) Color.Black else Color.White.copy(alpha = 0.72f),
+            label = "allText",
+        )
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(if (isAllSelected) Color.White else Color.White.copy(alpha = 0.08f))
-                .border(
-                    width = 1.dp,
-                    color = if (isAllSelected) Color.White else Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(16.dp),
-                )
+                .height(35.dp)
+                .clip(RoundedCornerShape(17.dp))
+                .background(allBg)
                 .clickable { onSelectMood(null) }
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .padding(horizontal = 15.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = DesktopStrings["all", "All"],
-                color = if (isAllSelected) Color.Black else Color.White,
-                fontSize = 12.5.sp,
-                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                color = allText,
+                fontSize = 13.sp,
+                fontWeight = if (isAllSelected) FontWeight.SemiBold else FontWeight.Medium,
             )
         }
 
         chips.forEach { mood ->
             val isSelected = selectedMood?.title.equals(mood.title, ignoreCase = true)
+            val bg by animateColorAsState(
+                if (isSelected) Color.White else Color.Transparent,
+                label = "moodBg",
+            )
+            val text by animateColorAsState(
+                if (isSelected) Color.Black else Color.White.copy(alpha = 0.72f),
+                label = "moodText",
+            )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.08f))
-                    .border(
-                        width = 1.dp,
-                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(16.dp),
-                    )
+                    .height(35.dp)
+                    .clip(RoundedCornerShape(17.dp))
+                    .background(bg)
                     .clickable {
                         onSelectMood(if (isSelected) null else mood)
                     }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 15.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = mood.title,
-                    color = if (isSelected) Color.Black else Color.White,
-                    fontSize = 12.5.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = text,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 )
             }
         }
