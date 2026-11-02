@@ -4849,6 +4849,7 @@ private fun DesktopTopBar(
                                 WaveformHalfPane(
                                     songKey = song?.videoId,
                                     progress = safeProgress,
+                                    isPlaying = isPlaying,
                                     isLeftHalf = true,
                                     activeColor = playingTint,
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -4932,6 +4933,7 @@ private fun DesktopTopBar(
                                 WaveformHalfPane(
                                     songKey = song?.videoId,
                                     progress = safeProgress,
+                                    isPlaying = isPlaying,
                                     isLeftHalf = false,
                                     activeColor = playingTint,
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -5084,6 +5086,7 @@ private fun formatPlayerTimestamp(ms: Long): String {
 private fun WaveformHalfPane(
     songKey: String?,
     progress: Float,
+    isPlaying: Boolean,
     isLeftHalf: Boolean,
     activeColor: Color,
     modifier: Modifier = Modifier,
@@ -5115,12 +5118,16 @@ private fun WaveformHalfPane(
             } else {
                 (1f - (i.toFloat() / barCount)).coerceIn(0.25f, 1f)
             }
-            val liveBoost = if (visualizerEnabled && liveBands.isNotEmpty()) {
+            val liveBoost = if (isPlaying && visualizerEnabled && liveBands.isNotEmpty()) {
                 liveBands[(i + if (isLeftHalf) 0 else barCount) % liveBands.size] * 0.45f
             } else {
                 0f
             }
-            val amplitude = ((baseEnvelope * taper) + liveBoost).coerceIn(0.12f, 1f)
+            val amplitude = if (isPlaying) {
+                ((baseEnvelope * taper) + liveBoost).coerceIn(0.12f, 1f)
+            } else {
+                0.12f
+            }
             val barHeight = (maxAmp * amplitude).coerceAtLeast(3.dp.toPx())
             val isPlayed = globalFrac <= progress
             val color = if (isPlayed) {
