@@ -8875,15 +8875,9 @@ private fun HomeMoodChipsRow(
     onSelectMood: (MoodGenre?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val defaultTitles = listOf(
-        "All", "Relax", "Energize", "Workout", "Focus", "Commute", "Party",
-        "Chill", "Sleep", "Romance", "Sad", "Happy", "Ambient", "Jazz",
-    )
-    val chips = if (availableMoods.isNotEmpty()) {
-        availableMoods
-    } else {
-        defaultTitles.drop(1).map { MoodGenre(it, "FEmusic_moods_and_genres", null) }
-    }
+    // No hardcoded fallbacks: the chips come straight from the Explore mood feed, so they
+    // always match the real categories the backend offers (see loadExplore / homeMoods).
+    val chips = availableMoods
 
     Row(
         modifier = modifier
