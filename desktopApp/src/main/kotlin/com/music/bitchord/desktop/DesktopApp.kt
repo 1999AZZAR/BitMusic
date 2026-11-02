@@ -3470,10 +3470,22 @@ fun BitChordDesktopApp() {
                         destination = destination,
                         song = selectedSong,
                         isPlaying = playback.isPlaying,
+                        shuffle = shuffle,
+                        repeatMode = repeatMode,
                         onDestinationSelected = ::selectDestination,
                         onExpand = { overlays.nowPlaying = true },
                         onPlayPause = { if (selectedSong != null) togglePlayPauseFromUser() },
                         onNext = ::playNext,
+                        onPrevious = ::playPrevious,
+                        onShuffle = { setShuffle(!shuffle) },
+                        onRepeat = {
+                            repeatMode = when (repeatMode) {
+                                DesktopRepeatMode.OFF -> DesktopRepeatMode.ALL
+                                DesktopRepeatMode.ALL -> DesktopRepeatMode.ONE
+                                DesktopRepeatMode.ONE -> DesktopRepeatMode.OFF
+                            }
+                            persistence.saveString("repeat_mode", repeatMode.name)
+                        },
                     )
                 },
                 trailing = {
@@ -5459,28 +5471,86 @@ private fun DesktopBottomChrome(
     destination: DesktopDestination,
     song: Song?,
     isPlaying: Boolean,
+    shuffle: Boolean,
+    repeatMode: DesktopRepeatMode,
     onDestinationSelected: (DesktopDestination) -> Unit,
     onExpand: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onShuffle: () -> Unit,
+    onRepeat: () -> Unit,
 ) {
+    val isHome = destination == DesktopDestination.LISTEN_NOW
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = if (isHome) 14.dp else 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // Top section: floating pills — quick transport + queue/lyrics actions.
         if (compact && song != null) {
-            DesktopMiniPlayer(
-                song = song,
-                isPlaying = isPlaying,
-                onExpand = onExpand,
-                onPlayPause = onPlayPause,
-                onNext = onNext,
-            )
+            Row(
+                Modifier
+                    .widthIn(max = 440.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DesktopMiniPlayer(
+                    song = song,
+                    isPlaying = isPlaying,
+                    onExpand = onExpand,
+                    onPlayPause = onPlayPause,
+                    onNext = onNext,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                Modifier
+                    .widthIn(max = 440.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DesktopPillButton(Icons.Rounded.FastRewind, "Previous", onPrevious)
+                DesktopPillButton(BitChordIcons.Shuffle, "Shuffle", onShuffle, active = shuffle)
+                DesktopPillButton(
+                    when (repeatMode) {
+                        DesktopRepeatMode.OFF -> BitChordIcons.Repeat
+                        DesktopRepeatMode.ALL -> BitChordIcons.Repeat
+                        DesktopRepeatMode.ONE -> BitChordIcons.Repeat
+                    },
+                    "Repeat",
+                    onRepeat,
+                    active = repeatMode != DesktopRepeatMode.OFF,
+                )
+                DesktopPillButton(Icons.Rounded.FastForward, "Next", onNext)
+            }
         }
+        // Bottom section: navigation tabs.
         DesktopFloatingNavigation(destination, onDestinationSelected)
+    }
+}
+
+@Composable
+private fun DesktopPillButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+) {
+    val shape = RoundedCornerShape(percent = 50)
+    Box(
+        Modifier
+            .clip(shape)
+            .desktopBarGlass(shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription, tint = if (active) DesktopAccent else Color.White, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -5539,10 +5609,11 @@ private fun DesktopMiniPlayer(
     onExpand: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(percent = 50)
     Row(
-        Modifier
+        modifier
             .widthIn(max = 440.dp)
             .fillMaxWidth()
             .clip(shape)
