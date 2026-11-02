@@ -8071,10 +8071,10 @@ internal fun rememberSpecularGlassBorder(): Brush {
         if (isLight) {
             Brush.linearGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.65f),
-                    Color.White.copy(alpha = 0.25f),
-                    Color.Black.copy(alpha = 0.08f),
-                    Color.Black.copy(alpha = 0.16f),
+                    Color.White.copy(alpha = 0.75f),
+                    Color.White.copy(alpha = 0.35f),
+                    Color.Black.copy(alpha = 0.06f),
+                    Color.Black.copy(alpha = 0.14f),
                 ),
                 start = Offset.Zero,
                 end = Offset.Infinite,
@@ -8082,10 +8082,10 @@ internal fun rememberSpecularGlassBorder(): Brush {
         } else {
             Brush.linearGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.35f),
-                    Color.White.copy(alpha = 0.12f),
-                    Color.White.copy(alpha = 0.04f),
-                    Color.Black.copy(alpha = 0.22f),
+                    Color.White.copy(alpha = 0.50f),
+                    Color.White.copy(alpha = 0.20f),
+                    Color.White.copy(alpha = 0.08f),
+                    Color.Black.copy(alpha = 0.18f),
                 ),
                 start = Offset.Zero,
                 end = Offset.Infinite,
@@ -8140,8 +8140,8 @@ internal fun Modifier.desktopChromeGlass(
     // and top bar are made of follows the playing record's tint with everything else.
     val surface = MaterialTheme.colorScheme.surface
     return desktopFrosted(
-        opaque = surface.copy(alpha = 0.88f),
-        tintAlpha = 0.46f,
+        opaque = surface.copy(alpha = 0.78f),
+        tintAlpha = 0.60f,
         edge = edge,
         fade = fade,
     )
