@@ -8102,8 +8102,8 @@ internal fun Modifier.desktopBarGlass(shape: Shape): Modifier {
 
     return this
         .desktopFrosted(
-            opaque = surface.copy(alpha = if (isLight) 0.88f else 0.82f),
-            tintAlpha = if (isLight) 0.65f else 0.52f,
+            opaque = surface.copy(alpha = if (isLight) 0.78f else 0.72f),
+            tintAlpha = if (isLight) 0.78f else 0.65f,
         )
         .border(0.75.dp, specularBorder, shape)
         .drawBehind {
@@ -8218,7 +8218,7 @@ private fun Modifier.desktopFrosted(
         // Spelled out rather than taken from a preset.
         blurEnabled = true
         backgroundColor = surface
-        blurRadius = 30.dp
+        blurRadius = 40.dp
         // Dark enough that white text on the pane always wins, translucent enough that the
         // colour of what is behind it still comes through.
         tints = listOf(HazeTint(surface.copy(alpha = tintAlpha)))
