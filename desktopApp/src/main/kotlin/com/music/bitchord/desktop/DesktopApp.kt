@@ -4851,9 +4851,6 @@ private fun DesktopTopBar(
                                     progress = safeProgress,
                                     isLeftHalf = true,
                                     activeColor = playingTint,
-                                    onSeekFraction = { frac ->
-                                        if (durationMs > 0L) onSeek((frac * durationMs).toLong())
-                                    },
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
                                 )
                                 Row(
@@ -4937,9 +4934,6 @@ private fun DesktopTopBar(
                                     progress = safeProgress,
                                     isLeftHalf = false,
                                     activeColor = playingTint,
-                                    onSeekFraction = { frac ->
-                                        if (durationMs > 0L) onSeek((frac * durationMs).toLong())
-                                    },
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
                                 )
                             }
@@ -5092,7 +5086,6 @@ private fun WaveformHalfPane(
     progress: Float,
     isLeftHalf: Boolean,
     activeColor: Color,
-    onSeekFraction: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val visualizerEnabled by DesktopAppearanceSettings.visualizer.collectAsState()
@@ -5100,20 +5093,7 @@ private fun WaveformHalfPane(
     val seed = remember(songKey) { (songKey ?: "bitmusic").hashCode() }
 
     Canvas(
-        modifier = modifier.pointerInput(isLeftHalf) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull() ?: continue
-                    if (change.pressed && size.width > 0) {
-                        val localFrac = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
-                        val globalFrac = if (isLeftHalf) localFrac * 0.5f else 0.5f + localFrac * 0.5f
-                        onSeekFraction(globalFrac.coerceIn(0f, 1f))
-                        change.consume()
-                    }
-                }
-            }
-        },
+        modifier = modifier,
     ) {
         val barCount = 28
         if (size.width <= 0f || size.height <= 0f) return@Canvas
