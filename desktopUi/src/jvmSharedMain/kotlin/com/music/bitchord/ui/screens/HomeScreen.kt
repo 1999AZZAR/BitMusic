@@ -10,7 +10,11 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import com.music.bitchord.ui.components.longPressMenuClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -444,28 +448,47 @@ fun CompactTrackRow(
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val rowShape = RoundedCornerShape(12.dp)
+    val backgroundAlpha = when {
+        isCurrent -> 0.14f
+        isHovered -> 0.08f
+        else -> 0f
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(rowShape)
+            .background(Color.White.copy(alpha = backgroundAlpha))
+            .then(
+                if (isCurrent || isHovered) {
+                    Modifier.border(0.5.dp, Color.White.copy(alpha = 0.10f), rowShape)
+                } else {
+                    Modifier
+                }
+            )
+            .hoverable(interactionSource)
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
             .contextClick(onLongPress)
-            .padding(vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(48.dp)) {
+        Box(Modifier.size(52.dp)) {
             AsyncImage(
                 model = thumbnailUrl.artworkAt(ROW_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .thumbnailBorder(RoundedCornerShape(7.dp))
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .thumbnailBorder(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             )
             if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -474,8 +497,9 @@ fun CompactTrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.height(2.dp))
             Text(
-                text = subtitle,
+                text = localizeCardSubtitle(subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -703,7 +727,8 @@ internal fun localizeShelfSubtitle(subtitle: String): String {
 internal fun localizeCardSubtitle(subtitle: String): String {
     if (subtitle.isBlank()) return subtitle
     val delimiter = " • "
-    val parts = subtitle.split(delimiter)
+    val normalized = subtitle.replace(" - ", delimiter).replace(" · ", delimiter)
+    val parts = normalized.split(delimiter)
     val songLabel = stringResource(Res.string.shelf_song_item)
     val singleLabel = stringResource(Res.string.shelf_single)
     val chartLabel = stringResource(Res.string.shelf_chart)

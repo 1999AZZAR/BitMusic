@@ -279,3 +279,4 @@ private const val MIN_WINDOW_HEIGHT_DP = 520.0
 
 /** Where the window's size and place are remembered between runs, as "w|h|x|y". */
 private const val KEY_WINDOW_GEOMETRY = "window_geometry"
+
