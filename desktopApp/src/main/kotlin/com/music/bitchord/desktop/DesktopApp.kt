@@ -8888,7 +8888,7 @@ private fun HomeMoodChipsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 6.dp)
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
