@@ -327,6 +327,8 @@ import com.music.bitchord.data.settings.SmartAnalysis
 import com.music.bitchord.data.settings.TrackAnalysisState
 import com.music.bitchord.data.settings.TransitionWindow
 import com.music.bitchord.ui.icons.BitChordIcons
+import dev.chrisbanes.haze.ExperimentalHazeApi
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -8200,6 +8202,7 @@ internal fun desktopChromeDivider(): Color {
 }
 
 @Composable
+@OptIn(ExperimentalHazeApi::class)
 private fun Modifier.desktopFrosted(
     opaque: Color,
     tintAlpha: Float,
@@ -8218,6 +8221,7 @@ private fun Modifier.desktopFrosted(
     return this.hazeEffect(state = haze) {
         // Spelled out rather than taken from a preset.
         blurEnabled = true
+        inputScale = HazeInputScale.Fixed(0.33f)
         backgroundColor = surface
         blurRadius = 40.dp
         // Dark enough that white text on the pane always wins, translucent enough that the

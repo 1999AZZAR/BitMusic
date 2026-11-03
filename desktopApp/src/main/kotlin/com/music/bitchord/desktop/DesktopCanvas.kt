@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.ui.player.CANVAS_FRAME_CAPTURE_PX
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
@@ -297,7 +298,7 @@ fun DesktopCanvasView(
                     // The backdrop reads the first frame and holds it: re-meshing every frame would
                     // be a full resample twenty-five times a second for a wash nobody is watching
                     // closely, and the clip's palette does not change much across it anyway.
-                    if (shown == 1) DesktopCanvasBackdrop.publish(url, next)
+                    if (shown == 1) DesktopCanvasBackdrop.publish(url, next.captureAtMost(CANVAS_FRAME_CAPTURE_PX))
                     val spent = System.currentTimeMillis() - started
                     delay((decoder.frameIntervalMillis - spent).coerceAtLeast(0L))
                 }
