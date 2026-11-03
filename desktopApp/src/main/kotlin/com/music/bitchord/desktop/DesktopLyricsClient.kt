@@ -7,7 +7,6 @@ import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.lyrics.withBackgroundVocals
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.durationMillis
-import java.util.concurrent.ConcurrentHashMap
 
 /** A track's lyrics and which provider they came from, by its label. */
 data class DesktopLyrics(val source: String, val lines: List<LyricLine>) {
@@ -51,7 +50,12 @@ object DesktopLyricsClient {
 
     private class Cached(val createdAt: Long, val result: Result<DesktopLyrics>)
 
-    private val cache = ConcurrentHashMap<String, Cached>()
+    /** Lyrics are text, but long synced songs still add up across a browsing session. */
+    private val cache = DesktopByteBudgetLru<Cached>(LYRICS_CACHE_BYTES) { cached ->
+        cached.result.getOrNull()?.let { lyrics ->
+            lyrics.lines.sumOf { line -> line.text.length.toLong() * 2L + 32L } + 128L
+        } ?: 128L
+    }
 
     /**
      * The track's lyrics from the configured providers — or, with [only], from that one provider,
@@ -86,7 +90,10 @@ object DesktopLyricsClient {
         // query, and a cache keyed only on the id would hand back the earlier
         // automatic answer and look as though the search had done nothing.
         val cacheKey = "${song.videoId}|$durationMs|${song.title}|${song.artist}|${only.orEmpty()}"
-        cache[cacheKey]?.takeIf { System.currentTimeMillis() - it.createdAt < CACHE_TTL_MS }?.let { return it.result }
+        cache[cacheKey]?.let { cached ->
+            if (System.currentTimeMillis() - cached.createdAt < CACHE_TTL_MS) return cached.result
+            cache.remove(cacheKey)
+        }
 
         // A downloaded or local file carries its own words; asking servers for a string already
         // on disk is a round trip, and it is why a download showed nothing offline.
@@ -125,4 +132,6 @@ object DesktopLyricsClient {
         // The same last pass the network sources get, as on the phone.
         return LrcLib.parseLrc(raw).takeIf { lines -> lines.any { it.text.isNotBlank() } }?.withBackgroundVocals()
     }
+
+    private const val LYRICS_CACHE_BYTES = 8L * 1024 * 1024
 }

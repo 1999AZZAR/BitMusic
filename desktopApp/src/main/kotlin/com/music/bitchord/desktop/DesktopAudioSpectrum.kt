@@ -45,6 +45,17 @@ internal object DesktopAudioSpectrum {
     private val _bands = MutableStateFlow(FloatArray(BANDS))
     val bands: StateFlow<FloatArray> = _bands
 
+    private val real = FloatArray(FFT)
+    private val imaginary = FloatArray(FFT)
+    private val magnitudes = FloatArray(BANDS)
+    private val window = FloatArray(FFT) { index ->
+        0.5f - 0.5f * cos(2.0 * PI * index / FFT).toFloat()
+    }
+    private val bandFrom = IntArray(BANDS)
+    private val bandTo = IntArray(BANDS)
+    private val bandTilt = FloatArray(BANDS) { band -> 1f + 2f * band / (BANDS - 1) }
+    private var bandRate = 0
+
     /** Per-band attack/release state, owned by the analyzer. */
     private val smoothed = FloatArray(BANDS)
 
@@ -95,6 +106,10 @@ internal object DesktopAudioSpectrum {
             fed = 0L
             sampleRate = 44_100
         }
+        bandRate = 0
+        real.fill(0f)
+        imaginary.fill(0f)
+        magnitudes.fill(0f)
         smoothed.fill(0f)
         gain = 0.01f
         _bands.value = FloatArray(BANDS)
@@ -120,8 +135,6 @@ internal object DesktopAudioSpectrum {
      * the tests call.
      */
     internal fun analyzeSnapshot(): FloatArray {
-        val re = FloatArray(FFT)
-        val im = FloatArray(FFT)
         val rate: Int
         synchronized(lock) {
             rate = sampleRate
@@ -130,37 +143,27 @@ internal object DesktopAudioSpectrum {
             val start = (fed - FFT).coerceAtLeast(0L)
             for (i in 0 until FFT) {
                 val sample = if (start + i < fed) ring[((start + i).toInt()) and RING_MASK] else 0f
-                val window = 0.5f - 0.5f * cos(2.0 * PI * i / FFT).toFloat()
-                re[i] = sample * window
+                real[i] = sample * window[i]
             }
         }
-        fft(re, im)
+        imaginary.fill(0f)
+        fft(real, imaginary)
 
         val bins = FFT / 2
-        val binHz = rate.toFloat() / FFT
-        // 40-ish Hz to 12-ish kHz: below is mostly rumble the mix rolled off anyway, above is
-        // whatever a 44.1/48k master left of its encoding silence.
-        val lowBin = 2f
-        val highBin = (12_000f / binHz).coerceIn(lowBin + 1f, (bins - 1).toFloat())
-        val logLow = ln(lowBin)
-        val logHigh = ln(highBin)
-
-        val magnitudes = FloatArray(BANDS)
+        if (rate != bandRate) rebuildBandRanges(rate, bins)
         var framePeak = 1e-4f
         for (band in 0 until BANDS) {
-            val from = exp(logLow + (logHigh - logLow) * band / BANDS).toInt()
-            val to = (exp(logLow + (logHigh - logLow) * (band + 1) / BANDS).toInt())
-                .coerceIn(from + 1, bins)
+            val from = bandFrom[band]
+            val to = bandTo[band]
             var peak = 0f
             for (bin in from until to) {
-                val magnitude = sqrt(re[bin] * re[bin] + im[bin] * im[bin])
+                val magnitude = sqrt(real[bin] * real[bin] + imaginary[bin] * imaginary[bin])
                 if (magnitude > peak) peak = magnitude
             }
             // Pink-noise tilt: music's energy falls ~3 dB an octave, so an honest spectrum is a
             // ski slope with all the life at the left. Lifting the top bands threefold (+9.5 dB
             // at the last octave pair) turns the slope into the field the ear thinks it hears.
-            val tilt = 1f + 2f * band / (BANDS - 1)
-            magnitudes[band] = ln(1f + peak * tilt)
+            magnitudes[band] = ln(1f + peak * bandTilt[band])
             if (magnitudes[band] > framePeak) framePeak = magnitudes[band]
         }
 
@@ -176,6 +179,24 @@ internal object DesktopAudioSpectrum {
         }
         _bands.value = out
         return out
+    }
+
+    private fun rebuildBandRanges(rate: Int, bins: Int) {
+        // 40-ish Hz to 12-ish kHz: below is mostly rumble the mix rolled off anyway, above is
+        // whatever a 44.1/48k master left of its encoding silence.
+        val binHz = rate.toFloat() / FFT
+        val lowBin = 2f
+        val highBin = (12_000f / binHz).coerceIn(lowBin + 1f, (bins - 1).toFloat())
+        val logLow = ln(lowBin)
+        val logHigh = ln(highBin)
+        for (band in 0 until BANDS) {
+            val from = exp(logLow + (logHigh - logLow) * band / BANDS).toInt()
+            bandFrom[band] = from
+            bandTo[band] = exp(logLow + (logHigh - logLow) * (band + 1) / BANDS)
+                .toInt()
+                .coerceIn(from + 1, bins)
+        }
+        bandRate = rate
     }
 
     /** Iterative radix-2 FFT in place; [FFT] is a power of two by construction. */

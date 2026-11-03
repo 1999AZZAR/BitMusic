@@ -46,7 +46,8 @@ internal class DesktopTrackAnalyzer(
     /** Analyses kept between runs, so a track measured yesterday is not measured again today. */
     private val store = AnalysisStore { DesktopAnalysisRuntime.analysisHome() }
 
-    private val results = ConcurrentHashMap<String, TrackAnalysis>()
+    /** Keep only recent analyses in RAM; the durable store remains the source of truth. */
+    private val results = DesktopByteBudgetLru<TrackAnalysis>(ANALYSIS_CACHE_BYTES, ::analysisBytes)
     private val running = ConcurrentHashMap.newKeySet<String>()
 
     /** Tracks the analyser could not measure. */
@@ -74,7 +75,7 @@ internal class DesktopTrackAnalyzer(
         store.load(trackId)?.also { results[trackId] = it }
 
     fun isAnalysed(trackId: String): Boolean =
-        results.containsKey(trackId) || restored(trackId) != null
+        results.contains(trackId) || restored(trackId) != null
 
     /** How far this track has got, for the player's Automix line. */
     fun stateFor(trackId: String): TrackAnalysisState = when {
@@ -86,7 +87,7 @@ internal class DesktopTrackAnalyzer(
         trackId in running -> TrackAnalysisState.ANALYSING
         // A recorded-but-unusable result is the analyser saying it tried and got nothing, and that
         // it will not try again.
-        trackId in failed || results.containsKey(trackId) -> TrackAnalysisState.FAILED
+        trackId in failed || results.contains(trackId) -> TrackAnalysisState.FAILED
         else -> TrackAnalysisState.WAITING
     }
 
@@ -110,7 +111,7 @@ internal class DesktopTrackAnalyzer(
             }
             return
         }
-        if (results.containsKey(trackId) || restored(trackId) != null) return
+        if (results.contains(trackId) || restored(trackId) != null) return
         // Asked every tick; a track that just failed is not resolved and decoded again each time.
         failedAt[trackId]?.let { if (System.currentTimeMillis() - it < RETRY_AFTER_MS) return }
         if (!running.add(trackId)) return
@@ -143,6 +144,10 @@ internal class DesktopTrackAnalyzer(
                     return@execute
                 }
                 if (analysis == null) {
+                    if (failedAt.size >= MAX_FAILED_TRACKS) {
+                        failed.clear()
+                        failedAt.clear()
+                    }
                     failed += trackId
                     failedAt[trackId] = System.currentTimeMillis()
                 }
@@ -237,25 +242,28 @@ internal class DesktopTrackAnalyzer(
             return null
         }
         return try {
-            val out = ArrayList<FloatArray>()
+            var samples = FloatArray(INITIAL_DECODE_CAPACITY.coerceAtMost(MAX_SAMPLES))
             var total = 0
             while (true) {
                 if (stopped()) return null
                 val block = decoder.readSamples() ?: break
                 val count = decoder.sampleCount
                 if (count <= 0) continue
-                out += block.copyOf(count)
-                total += count
-                if (total > MAX_SAMPLES) break
+                val accepted = minOf(count, MAX_SAMPLES - total)
+                if (accepted <= 0) break
+                if (samples.size < total + accepted) {
+                    var capacity = samples.size
+                    while (capacity < total + accepted) {
+                        capacity = (capacity * 2).coerceAtMost(MAX_SAMPLES)
+                    }
+                    samples = samples.copyOf(capacity)
+                }
+                block.copyInto(samples, destinationOffset = total, endIndex = accepted)
+                total += accepted
+                if (accepted < count || total == MAX_SAMPLES) break
             }
             if (total == 0) return null
-            val samples = FloatArray(total)
-            var at = 0
-            for (block in out) {
-                block.copyInto(samples, at)
-                at += block.size
-            }
-            samples
+            samples.copyOf(total)
         } finally {
             decoder.close()
         }
@@ -269,6 +277,13 @@ internal class DesktopTrackAnalyzer(
         failedAt.clear()
     }
 
+    private fun analysisBytes(analysis: TrackAnalysis): Long =
+        512L + analysis.downbeats.size * 32L +
+            analysis.phraseBoundaries.size * 32L +
+            analysis.vocalActivityMask.size * 32L +
+            (analysis.energyCurve.size + analysis.lowEnergyCurve.size) * 48L +
+            (analysis.mixInCandidates.size + analysis.mixOutCandidates.size) * 64L
+
     internal companion object {
 
         /** How long a track that failed to be measured waits before it is tried again. */
@@ -280,8 +295,17 @@ internal class DesktopTrackAnalyzer(
          */
         const val MAX_SAMPLES = 20 * 60 * 11_025
 
+        /** Avoid a long chain of reallocations while keeping short tracks small. */
+        const val INITIAL_DECODE_CAPACITY = 64 * 1024
+
+        /** Failed lookups are cooldown state, not a history of every track seen. */
+        const val MAX_FAILED_TRACKS = 256
+
         /** Stack for the analysis thread. */
         const val ANALYSIS_STACK_BYTES = 64L * 1024 * 1024
+
+        /** Enough for the active track and a small upcoming queue without heap growth. */
+        const val ANALYSIS_CACHE_BYTES = 32L * 1024 * 1024
     }
 }
 
