@@ -69,4 +69,15 @@ class DesktopArtworkCacheTest {
         cache.clear()
         assertEquals(0L, cache.heldBytes)
     }
+
+    @Test
+    fun removingAnEntryReleasesItsBudget() {
+        val cache = lru(100)
+        cache.put("a", 40L)
+        cache.put("b", 20L)
+
+        assertEquals(40L, cache.remove("a"))
+        assertEquals(20L, cache.heldBytes)
+        assertFalse(cache.contains("a"))
+    }
 }

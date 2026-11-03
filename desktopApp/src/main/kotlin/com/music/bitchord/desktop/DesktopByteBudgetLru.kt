@@ -22,17 +22,25 @@ internal class DesktopByteBudgetLru<V : Any>(
     /** How much is being held right now. */
     val heldBytes: Long get() = synchronized(entries) { held }
 
-    fun get(key: String): V? = synchronized(entries) { entries[key] }
+    operator fun get(key: String): V? = synchronized(entries) { entries[key] }
 
     fun contains(key: String): Boolean = synchronized(entries) { entries.containsKey(key) }
 
-    fun put(key: String, value: V) = synchronized(entries) {
+    fun remove(key: String): V? = synchronized(entries) {
+        entries.remove(key)?.also { held -= sizeOf(it) }
+    }
+
+    operator fun set(key: String, value: V) = synchronized(entries) {
         // Put first, then trim: the entry that has just arrived is the one the caller is about to
         // use, and it is the one eviction may not take.
         val replaced = entries.put(key, value)
         if (replaced != null) held -= sizeOf(replaced)
         held += sizeOf(value)
         trim()
+    }
+
+    fun put(key: String, value: V) {
+        this[key] = value
     }
 
     fun clear() = synchronized(entries) {

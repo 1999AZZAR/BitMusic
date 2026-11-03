@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import kotlin.math.roundToInt
@@ -121,11 +123,18 @@ internal fun DesktopCanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) {
     // clip — another every so often.
     LaunchedEffect(rendered, spec.refreshFrameEveryMs) {
         if (!rendered) return@LaunchedEffect
-        frame?.let(reportFrame)
+        suspend fun emitCapture() {
+            val current = frame ?: return
+            val captured = withContext(Dispatchers.Default) {
+                current.captureAtMost(spec.frameCapturePx)
+            }
+            reportFrame(captured)
+        }
+        emitCapture()
         val interval = spec.refreshFrameEveryMs ?: return@LaunchedEffect
         while (isActive) {
             delay(interval)
-            frame?.let(reportFrame)
+            emitCapture()
         }
     }
 
@@ -187,6 +196,39 @@ internal fun DesktopCanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) {
             )
         }
     }
+}
+
+/** Reduce the frame kept by the palette/mesh path; the full-size frame remains the visible video. */
+internal fun ImageBitmap.captureAtMost(maxEdge: Int): ImageBitmap {
+    if (maxEdge <= 0 || maxOf(width, height) <= maxEdge) return this
+    val scale = maxEdge.toFloat() / maxOf(width, height)
+    val targetWidth = (width * scale).roundToInt().coerceAtLeast(1)
+    val targetHeight = (height * scale).roundToInt().coerceAtLeast(1)
+    val target = IntArray(targetWidth * targetHeight)
+    val sourceRow = IntArray(width)
+
+    for (y in 0 until targetHeight) {
+        val sourceY = (y * height / targetHeight).coerceIn(0, height - 1)
+        readPixels(sourceRow, startX = 0, startY = sourceY, width = width, height = 1)
+        for (x in 0 until targetWidth) {
+            target[y * targetWidth + x] = sourceRow[(x * width / targetWidth).coerceIn(0, width - 1)]
+        }
+    }
+
+    val bytes = ByteArray(target.size * 4)
+    target.forEachIndexed { index, argb ->
+        val at = index * 4
+        bytes[at] = (argb and 0xFF).toByte()
+        bytes[at + 1] = ((argb shr 8) and 0xFF).toByte()
+        bytes[at + 2] = ((argb shr 16) and 0xFF).toByte()
+        bytes[at + 3] = ((argb shr 24) and 0xFF).toByte()
+    }
+    val info = ImageInfo(targetWidth, targetHeight, ColorType.BGRA_8888, ColorAlphaType.PREMUL)
+    val bitmap = Bitmap()
+    bitmap.allocPixels(info)
+    bitmap.installPixels(bytes)
+    bitmap.setImmutable()
+    return Image.makeFromBitmap(bitmap).toComposeImageBitmap()
 }
 
 /** The desktop's clip, in the shared player's terms. */
