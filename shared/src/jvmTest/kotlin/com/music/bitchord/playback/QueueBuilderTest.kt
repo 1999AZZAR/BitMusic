@@ -13,39 +13,39 @@ class QueueBuilderTest {
     )
 
     @Test
-    fun mixedExtensionKeepsARecommendationSpine() {
-        val mixed = QueueBuilder.extendMixed(
+    fun rankedExtensionDoesNotForceWeakSources() {
+        val mixed = QueueBuilder.extendRanked(
             existing = emptyList(),
-            batches = listOf(
-                QueueBuilder.CandidateBatch(
-                    "youtube",
-                    listOf(song("yt-1"), song("yt-2"), song("yt-3")),
-                ),
-                QueueBuilder.CandidateBatch("audius", listOf(song("au-1"), song("au-2"))),
-                QueueBuilder.CandidateBatch("jiosaavn", listOf(song("jio-1"))),
+            candidates = listOf(
+                QueueBuilder.RankedCandidate("audius", song("weak"), 39),
+                QueueBuilder.RankedCandidate("jiosaavn", song("good"), 55),
+                QueueBuilder.RankedCandidate("youtube", song("best"), 90),
             ),
-            limit = 6,
-            primarySourceId = "youtube",
+            limit = 5,
+            minimumScore = 40,
         )
 
-        assertEquals(
-            listOf("yt-1", "yt-2", "au-1", "yt-3", "au-2", "jio-1"),
-            mixed.map(Song::videoId),
-        )
+        assertEquals(listOf("best", "good"), mixed.map(Song::videoId))
     }
 
     @Test
     fun mixedExtensionDeduplicatesRecordingsAcrossSources() {
-        val mixed = QueueBuilder.extendMixed(
+        val mixed = QueueBuilder.extendRanked(
             existing = listOf(song("existing", title = "Same Song", artist = "Artist")),
-            batches = listOf(
-                QueueBuilder.CandidateBatch(
+            candidates = listOf(
+                QueueBuilder.RankedCandidate(
                     "audius",
-                    listOf(song("audius-copy", title = "Same Song", artist = "Artist")),
+                    song("audius-copy", title = "Same Song", artist = "Artist"),
+                    100,
                 ),
-                QueueBuilder.CandidateBatch("soundcloud", listOf(song("different", title = "Different"))),
+                QueueBuilder.RankedCandidate(
+                    "soundcloud",
+                    song("different", title = "Different"),
+                    50,
+                ),
             ),
             limit = 5,
+            minimumScore = 40,
         )
 
         assertEquals(listOf("different"), mixed.map(Song::videoId))

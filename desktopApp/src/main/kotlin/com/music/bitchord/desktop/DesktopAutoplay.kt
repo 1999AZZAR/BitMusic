@@ -9,6 +9,8 @@ import com.music.bitchord.playback.QueueBuilder
 /** Most Autoplay-suggested tracks kept queued ahead of the current one at once. */
 const val MAX_QUEUED_AUTOPLAY = 10
 
+private const val MIN_AUTOPLAY_SCORE = 35
+
 /** The station that keeps playing when the queue runs out. */
 internal object DesktopAutoplay {
 
@@ -65,18 +67,30 @@ internal object DesktopAutoplay {
     ): Result<List<Song>> {
         val seed = youtubeSeedFor(seedSong)
         val batches = DesktopSourceRegistry.autoplayCandidates(seedSong, seed, limit)
-        val primarySourceId = when {
-            seedSong.videoId.startsWith("soundcloud:") -> "soundcloud"
-            seed != null -> "youtube"
-            else -> null
+        val ranked = batches.flatMap { batch ->
+            val sourcePrior = sourcePrior(batch.sourceId, seedSong, seed)
+            batch.candidates.map { candidate ->
+                QueueBuilder.RankedCandidate(
+                    sourceId = batch.sourceId,
+                    song = candidate,
+                    score = DesktopTrackMatcher.recommendationScore(candidate, seedSong) + sourcePrior,
+                )
+            }
         }
         DesktopTrackLog.log(
             "autoplay: sources for '${seedSong.title}': " +
                 batches.joinToString { "${it.sourceId}=${it.candidates.size}" } +
-                ", primary=${primarySourceId ?: "balanced"}",
+                ", ranked=${ranked.count { it.score >= MIN_AUTOPLAY_SCORE }}/" +
+                "${ranked.size}",
         )
-        val extra = QueueBuilder.extendMixed(existing, batches, limit, primarySourceId)
+        val extra = QueueBuilder.extendRanked(existing, ranked, limit, MIN_AUTOPLAY_SCORE)
         if (extra.isEmpty()) return Result.success(emptyList())
         return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
+    }
+
+    private fun sourcePrior(sourceId: String, seedSong: Song, youtubeSeed: String?): Int = when {
+        sourceId == "youtube" && youtubeSeed != null -> 45
+        sourceId == "soundcloud" && seedSong.videoId.startsWith("soundcloud:") -> 40
+        else -> 0
     }
 }

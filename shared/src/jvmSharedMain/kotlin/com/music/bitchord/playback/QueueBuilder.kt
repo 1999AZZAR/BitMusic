@@ -24,7 +24,7 @@ import java.util.Locale
  */
 object QueueBuilder {
 
-    /** Candidates returned by one catalogue, kept separate until the mix is assembled. */
+    /** Candidates returned by one catalogue, kept separate until they are scored. */
     data class CandidateBatch(
         val sourceId: String,
         val candidates: List<Song>,
@@ -77,87 +77,58 @@ object QueueBuilder {
         return out
     }
 
+    /** A candidate with a cross-source relevance score. Higher scores are queued first. */
+    data class RankedCandidate(
+        val sourceId: String,
+        val song: Song,
+        val score: Int,
+    )
+
     /**
-     * Extends a queue around one coherent recommendation spine.
+     * Extends a queue from candidates that have already been scored against the station seed.
      *
-     * The primary source supplies a short run before one alternate source is sampled. This keeps
-     * a radio queue musically coherent without pinning it to one catalogue. A source with fewer
-     * usable candidates naturally drops out, while recording identity and artist caps remain
-     * shared across all batches.
+     * Source identity is only a deterministic tie-breaker. A source with no relevant candidate
+     * contributes nothing, while recording identity and artist caps remain shared across sources.
      */
-    fun extendMixed(
+    fun extendRanked(
         existing: List<Song>,
-        batches: List<CandidateBatch>,
+        candidates: List<RankedCandidate>,
         limit: Int,
-        primarySourceId: String? = null,
+        minimumScore: Int,
     ): List<Song> {
         if (limit <= 0) return emptyList()
+        require(minimumScore >= 0) { "minimumScore must not be negative" }
         val taken = existing.toMutableList()
         val perArtist = mutableMapOf<String, Int>()
         val seedArtists = existing.lastOrNull()?.artist?.let(::artistSet).orEmpty()
-        val pending = batches
-            .filter { it.candidates.isNotEmpty() }
-            .map { it.sourceId to it.candidates.toMutableList() }
-            .toMutableList()
         val out = mutableListOf<Song>()
-        var primaryRun = 0
-        var alternateCursor = 0
 
-        while (out.size < limit && pending.isNotEmpty()) {
-            val primaryIndex = primarySourceId?.let { sourceId ->
-                pending.indexOfFirst { it.first == sourceId }.takeIf { it >= 0 }
-            }
-            val alternateIndex = pending.indices
-                .filter { it != primaryIndex }
-                .let { indices ->
-                    indices.firstOrNull { it >= alternateCursor }
-                        ?: indices.firstOrNull()
+        candidates
+            .asSequence()
+            .filter { it.score >= minimumScore }
+            .sortedWith(compareByDescending<RankedCandidate> { it.score }.thenBy { it.sourceId })
+            .forEach { ranked ->
+                if (out.size >= limit) return@forEach
+                val candidate = ranked.song
+                if (taken.any { isSameRecording(it, candidate) }) return@forEach
+
+                val artists = artistSet(candidate.artist)
+                val key = artists.minOrNull()
+                if (key != null) {
+                    val cap = if (artists.any { it in seedArtists }) {
+                        SEED_ARTIST_LIMIT
+                    } else {
+                        PER_ARTIST_LIMIT
+                    }
+                    val played = perArtist[key] ?: 0
+                    if (played >= cap) return@forEach
+                    perArtist[key] = played + 1
                 }
-            val sourceIndex = when {
-                primaryIndex != null && primaryRun < PRIMARY_BLOCK_SIZE -> primaryIndex
-                alternateIndex != null -> alternateIndex
-                primaryIndex != null -> primaryIndex
-                else -> 0
+
+                taken += candidate
+                out += candidate
             }
-            val source = pending[sourceIndex].second
-            val candidate = takeEligible(source, taken, perArtist, seedArtists)
-            if (candidate == null) {
-                pending.removeAt(sourceIndex)
-                continue
-            }
-            taken += candidate
-            out += candidate
-            if (sourceIndex == primaryIndex) {
-                primaryRun++
-            } else {
-                primaryRun = 0
-                alternateCursor = (sourceIndex + 1).coerceAtMost(pending.lastIndex)
-            }
-        }
         return out
-    }
-
-    private fun takeEligible(
-        candidates: MutableList<Song>,
-        taken: List<Song>,
-        perArtist: MutableMap<String, Int>,
-        seedArtists: Set<String>,
-    ): Song? {
-        while (candidates.isNotEmpty()) {
-            val candidate = candidates.removeAt(0)
-            if (taken.any { isSameRecording(it, candidate) }) continue
-
-            val artists = artistSet(candidate.artist)
-            val key = artists.minOrNull()
-            if (key != null) {
-                val cap = if (artists.any { it in seedArtists }) SEED_ARTIST_LIMIT else PER_ARTIST_LIMIT
-                val played = perArtist[key] ?: 0
-                if (played >= cap) continue
-                perArtist[key] = played + 1
-            }
-            return candidate
-        }
-        return null
     }
 
     /**
@@ -207,6 +178,4 @@ object QueueBuilder {
     private val PUNCTUATION = Regex("""[^\p{L}\p{N}]+""")
     private val SPACES = Regex("""\s+""")
 
-    /** Keep a coherent recommendation spine before inserting a cross-source variation. */
-    private const val PRIMARY_BLOCK_SIZE = 2
 }
