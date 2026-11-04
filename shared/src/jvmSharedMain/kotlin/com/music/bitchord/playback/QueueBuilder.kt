@@ -78,16 +78,18 @@ object QueueBuilder {
     }
 
     /**
-     * Extends a queue by taking turns across source batches.
+     * Extends a queue around one coherent recommendation spine.
      *
-     * A source with fewer usable candidates naturally drops out, allowing the remaining sources
-     * to fill the requested window. Recording identity and artist caps are shared across all
-     * batches, so changing source does not reintroduce a duplicate or bypass station variety.
+     * The primary source supplies a short run before one alternate source is sampled. This keeps
+     * a radio queue musically coherent without pinning it to one catalogue. A source with fewer
+     * usable candidates naturally drops out, while recording identity and artist caps remain
+     * shared across all batches.
      */
     fun extendMixed(
         existing: List<Song>,
         batches: List<CandidateBatch>,
         limit: Int,
+        primarySourceId: String? = null,
     ): List<Song> {
         if (limit <= 0) return emptyList()
         val taken = existing.toMutableList()
@@ -95,14 +97,29 @@ object QueueBuilder {
         val seedArtists = existing.lastOrNull()?.artist?.let(::artistSet).orEmpty()
         val pending = batches
             .filter { it.candidates.isNotEmpty() }
-            .map { it.candidates.toMutableList() }
+            .map { it.sourceId to it.candidates.toMutableList() }
             .toMutableList()
         val out = mutableListOf<Song>()
-        var cursor = 0
+        var primaryRun = 0
+        var alternateCursor = 0
 
         while (out.size < limit && pending.isNotEmpty()) {
-            val sourceIndex = cursor % pending.size
-            val source = pending[sourceIndex]
+            val primaryIndex = primarySourceId?.let { sourceId ->
+                pending.indexOfFirst { it.first == sourceId }.takeIf { it >= 0 }
+            }
+            val alternateIndex = pending.indices
+                .filter { it != primaryIndex }
+                .let { indices ->
+                    indices.firstOrNull { it >= alternateCursor }
+                        ?: indices.firstOrNull()
+                }
+            val sourceIndex = when {
+                primaryIndex != null && primaryRun < PRIMARY_BLOCK_SIZE -> primaryIndex
+                alternateIndex != null -> alternateIndex
+                primaryIndex != null -> primaryIndex
+                else -> 0
+            }
+            val source = pending[sourceIndex].second
             val candidate = takeEligible(source, taken, perArtist, seedArtists)
             if (candidate == null) {
                 pending.removeAt(sourceIndex)
@@ -110,7 +127,12 @@ object QueueBuilder {
             }
             taken += candidate
             out += candidate
-            cursor = (sourceIndex + 1) % pending.size.coerceAtLeast(1)
+            if (sourceIndex == primaryIndex) {
+                primaryRun++
+            } else {
+                primaryRun = 0
+                alternateCursor = (sourceIndex + 1).coerceAtMost(pending.lastIndex)
+            }
         }
         return out
     }
@@ -184,4 +206,7 @@ object QueueBuilder {
     private val TOPIC = Regex("""\s*-\s*topic\b""", RegexOption.IGNORE_CASE)
     private val PUNCTUATION = Regex("""[^\p{L}\p{N}]+""")
     private val SPACES = Regex("""\s+""")
+
+    /** Keep a coherent recommendation spine before inserting a cross-source variation. */
+    private const val PRIMARY_BLOCK_SIZE = 2
 }

@@ -13,18 +13,25 @@ class QueueBuilderTest {
     )
 
     @Test
-    fun mixedExtensionTakesTurnsAcrossSources() {
+    fun mixedExtensionKeepsARecommendationSpine() {
         val mixed = QueueBuilder.extendMixed(
             existing = emptyList(),
             batches = listOf(
-                QueueBuilder.CandidateBatch("youtube", listOf(song("yt-1"), song("yt-2"))),
+                QueueBuilder.CandidateBatch(
+                    "youtube",
+                    listOf(song("yt-1"), song("yt-2"), song("yt-3")),
+                ),
                 QueueBuilder.CandidateBatch("audius", listOf(song("au-1"), song("au-2"))),
                 QueueBuilder.CandidateBatch("jiosaavn", listOf(song("jio-1"))),
             ),
-            limit = 5,
+            limit = 6,
+            primarySourceId = "youtube",
         )
 
-        assertEquals(listOf("yt-1", "au-1", "jio-1", "yt-2", "au-2"), mixed.map(Song::videoId))
+        assertEquals(
+            listOf("yt-1", "yt-2", "au-1", "yt-3", "au-2", "jio-1"),
+            mixed.map(Song::videoId),
+        )
     }
 
     @Test

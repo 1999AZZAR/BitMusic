@@ -65,11 +65,17 @@ internal object DesktopAutoplay {
     ): Result<List<Song>> {
         val seed = youtubeSeedFor(seedSong)
         val batches = DesktopSourceRegistry.autoplayCandidates(seedSong, seed, limit)
+        val primarySourceId = when {
+            seedSong.videoId.startsWith("soundcloud:") -> "soundcloud"
+            seed != null -> "youtube"
+            else -> null
+        }
         DesktopTrackLog.log(
             "autoplay: sources for '${seedSong.title}': " +
-                batches.joinToString { "${it.sourceId}=${it.candidates.size}" },
+                batches.joinToString { "${it.sourceId}=${it.candidates.size}" } +
+                ", primary=${primarySourceId ?: "balanced"}",
         )
-        val extra = QueueBuilder.extendMixed(existing, batches, limit)
+        val extra = QueueBuilder.extendMixed(existing, batches, limit, primarySourceId)
         if (extra.isEmpty()) return Result.success(emptyList())
         return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
     }
