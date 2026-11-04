@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.ceil
 
@@ -67,6 +68,12 @@ class DesktopPlaybackEngine(
         stopped = { DesktopListenTogether.state.value.inParty },
     )
     private val commands = ConcurrentLinkedQueue<Command>()
+    private val workAvailable = Semaphore(0)
+
+    private fun submit(command: Command) {
+        commands.add(command)
+        workAvailable.release()
+    }
     private val running = AtomicBoolean(true)
 
     // The output sheet changes the persisted mixer directly. Observe that single source of truth
@@ -77,7 +84,7 @@ class DesktopPlaybackEngine(
         DesktopAudioDevices.selected.collect { selected ->
             if (selected != observedOutputDevice) {
                 observedOutputDevice = selected
-                commands += Command.Reconfigure
+                submit(Command.Reconfigure)
             }
         }
     }
@@ -100,7 +107,7 @@ class DesktopPlaybackEngine(
                         // leaving playback pointed at a mixer that no longer exists.
                         DesktopAudioDevices.select(DesktopAudioDevices.SYSTEM_DEFAULT)
                         observedOutputDevice = DesktopAudioDevices.SYSTEM_DEFAULT
-                        commands += Command.Reconfigure
+                        submit(Command.Reconfigure)
                     }
                 }
             }
@@ -243,7 +250,7 @@ class DesktopPlaybackEngine(
         resolveJob?.cancel()
         nextResolveJob?.cancel()
         upgradeJob?.cancel()
-        commands += Command.Flush
+        submit(Command.Flush)
         searchingBetterFor = null
         incomingSearchingFor = null
 
@@ -269,7 +276,7 @@ class DesktopPlaybackEngine(
                     opened.fold(
                         onSuccess = { track ->
                             searchingBetterFor = song.videoId.takeIf { live.pendingSubstitute != null }
-                            commands += Command.Start(track, playWhenReady)
+                            submit(Command.Start(track, playWhenReady))
                             live.pendingSubstitute?.let { watchForUpgrade(song, it) }
                         },
                         onFailure = { failure -> retryAfterFailure(song, playWhenReady, live.stream, failure) },
@@ -415,7 +422,7 @@ class DesktopPlaybackEngine(
                         track.decoder.seek(latest.positionMs * 1_000)
                         track.startUs = latest.positionMs * 1_000
                     }
-                    commands += Command.ReplaceCurrent(track, playWhenReady = latest.isPlaying)
+                    submit(Command.ReplaceCurrent(track, playWhenReady = latest.isPlaying))
                 },
                 onFailure = { failure ->
                     DesktopTrackLog.log(
@@ -463,6 +470,7 @@ class DesktopPlaybackEngine(
 
     fun play() {
         paused = false
+        workAvailable.release()
         _state.update { it.copy(isPlaying = true) }
     }
 
@@ -477,7 +485,7 @@ class DesktopPlaybackEngine(
             "seek requested: ${positionMs}ms (at ${_state.value.positionMs}ms) from " +
                 Throwable().stackTrace.drop(1).take(6).joinToString(" < ") { "${it.fileName}:${it.lineNumber}" },
         )
-        commands += Command.SeekTo(positionMs.coerceAtLeast(0))
+        submit(Command.SeekTo(positionMs.coerceAtLeast(0)))
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -531,7 +539,7 @@ class DesktopPlaybackEngine(
      */
     fun beginSkipMix(nextVideoId: String, fadeSeconds: Int): Boolean {
         if (blendActive || nextDeckOpenId != nextVideoId) return false
-        commands += Command.MixNow(fadeSeconds.coerceIn(2, MAX_CROSSFADE_SECONDS * 2))
+        submit(Command.MixNow(fadeSeconds.coerceIn(2, MAX_CROSSFADE_SECONDS * 2)))
         return true
     }
 
@@ -603,7 +611,7 @@ class DesktopPlaybackEngine(
                                 "incoming '${song.title}' ready from ${DesktopMusicSources.sourceNameFor(live.stream)}" +
                                     " in ${(System.nanoTime() - askedAt) / 1_000_000}ms",
                             )
-                            commands += Command.Upcoming(track)
+                            submit(Command.Upcoming(track))
                             live.pendingSubstitute?.let { upgradeIncoming(song, track.stream, it) }
                         },
                         onFailure = { failure ->
@@ -640,7 +648,7 @@ class DesktopPlaybackEngine(
             // Not heard yet: the incoming deck itself is replaced, with nothing to interrupt.
             if (upcoming?.song?.videoId == song.videoId && fadeRemaining <= 0 && !displaySwitched) {
                 openTrack(song, better, startAtMs = 0).fold(
-                    onSuccess = { commands += Command.ReplaceUpcoming(it) },
+                    onSuccess = { submit(Command.ReplaceUpcoming(it)) },
                     onFailure = { settleIncomingSearch(song) },
                 )
                 return@launch
@@ -708,7 +716,7 @@ class DesktopPlaybackEngine(
         nextSong = null
         nextLocalStream = null
         awaitingArm.set(null)
-        commands += Command.ClearUpcoming
+        submit(Command.ClearUpcoming)
     }
 
     private fun transitionSecondsFor(next: Song?): Int = when {
@@ -812,16 +820,20 @@ class DesktopPlaybackEngine(
     private var activePlan: TransitionPlan? = null
 
     private fun pump() {
-        while (running.get()) {
-            runCatching { step() }.onFailure { failure ->
-                if (failure is InterruptedException) return
-                DesktopTrackLog.log("audio thread recovered from: ${failure.message}")
+        try {
+            while (running.get()) {
+                runCatching { step() }.onFailure { failure ->
+                    if (failure is InterruptedException) return
+                    DesktopTrackLog.log("audio thread recovered from: ${failure.message}")
+                }
             }
+        } finally {
+            closeEverything()
         }
-        closeEverything()
     }
 
     private fun step() {
+        workAvailable.drainPermits()
         drainCommands()
         recoverSinkIfNeeded()
         val track = current
@@ -831,7 +843,7 @@ class DesktopPlaybackEngine(
             // Nothing is being written, so a frozen played count means nothing.
             stallPlayedFrames = -1L
             pumpExpected = false
-            Thread.sleep(20)
+            workAvailable.acquire()
             return
         }
         pumpBeatNanos = System.nanoTime()
@@ -888,7 +900,9 @@ class DesktopPlaybackEngine(
         sink.gain = volume * normalizationGain
         sink.write(samples, count)
         // The visualizer's tap: the finished mix, exactly as written to the speakers.
-        DesktopAudioSpectrum.offer(samples, count, sink.format.channels, sink.format.sampleRate)
+        if (DesktopAudioSpectrum.isNeeded) {
+            DesktopAudioSpectrum.offer(samples, count, sink.format.channels, sink.format.sampleRate)
+        }
         framesWritten += count / sink.format.channels.coerceAtLeast(1)
         watchSinkHealth()
         if (count > 0 && _state.value.awaitingAudio) _state.update { it.copy(awaitingAudio = false) }
@@ -2086,7 +2100,7 @@ class DesktopPlaybackEngine(
         val wanted = mode.uppercase() == "FLOAT_32"
         if (wanted == preferFloat) return
         preferFloat = wanted
-        commands += Command.Reconfigure
+        submit(Command.Reconfigure)
     }
 
     /**

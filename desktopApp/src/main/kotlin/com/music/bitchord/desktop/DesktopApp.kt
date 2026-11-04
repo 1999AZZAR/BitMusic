@@ -348,6 +348,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -1876,7 +1878,9 @@ fun BitChordDesktopApp() {
             }
         }
     }
-    val playback by playbackEngine.state.collectAsState()
+    val playback by remember(playbackEngine) {
+        playbackEngine.state.map { it.withoutPlayhead() }.distinctUntilChanged()
+    }.collectAsState(playbackEngine.state.value.withoutPlayhead())
 
     // The shared player reads the playhead off this one object, and only where it
     // draws it — see PlaybackPosition — so a tick never recomposes the player.
@@ -2091,7 +2095,7 @@ fun BitChordDesktopApp() {
     LaunchedEffect(playback.song?.videoId, playback.isPlaying) {
         val songId = playback.song?.videoId ?: return@LaunchedEffect
         if (!playback.isPlaying) return@LaunchedEffect
-        var previousPosition = playback.positionMs
+        var previousPosition = playbackEngine.state.value.positionMs
         var countedAsPlay = songId in statsCountedSongs
         while (currentCoroutineContext().isActive) {
             delay(STATS_SAMPLE_MS)
@@ -3279,8 +3283,8 @@ fun BitChordDesktopApp() {
         DesktopKeyboardShortcuts.onPlayPause = ::togglePlayPauseFromUser
         DesktopKeyboardShortcuts.onNext = ::playNext
         DesktopKeyboardShortcuts.onPrevious = ::playPrevious
-        DesktopKeyboardShortcuts.onSeekBack = { seekPlayer((playback.positionMs - 5_000L).coerceAtLeast(0L)) }
-        DesktopKeyboardShortcuts.onSeekForward = { seekPlayer(playback.positionMs + 5_000L) }
+        DesktopKeyboardShortcuts.onSeekBack = { seekPlayer((playbackEngine.state.value.positionMs - 5_000L).coerceAtLeast(0L)) }
+        DesktopKeyboardShortcuts.onSeekForward = { seekPlayer(playbackEngine.state.value.positionMs + 5_000L) }
         onDispose {
             DesktopKeyboardShortcuts.onPlayPause = null
             DesktopKeyboardShortcuts.onNext = null
@@ -3403,17 +3407,18 @@ fun BitChordDesktopApp() {
                     }
                 },
                 topBar = { compact ->
+                    val transport by playbackEngine.state.collectAsState()
                     DesktopTopBar(
                         compact = compact,
                         song = selectedSong,
                         isPlaying = playback.isPlaying,
                         isLoading = playback.isLoading,
                         previousEnabled = liveQueue.hasPrevious ||
-                            playback.positionMs > BACK_RESTARTS_AFTER_MS,
-                        positionMs = playback.positionMs,
+                            transport.positionMs > BACK_RESTARTS_AFTER_MS,
+                        positionMs = transport.positionMs,
                         durationMs = playback.durationMs,
                         progress = if (playback.durationMs > 0L) {
-                            (playback.positionMs.toFloat() / playback.durationMs.toFloat()).coerceIn(0f, 1f)
+                            (transport.positionMs.toFloat() / playback.durationMs.toFloat()).coerceIn(0f, 1f)
                         } else {
                             0f
                         },
@@ -3661,11 +3666,12 @@ fun BitChordDesktopApp() {
                         // The desktop's own player: the record on the mesh of itself, the
                         // visualizer in its tint, and the same lyrics and queue panels the main
                         // window uses — beside it, as slots, so this stays out of their plumbing.
+                        val transport by playbackEngine.state.collectAsState()
                         DesktopNowPlaying(
                             song = playerSong,
                             isPlaying = playback.isPlaying,
                             isLoading = playback.isLoading,
-                            positionMs = playback.positionMs,
+                            positionMs = transport.positionMs,
                             durationMs = playback.durationMs,
                             shuffle = shuffle,
                             repeatMode = repeatMode,

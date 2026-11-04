@@ -58,6 +58,17 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 
 ## 5. Platform-Specific Optimizations
 
+- [x] **v1.4.0-beta-0 Desktop Resource Budget**
+  - One shared 24 MiB decoded-artwork cache, with bounded decoder concurrency and a 32 MiB Skia GPU cache per context.
+  - Smaller initial JVM heap, bounded worker parallelism, and heap reclamation while idle.
+  - Keep playhead ticks local to transport controls; suspend spectrum/Canvas work and motion when the window is hidden or minimized.
+  - Initialize YouTube/BotGuard and the bundled party server only when needed; release idle BotGuard pages.
+  - Park the audio worker while idle or paused instead of polling 50 times per second; guarantee native cleanup on shutdown.
+  - Keep Home/Library folder and sign-in gradients static; decorative cards no longer redraw blurred layers continuously while idle.
+  - Free FFmpeg dictionaries, failed codec contexts, and pointer arrays; avoid redundant Canvas frame copies.
+  - Repeatable isolated Linux resource benchmark: `scripts/profile-desktop.py`.
+  - Measured results and reproduction: [v1.4.0-beta-0 resource report](docs/performance/1.4.0-beta-0.md).
+
 - [x] **Desktop Linux / Wayland** ✔️
   - MPRIS media keys and capabilities hardened; track changes now publish Freedesktop notifications with artwork.
 - [x] **macOS Native Keybinds & Media Center** ✔️

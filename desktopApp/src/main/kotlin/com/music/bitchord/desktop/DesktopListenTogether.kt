@@ -128,12 +128,14 @@ internal object DesktopListenTogether {
         else if (DesktopPartyServer.isAvailable()) "http://127.0.0.1:8000" else ""
     }
 
-    private val http = HttpClient(CIO) {
-        install(ContentNegotiation) { json(json) }
-        install(WebSockets)
-        install(HttpTimeout) {
-            requestTimeoutMillis = 20_000
-            connectTimeoutMillis = 15_000
+    private val http by lazy {
+        HttpClient(CIO) {
+            install(ContentNegotiation) { json(json) }
+            install(WebSockets)
+            install(HttpTimeout) {
+                requestTimeoutMillis = 20_000
+                connectTimeoutMillis = 15_000
+            }
         }
     }
 
@@ -164,9 +166,6 @@ internal object DesktopListenTogether {
     @Volatile private var activePartyServerBase: String? = null
 
     init {
-        // Keep the bundled party server alive whenever this build ships one, so "Use built-in"
-        // works without a separate process.
-        DesktopPartyServer.start()
         // A process cannot resume the old socket safely, and leaving its token around occupies a
         // party slot until the server's grace period expires. Android hands that stale slot back
         // during init; desktop does the same before offering a new room.
@@ -185,7 +184,6 @@ internal object DesktopListenTogether {
                 }
             }
         }
-        refreshServerHealth()
     }
 
     fun setCustomServerUrl(value: String): Result<Unit> = runCatching {
@@ -771,6 +769,7 @@ internal object DesktopListenTogether {
     }
 
     private suspend fun probeHealth(server: String, timeoutMs: Long): Pair<Boolean, Long> {
+        if (server == "http://127.0.0.1:8000") DesktopPartyServer.start()
         val started = clock.nowMs()
         val online = runCatching {
             val response = http.get("$server/healthz") {

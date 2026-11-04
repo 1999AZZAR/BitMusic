@@ -73,6 +73,7 @@ object InnerTubeXResolver {
     private var poTokens: TokenProvider? = null
     private var playerDir: File? = null
     private var warmup: Job? = null
+    private var prewarmEnabled = true
 
     /**
      * @param filesDir where the preprocessed EJS players are kept.
@@ -80,13 +81,14 @@ object InnerTubeXResolver {
      *   WebView one. Null where there is none, which leaves the clients that
      *   need a PoToken out of the catalog.
      */
-    fun init(filesDir: File, store: ConfigStore, poTokenProvider: TokenProvider?) {
+    fun init(filesDir: File, store: ConfigStore, poTokenProvider: TokenProvider?, prewarm: Boolean = true) {
+        prewarmEnabled = prewarm
         prefs = store
         poTokens = poTokenProvider
         playerDir = File(filesDir, "innertubex_players").apply { mkdirs() }
         scope.launch {
             cipherService.setPreprocessedPlayerCache(::readPlayer, ::writePlayer)
-            warm(WARM_DELAY_MS)
+            if (prewarm) warm(WARM_DELAY_MS)
         }
     }
 
@@ -277,7 +279,7 @@ object InnerTubeXResolver {
         excluded.clear()
         minted.clear()
         // A new cookie or visitor means a new player config and PoToken binding.
-        if (prefs != null) warm(0)
+        if (prefs != null && prewarmEnabled) warm(0)
     }
 
     private fun excludedFor(videoId: String): Set<String> {

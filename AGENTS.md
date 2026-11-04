@@ -22,17 +22,17 @@ All development must follow this strict branch lifecycle:
 
 | Branch | Role | Version Pattern | Promotion Rules |
 |---|---|---|---|
-| `master` | **Final Production** | `1.1.0` (clean `X.Y.Z`) | Protected production branch. Tags (`v*.*.*`) are cut here. Direct commits forbidden; changes enter strictly via promotion from `staging`. |
-| `staging` | **Ongoing Development** | `1.1.0-beta-0` (or `-beta-N`) | Integration branch where all new features and bug fixes land and undergo testing. |
-| `feature/<name>` | **New Features** | `1.1.0-beta-<name>-0` | Branched from `staging`. Promoted via Pull Request (`PR -> review -> CI check -> merge`) into `staging`. |
-| `fix/<name>` | **Bug Fixes** | `1.1.0-beta-<name>-0` | Branched from `staging`. Promoted via Pull Request into `staging`. |
+| `master` | **Final Production** | Clean `X.Y.Z` | Protected production branch. Tags (`v*.*.*`) are cut here. Direct commits forbidden; changes enter strictly via promotion from `staging`. |
+| `staging` | **Ongoing Development** | `1.4.0-beta-0` (or `-beta-N`) | Integration branch where all new features and bug fixes land and undergo testing. |
+| `feature/<name>` | **New Features** | `1.4.0-beta-<name>-0` | Branched from `staging`. Promoted via Pull Request (`PR -> review -> CI check -> merge`) into `staging`. |
+| `fix/<name>` | **Bug Fixes** | `1.4.0-beta-<name>-0` | Branched from `staging`. Promoted via Pull Request into `staging`. |
 
 ### Versioning Rules
-- Base version is currently `1.1.0`.
+- The development base is `1.4.0`; staging starts at `1.4.0-beta-0`. Production remains at its last promoted release until staging is explicitly promoted.
 - Release script [`scripts/local-release.sh`](scripts/local-release.sh) detects the active branch and automatically stamps the appropriate debian version.
-- On `master`, builds produce clean `1.1.0`.
-- On `staging`, builds increment `1.1.0-beta-0`, `1.1.0-beta-1`, etc.
-- On `feature/<name>`, builds produce `1.1.0-beta-<name>-0`.
+- On `master`, builds produce the clean version recorded by the promoted `version.txt`.
+- On `staging`, builds increment `1.4.0-beta-0`, `1.4.0-beta-1`, etc.
+- On `feature/<name>`, builds produce `1.4.0-beta-<name>-0`.
 
 ---
 

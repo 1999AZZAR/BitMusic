@@ -9,6 +9,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -34,12 +39,15 @@ internal object DesktopAudioSpectrum {
 
     /** ~30 frames a second: quicker reads make the bars shiver rather than dance. */
     private const val FRAME_MS = 33L
+    private const val SILENCE_THRESHOLD = 0.005f
 
     private val lock = Any()
 
     /** The newest samples last, as mono. */
     private val ring = FloatArray(RING)
     private var fed = 0L
+    private var analyzedFeed = 0L
+    private val frames = Channel<Unit>(Channel.CONFLATED)
     private var sampleRate = 44_100
 
     private val _bands = MutableStateFlow(FloatArray(BANDS))
@@ -66,18 +74,31 @@ internal object DesktopAudioSpectrum {
 
     init {
         scope.launch {
-            while (true) {
-                if (_bands.subscriptionCount.value == 0) {
-                    delay(250)
-                    continue
+            combine(_bands.subscriptionCount, DesktopWindowVisibility.renderingActive) { count, visible ->
+                count > 0 && visible
+            }.distinctUntilChanged().collectLatest { active ->
+                if (!active) return@collectLatest
+                while (isActive) {
+                    val fresh = synchronized(lock) { fed != analyzedFeed }
+                    if (fresh && !DesktopPlayerSettings.reduceAnimation.value) {
+                        analyzeSnapshot()
+                    } else if (smoothed.any { it > SILENCE_THRESHOLD }) {
+                        decaySnapshot()
+                    } else {
+                        if (_bands.value.any { it != 0f }) _bands.value = FloatArray(BANDS)
+                        frames.receive()
+                        continue
+                    }
+                    delay(FRAME_MS)
                 }
-                // Reduce animation settles the bars to nothing rather than freezing them
-                // mid-dance — a frozen field reads as a glitch, an emptying one as a choice.
-                if (!DesktopPlayerSettings.reduceAnimation.value) analyzeSnapshot() else decaySnapshot()
-                delay(FRAME_MS)
             }
         }
     }
+
+    val isNeeded: Boolean
+        get() = _bands.subscriptionCount.value > 0 && DesktopWindowVisibility.renderingActive.value &&
+            DesktopAppearanceSettings.visualizer.value &&
+            !DesktopPlayerSettings.reduceAnimation.value
 
     /**
      * The audio thread's copy of one output block: [count] interleaved samples at [rate]. Mixed
@@ -97,6 +118,7 @@ internal object DesktopAudioSpectrum {
                 at += ch
             }
         }
+        frames.trySend(Unit)
     }
 
     /** Back to a never-played state: empty ring, dark bands, the gain at its floor. */
@@ -104,6 +126,7 @@ internal object DesktopAudioSpectrum {
         synchronized(lock) {
             ring.fill(0f)
             fed = 0L
+            analyzedFeed = 0L
             sampleRate = 44_100
         }
         bandRate = 0
@@ -119,10 +142,10 @@ internal object DesktopAudioSpectrum {
      * The reduce-animation answer: no transform, just the release curve running out, so the
      * field glides down to nothing and stays there until animation is allowed again.
      */
-    private fun decaySnapshot(): FloatArray {
+    internal fun decaySnapshot(): FloatArray {
         val out = FloatArray(BANDS)
         for (band in 0 until BANDS) {
-            smoothed[band] *= 0.80f
+            smoothed[band] = (smoothed[band] * 0.80f).takeIf { it > SILENCE_THRESHOLD } ?: 0f
             out[band] = smoothed[band]
         }
         _bands.value = out
@@ -138,6 +161,7 @@ internal object DesktopAudioSpectrum {
         val rate: Int
         synchronized(lock) {
             rate = sampleRate
+            analyzedFeed = fed
             // Whatever the ring already holds; a just-started stream analyses its first
             // fractions of a second against silence, which the bars simply show as rising.
             val start = (fed - FFT).coerceAtLeast(0L)

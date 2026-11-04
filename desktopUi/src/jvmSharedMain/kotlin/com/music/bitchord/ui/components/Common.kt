@@ -19,10 +19,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
-import com.music.bitchord.ui.player.MESH_CYCLE_MILLIS
 import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.WelcomeMeshPalettes
-import com.music.bitchord.ui.player.cyclingMeshPalette
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
@@ -826,15 +824,11 @@ fun SignInBanner(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(22.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = onSignIn),
     ) {
-        // A card is a few hundred dp the reader is looking straight at, which
-        // is the case the mesh lets keep moving — see its `continuous` note.
         MeshGradientBackground(
-            palette = cyclingMeshPalette(WelcomeMeshPalettes),
+            palette = WelcomeMeshPalettes.first(),
             modifier = Modifier.matchParentSize(),
-            continuous = true,
-            driftMillis = 6_000,
+            animated = false,
             blurRadius = 36.dp,
-            colorFadeMillis = MESH_CYCLE_MILLIS,
         )
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp)) {
             Text(

@@ -39,6 +39,7 @@ import org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_S32
 import org.bytedeco.ffmpeg.global.avutil.av_channel_layout_default
 import org.bytedeco.ffmpeg.global.avutil.av_dict_get
 import org.bytedeco.ffmpeg.global.avutil.av_dict_set
+import org.bytedeco.ffmpeg.global.avutil.av_dict_free
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
 import org.bytedeco.ffmpeg.global.avutil.av_frame_free
 import org.bytedeco.ffmpeg.global.avutil.av_frame_unref
@@ -167,7 +168,11 @@ internal class DesktopAudioDecoder : DesktopSampleSource {
             DesktopAddonStream.DASH -> av_find_input_format("dash")
             else -> null
         }
-        val status = avformat_open_input(opened, if (windowed) null as String? else url, inputFormat, options)
+        val status = try {
+            avformat_open_input(opened, if (windowed) null as String? else url, inputFormat, options)
+        } finally {
+            av_dict_free(options)
+        }
         check(status >= 0) { "could not open stream (${describe(status)})" }
         format = opened
         check(avformat_find_stream_info(opened, null as AVDictionary?) >= 0) { "no stream info" }
@@ -192,12 +197,13 @@ internal class DesktopAudioDecoder : DesktopSampleSource {
         val parameters = stream.codecpar()
         val decoder = avcodec_find_decoder(parameters.codec_id()) ?: error("no decoder for stream")
         val context = avcodec_alloc_context3(decoder)
+        codec = context
+        context.thread_count(1)
         check(avcodec_parameters_to_context(context, parameters) >= 0) { "bad codec parameters" }
         // Lets the decoder keep frame timestamps right when it trims priming samples (Opus's
         // pre-skip, an MP3's encoder delay), which the seek trim in [convert] reads.
         context.pkt_timebase(timeBase)
         check(avcodec_open2(context, decoder, null as AVDictionary?) >= 0) { "decoder refused to open" }
-        codec = context
 
         durationUs = when {
             opened.duration() != AV_NOPTS_VALUE && opened.duration() > 0 -> opened.duration()
@@ -442,6 +448,7 @@ internal class DesktopAudioDecoder : DesktopSampleSource {
     private fun ensureOutputCapacity(samples: Int, target: DesktopPcmFormat) {
         if (outputBuffer != null && samples <= outputBufferSamples) return
         outputBuffer?.deallocate()
+        outputPlanes?.deallocate()
         val bytes = samples.toLong() * target.frameBytes
         val buffer = BytePointer(bytes)
         outputBuffer = buffer

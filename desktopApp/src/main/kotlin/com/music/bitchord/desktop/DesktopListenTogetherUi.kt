@@ -81,6 +81,8 @@ internal fun DesktopListenTogetherDialog(autoplayEnabled: Boolean, onDismiss: ()
     var busy by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(Unit) { DesktopListenTogether.refreshServerHealth() }
+
     LaunchedEffect(server) {
         if (serverDraft == server || serverDraft.isBlank()) serverDraft = server
     }

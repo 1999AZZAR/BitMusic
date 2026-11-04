@@ -26,6 +26,7 @@ import org.bytedeco.ffmpeg.global.avformat.avformat_open_input
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
 import org.bytedeco.ffmpeg.global.avutil.av_dict_set
+import org.bytedeco.ffmpeg.global.avutil.av_dict_free
 import org.bytedeco.ffmpeg.global.avutil.av_frame_alloc
 import org.bytedeco.ffmpeg.global.avutil.av_frame_free
 import org.bytedeco.ffmpeg.global.avutil.av_image_fill_arrays
@@ -81,7 +82,12 @@ internal class DesktopCanvasDecoder {
         av_dict_set(options, "rw_timeout", "15000000", 0)
 
         val opened = AVFormatContext(null)
-        check(avformat_open_input(opened, url, null, options) >= 0) { "could not open the clip" }
+        val status = try {
+            avformat_open_input(opened, url, null, options)
+        } finally {
+            av_dict_free(options)
+        }
+        check(status >= 0) { "could not open the clip" }
         format = opened
         check(avformat_find_stream_info(opened, null as AVDictionary?) >= 0) { "no stream info" }
         streamIndex = av_find_best_stream(
@@ -93,9 +99,10 @@ internal class DesktopCanvasDecoder {
         val parameters = stream.codecpar()
         val decoder = avcodec_find_decoder(parameters.codec_id()) ?: error("no decoder for this clip")
         val context = avcodec_alloc_context3(decoder)
+        codec = context
+        context.thread_count(2)
         check(avcodec_parameters_to_context(context, parameters) >= 0) { "bad codec parameters" }
         check(avcodec_open2(context, decoder, null as AVDictionary?) >= 0) { "decoder refused to open" }
-        codec = context
 
         sourceWidth = context.width()
         sourceHeight = context.height()
@@ -186,6 +193,7 @@ internal class DesktopCanvasDecoder {
         codec?.let { avcodec_free_context(it) }
         format?.let { avformat_close_input(it) }
         buffer?.deallocate()
+        planes?.deallocate()
         strides?.deallocate()
         frame = null
         packet = null

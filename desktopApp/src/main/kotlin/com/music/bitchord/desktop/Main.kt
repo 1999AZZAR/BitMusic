@@ -38,6 +38,7 @@ fun main() {
     if (!DesktopSingleInstance.acquire { DesktopWindowVisibility.show() }) {
         DesktopSingleInstance.exitAsDuplicate()
     }
+    DesktopArtworkCache.install()
     // Before any WebView exists, so the sign-in window can start over with an empty jar.
     DesktopWebCookies.install()
     DesktopWindowVisibility.install()
@@ -71,11 +72,10 @@ fun main() {
             createMinter = { DesktopPoTokenWebView.getNewPoTokenGenerator() },
             available = { DesktopPoTokenWebView.available },
         ).asTokenProvider(),
+        prewarm = false,
     )
     // The public "apps open right now" count; see Presence.
     DesktopPresence.install()
-    // Keep the bundled Listen Together party server alive so "Use built-in" works out of the box.
-    DesktopPartyServer.start()
     desktopMain()
 }
 
@@ -107,6 +107,14 @@ private fun desktopMain() = application {
         height = (startAt?.get(1) ?: 780).dp,
         position = startAt?.let { WindowPosition(it[2].dp, it[3].dp) } ?: WindowPosition.PlatformDefault,
     )
+    val reduceAnimation by DesktopAppearanceSettings.reduceAnimation.collectAsState()
+    val reduceBlur by DesktopAppearanceSettings.reduceDynamicBlur.collectAsState()
+    LaunchedEffect(visible, state.isMinimized, reduceAnimation, reduceBlur) {
+        val rendering = visible && !state.isMinimized
+        DesktopWindowVisibility.setRenderingActive(rendering)
+        DesktopPlayerSettings.reduceAnimation.value = reduceAnimation || !rendering
+        DesktopPlayerSettings.reduceDynamicBlur.value = reduceBlur || !rendering
+    }
     LaunchedEffect(state) {
         snapshotFlow { Triple(state.placement, state.size, state.position) }.collectLatest {
             delay(600)
