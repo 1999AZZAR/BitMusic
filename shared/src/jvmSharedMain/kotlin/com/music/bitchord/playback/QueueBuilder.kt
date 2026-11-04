@@ -24,6 +24,12 @@ import java.util.Locale
  */
 object QueueBuilder {
 
+    /** Candidates returned by one catalogue, kept separate until they are scored. */
+    data class CandidateBatch(
+        val sourceId: String,
+        val candidates: List<Song>,
+    )
+
     /** No more than this many tracks by one artist in a single batch. */
     const val PER_ARTIST_LIMIT = 2
 
@@ -68,6 +74,60 @@ object QueueBuilder {
             taken += candidate
             out += candidate
         }
+        return out
+    }
+
+    /** A candidate with a cross-source relevance score. Higher scores are queued first. */
+    data class RankedCandidate(
+        val sourceId: String,
+        val song: Song,
+        val score: Int,
+    )
+
+    /**
+     * Extends a queue from candidates that have already been scored against the station seed.
+     *
+     * Source identity is only a deterministic tie-breaker. A source with no relevant candidate
+     * contributes nothing, while recording identity and artist caps remain shared across sources.
+     */
+    fun extendRanked(
+        existing: List<Song>,
+        candidates: List<RankedCandidate>,
+        limit: Int,
+        minimumScore: Int,
+    ): List<Song> {
+        if (limit <= 0) return emptyList()
+        require(minimumScore >= 0) { "minimumScore must not be negative" }
+        val taken = existing.toMutableList()
+        val perArtist = mutableMapOf<String, Int>()
+        val seedArtists = existing.lastOrNull()?.artist?.let(::artistSet).orEmpty()
+        val out = mutableListOf<Song>()
+
+        candidates
+            .asSequence()
+            .filter { it.score >= minimumScore }
+            .sortedWith(compareByDescending<RankedCandidate> { it.score }.thenBy { it.sourceId })
+            .forEach { ranked ->
+                if (out.size >= limit) return@forEach
+                val candidate = ranked.song
+                if (taken.any { isSameRecording(it, candidate) }) return@forEach
+
+                val artists = artistSet(candidate.artist)
+                val key = artists.minOrNull()
+                if (key != null) {
+                    val cap = if (artists.any { it in seedArtists }) {
+                        SEED_ARTIST_LIMIT
+                    } else {
+                        PER_ARTIST_LIMIT
+                    }
+                    val played = perArtist[key] ?: 0
+                    if (played >= cap) return@forEach
+                    perArtist[key] = played + 1
+                }
+
+                taken += candidate
+                out += candidate
+            }
         return out
     }
 
@@ -117,4 +177,5 @@ object QueueBuilder {
     private val TOPIC = Regex("""\s*-\s*topic\b""", RegexOption.IGNORE_CASE)
     private val PUNCTUATION = Regex("""[^\p{L}\p{N}]+""")
     private val SPACES = Regex("""\s+""")
+
 }

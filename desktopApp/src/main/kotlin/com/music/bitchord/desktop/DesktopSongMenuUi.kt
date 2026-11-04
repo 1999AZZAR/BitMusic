@@ -630,9 +630,6 @@ private fun DesktopMenuSurface(onDismiss: () -> Unit, content: @Composable () ->
 
 /** Where a menu hangs relative to the button that opened it. */
 private class DesktopMenuPosition : PopupPositionProvider {
-
-    private var above: Boolean? = null
-
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -644,8 +641,7 @@ private class DesktopMenuPosition : PopupPositionProvider {
         val above = anchorBounds.top - popupContentSize.height - margin
         val fitsBelow = below + popupContentSize.height + margin <= windowSize.height
         val fitsAbove = above >= margin
-        val placeAbove = this.above ?: (!fitsBelow && fitsAbove)
-        if (this.above == null) this.above = placeAbove
+        val placeAbove = !fitsBelow && fitsAbove
         val y = when {
             placeAbove && fitsAbove -> above
             fitsBelow -> below
@@ -653,9 +649,30 @@ private class DesktopMenuPosition : PopupPositionProvider {
             // margins.
             else -> margin
         }
-        val x = anchorBounds.left.coerceIn(
+        // Keep the menu's trailing edge aligned with the button in LTR layouts. This makes a
+        // row's trailing overflow menu open inward instead of covering content to its right.
+        val trailingX = if (layoutDirection == LayoutDirection.Ltr) {
+            anchorBounds.right - popupContentSize.width
+        } else {
+            anchorBounds.left
+        }
+        val leadingX = if (layoutDirection == LayoutDirection.Ltr) {
+            anchorBounds.left
+        } else {
+            anchorBounds.right - popupContentSize.width
+        }
+        val maxX = (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)
+        val preferredX = trailingX.coerceIn(margin, maxX)
+        val x = if (popupContentSize.width <= windowSize.width - (margin * 2)) {
+            preferredX
+        } else {
+            leadingX.coerceIn(
+                margin,
+                maxX,
+            )
+        }.coerceIn(
             margin,
-            (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin),
+            maxX,
         )
         return IntOffset(x, y.coerceAtMost((windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
     }

@@ -19,7 +19,7 @@ import com.music.bitchord.data.model.audioSourceOrigin
 
 /**
  * A compact, visually crisp badge identifying the streaming or storage origin of a track
- * (SoundCloud, YouTube, Local files, JioSaavn, or Addon services).
+ * (Audius, SoundCloud, YouTube, Local files, JioSaavn, or Addon services).
  */
 @Composable
 fun AudioSourceBadge(
@@ -30,11 +30,12 @@ fun AudioSourceBadge(
 ) {
     val origin = song.audioSourceOrigin
     // YouTube is the canonical catalogue default; unless explicitly requested,
-    // only non-default origins (SoundCloud, Local, Addon, JioSaavn) are highlighted
+    // only non-default origins (Audius, SoundCloud, Local, Addon, JioSaavn) are highlighted
     // to keep standard album tracklists visually clean.
     if (!showYouTube && origin == AudioSourceOrigin.YOUTUBE) return
 
     val brandColor = when (origin) {
+        AudioSourceOrigin.AUDIUS -> Color(0xFF7C3AED)
         AudioSourceOrigin.SOUNDCLOUD -> Color(0xFFFF5500)
         AudioSourceOrigin.LOCAL -> Color(0xFF30D158)
         AudioSourceOrigin.JIOSAAVN -> Color(0xFF00BFA5)

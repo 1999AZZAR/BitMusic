@@ -17,7 +17,7 @@ internal object DesktopAppearanceSettings {
     private val _reduceAnimation = flag(KEY_REDUCE_ANIMATION, false)
     private val _reduceDynamicBlur = flag(KEY_REDUCE_DYNAMIC_BLUR, false)
     private val _hideVolumeBar = flag(KEY_HIDE_VOLUME_BAR, false)
-    private val _ambientBackdrop = flag(KEY_AMBIENT_BACKDROP, false)
+    private val _ambientBackdrop = flag(KEY_AMBIENT_BACKDROP, true)
     private val _dynamicColor = flag(KEY_DYNAMIC_COLOR, true)
     private val _visualizer = flag(KEY_VISUALIZER, true)
     private val _loudness = flag(KEY_LOUDNESS, true)

@@ -17,6 +17,53 @@ internal object DesktopTrackMatcher {
 
     fun best(candidates: List<Song>, target: Song): Song? = ranked(candidates, target).firstOrNull()
 
+    /**
+     * Scores how much a candidate resembles [target] without requiring it to be the same track.
+     * Exact-match resolution remains stricter in [best]; autoplay needs a graded signal because a
+     * radio recommendation normally has a different title.
+     */
+    fun recommendationScore(candidate: Song, target: Song): Int {
+        val wanted = parseTitle(target.title, target.artist)
+        val got = parseTitle(candidate.title, candidate.artist)
+        if (wanted.core.isEmpty() || got.core.isEmpty()) return 0
+
+        val wantedWords = wanted.words.toSet()
+        val gotWords = got.words.toSet()
+        val sharedWords = wantedWords.intersect(gotWords).size
+        val titleScore = when {
+            wanted.core == got.core -> 60
+            sharedWords >= 2 -> (45 * sharedWords / maxOf(wantedWords.size, gotWords.size)).coerceAtLeast(10)
+            else -> 0
+        }
+
+        val targetArtists = artistNames(target.artist)
+        val candidateArtists = artistNames(candidate.artist)
+        val sharesArtist = targetArtists.any { wantedArtist ->
+            candidateArtists.any { candidateArtist -> sameArtist(wantedArtist, candidateArtist) }
+        }
+        val artistScore = when {
+            !sharesArtist -> 0
+            targetArtists == candidateArtists -> 30
+            else -> 20
+        }
+
+        val durationScore = if (titleScore > 0 || artistScore > 0) {
+            val wantedDuration = target.durationMillis().takeIf { it > 0L }
+            val candidateDuration = candidate.durationMillis().takeIf { it > 0L }
+            when {
+                wantedDuration == null || candidateDuration == null -> 0
+                abs(wantedDuration - candidateDuration) <= 10_000L -> 10
+                abs(wantedDuration - candidateDuration) <= DURATION_TOLERANCE_MS -> 5
+                else -> 0
+            }
+        } else {
+            0
+        }
+
+        val versionPenalty = if (wanted.versions.isNotEmpty() && wanted.versions != got.versions) 25 else 0
+        return (titleScore + artistScore + durationScore - versionPenalty).coerceIn(0, 100)
+    }
+
     /** Every candidate that is the same recording, most confident first. */
     fun ranked(candidates: List<Song>, target: Song): List<Song> = candidates
         .mapNotNull { candidate -> score(candidate, target)?.let { candidate to it } }

@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The case that made addons useless outside search. */
 class DesktopMatcherTest {
@@ -37,6 +38,16 @@ class DesktopMatcherTest {
         )
 
         assertNotNull(DesktopTrackMatcher.best(listOf(catalogueRow), youtubeRow))
+    }
+
+    @Test
+    fun recommendationScorePrefersSharedTitleAndArtist() {
+        val related = Song("related", "Tera Mera Safar", "Mithoon", null)
+        val unrelated = Song("unrelated", "Ocean Drive", "Duke Dumont", null)
+
+        val relatedScore = DesktopTrackMatcher.recommendationScore(related, youtubeRow)
+        val unrelatedScore = DesktopTrackMatcher.recommendationScore(unrelated, youtubeRow)
+        assertTrue(relatedScore > unrelatedScore, "related=$relatedScore unrelated=$unrelatedScore")
     }
 
     @Test

@@ -9,6 +9,8 @@ import com.music.bitchord.playback.QueueBuilder
 /** Most Autoplay-suggested tracks kept queued ahead of the current one at once. */
 const val MAX_QUEUED_AUTOPLAY = 10
 
+private const val MIN_AUTOPLAY_SCORE = 35
+
 /** The station that keeps playing when the queue runs out. */
 internal object DesktopAutoplay {
 
@@ -57,31 +59,38 @@ internal object DesktopAutoplay {
             ?.videoId
     }
 
-    /** One batch of station tracks to append after [existing]. */
+    /** One mixed-source batch of station tracks to append after [existing]. */
     suspend fun tracksFor(
         existing: List<Song>,
         seedSong: Song,
         limit: Int = MAX_QUEUED_AUTOPLAY,
     ): Result<List<Song>> {
-        if (seedSong.videoId.startsWith("soundcloud:")) {
-            val relatedSc = DesktopSoundCloud.getRelatedTracks(seedSong.videoId, limit).getOrNull()
-            if (!relatedSc.isNullOrEmpty()) {
-                val extra = QueueBuilder.extend(existing, relatedSc, limit)
-                if (extra.isNotEmpty()) {
-                    DesktopTrackLog.log("autoplay: soundcloud station for '${seedSong.title}' offered ${extra.size} tracks")
-                    return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
-                }
+        val seed = youtubeSeedFor(seedSong)
+        val batches = DesktopSourceRegistry.autoplayCandidates(seedSong, seed, limit)
+        val ranked = batches.flatMap { batch ->
+            val sourcePrior = sourcePrior(batch.sourceId, seedSong, seed)
+            batch.candidates.map { candidate ->
+                QueueBuilder.RankedCandidate(
+                    sourceId = batch.sourceId,
+                    song = candidate,
+                    score = DesktopTrackMatcher.recommendationScore(candidate, seedSong) + sourcePrior,
+                )
             }
         }
-        val seed = youtubeSeedFor(seedSong)
-        if (seed == null) {
-            DesktopTrackLog.log("autoplay: no YouTube match to seed a station on for '${seedSong.title}'")
-            return Result.success(emptyList())
-        }
-        val related = DesktopSearchClient.radio(seed).getOrElse { return Result.failure(it) }
-        DesktopTrackLog.log("autoplay: station for '${seedSong.title}' offered ${related.size} tracks")
-        val extra = QueueBuilder.extend(existing, related, limit)
+        DesktopTrackLog.log(
+            "autoplay: sources for '${seedSong.title}': " +
+                batches.joinToString { "${it.sourceId}=${it.candidates.size}" } +
+                ", ranked=${ranked.count { it.score >= MIN_AUTOPLAY_SCORE }}/" +
+                "${ranked.size}",
+        )
+        val extra = QueueBuilder.extendRanked(existing, ranked, limit, MIN_AUTOPLAY_SCORE)
         if (extra.isEmpty()) return Result.success(emptyList())
         return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
+    }
+
+    private fun sourcePrior(sourceId: String, seedSong: Song, youtubeSeed: String?): Int = when {
+        sourceId == "youtube" && youtubeSeed != null -> 45
+        sourceId == "soundcloud" && seedSong.videoId.startsWith("soundcloud:") -> 40
+        else -> 0
     }
 }

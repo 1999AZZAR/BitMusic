@@ -24,6 +24,14 @@ class AudioSourceOriginTest {
     }
 
     @Test
+    fun testAudiusOrigin() {
+        val song = testSong("audius:263514")
+        assertEquals(AudioSourceOrigin.AUDIUS, song.audioSourceOrigin)
+        assertEquals("Audius", song.audioSourceOrigin.label)
+        assertEquals("AUDIUS", song.audioSourceOrigin.shortLabel)
+    }
+
+    @Test
     fun testLocalOrigins() {
         assertEquals(AudioSourceOrigin.LOCAL, testSong("local:downloads:123").audioSourceOrigin)
         assertEquals(AudioSourceOrigin.LOCAL, testSong("file:///storage/music/track.flac").audioSourceOrigin)

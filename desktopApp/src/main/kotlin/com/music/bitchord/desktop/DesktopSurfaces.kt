@@ -18,11 +18,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.border
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
@@ -45,13 +48,36 @@ internal val DesktopRowHover = Color(0x1AFFFFFF)
 /** The scrim a modal card sits on. */
 internal val DesktopScrim = Color(0x8C000000)
 
-/** Card, hairline and all. */
+/** Card, hairline and all, with the shared Material You + Liquid Glass treatment. */
+@Composable
 internal fun Modifier.desktopCard(shape: Shape): Modifier =
-    clip(shape).background(DesktopCardFill).border(0.5.dp, DesktopCardEdge, shape)
+    desktopBarGlass(shape)
 
 /** A block of rows inside a card. */
+@Composable
 internal fun Modifier.desktopCardInset(shape: Shape): Modifier =
-    clip(shape).background(DesktopCardInsetFill).border(0.5.dp, DesktopCardEdge, shape)
+    run {
+        val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+        val outline = MaterialTheme.colorScheme.outline
+        val surfaceTint = MaterialTheme.colorScheme.surfaceTint
+        clip(shape)
+        .background(surfaceVariant.copy(alpha = 0.62f))
+        .border(
+            0.75.dp,
+            outline.copy(alpha = 0.55f),
+            shape,
+        )
+        .drawBehind {
+            drawRect(
+                Brush.verticalGradient(
+                    listOf(
+                        surfaceTint.copy(alpha = 0.12f),
+                        Color.Transparent,
+                    ),
+                ),
+            )
+        }
+    }
 
 /** The rule between two rows of a card. A page of Settings has none: its rows are spaced, not ruled. */
 @Composable

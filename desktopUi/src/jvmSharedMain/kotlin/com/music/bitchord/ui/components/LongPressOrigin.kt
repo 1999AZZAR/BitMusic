@@ -72,6 +72,32 @@ object LongPressOrigin {
 }
 
 /**
+ * Window bounds for the last explicit menu button activation.
+ *
+ * The desktop menu host is above shared rows in the composition tree, so it
+ * cannot use the button as its Popup anchor directly. Keeping the bounds in
+ * window coordinates lets the host recreate that anchor without relying on a
+ * stale pointer position.
+ */
+object DesktopMenuAnchor {
+    private var bounds: Rect? = null
+    private var recordedAt = 0L
+
+    fun record(value: Rect) {
+        bounds = value
+        recordedAt = System.nanoTime()
+    }
+
+    fun consume(): Rect? {
+        val value = bounds?.takeIf { System.nanoTime() - recordedAt < FRESH_NANOS }
+        bounds = null
+        return value
+    }
+
+    private const val FRESH_NANOS = 500_000_000L
+}
+
+/**
  * [combinedClickable] that also tells [LongPressOrigin] what was held.
  *
  * Nothing is paid until a hold actually lands: the coordinates are kept by
