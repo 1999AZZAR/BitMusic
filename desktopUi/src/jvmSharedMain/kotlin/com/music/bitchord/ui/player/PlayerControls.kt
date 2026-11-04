@@ -34,6 +34,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import com.music.bitchord.ui.components.SoftVerticalDivider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -932,11 +933,8 @@ private fun Pill(
 
 @Composable
 private fun PillDivider() {
-    Box(
-        Modifier
-            .width(1.dp)
-            .fillMaxHeight()
-            .background(LocalPlayerTint.current.copy(alpha = 0.20f)),
+    SoftVerticalDivider(
+        color = LocalPlayerTint.current.copy(alpha = 0.10f),
     )
 }
 

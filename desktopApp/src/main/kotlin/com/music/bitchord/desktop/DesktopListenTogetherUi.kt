@@ -31,7 +31,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import com.music.bitchord.ui.components.SoftHorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -111,7 +111,7 @@ internal fun DesktopListenTogetherDialog(autoplayEnabled: Boolean, onDismiss: ()
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
                 }
             }
-            if (!LocalDesktopPanelIsPage.current) HorizontalDivider(color = DesktopCardEdge)
+            if (!LocalDesktopPanelIsPage.current) SoftHorizontalDivider()
 
             when {
                 state.inParty -> PartyRoom(
@@ -459,7 +459,7 @@ private fun QueueCard(state: DesktopListenTogether.State) {
         val upcoming = state.queue.items.drop((state.queue.index + 1).coerceAtLeast(0)).take(5)
         if (upcoming.isEmpty()) Text("The shared queue is empty", color = DesktopSecondary)
         upcoming.forEachIndexed { index, track ->
-            if (index > 0 && !LocalDesktopPanelIsPage.current) HorizontalDivider(color = DesktopCardEdge)
+            if (index > 0 && !LocalDesktopPanelIsPage.current) SoftHorizontalDivider()
             Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("${index + 1}", color = DesktopSecondary, modifier = Modifier.width(28.dp))
                 Column(Modifier.weight(1f)) {
@@ -480,7 +480,7 @@ private fun MembersCard(state: DesktopListenTogether.State) {
         }
         Spacer(Modifier.height(8.dp))
         state.members.forEachIndexed { index, member ->
-            if (index > 0 && !LocalDesktopPanelIsPage.current) HorizontalDivider(color = DesktopCardEdge)
+            if (index > 0 && !LocalDesktopPanelIsPage.current) SoftHorizontalDivider()
             MemberRow(member, member.memberId == state.you?.memberId, state.you?.isHost == true && !member.isHost) {
                 DesktopListenTogether.kick(member.memberId)
             }
@@ -505,7 +505,7 @@ private fun HostControls(state: DesktopListenTogether.State) {
         if (LocalDesktopPanelIsPage.current) {
             Spacer(Modifier.height(20.dp))
         } else {
-            HorizontalDivider(color = DesktopCardEdge, modifier = Modifier.padding(vertical = 10.dp))
+            SoftHorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

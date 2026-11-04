@@ -179,7 +179,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
+import com.music.bitchord.ui.components.SoftHorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -253,7 +253,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
@@ -356,7 +355,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.yield
 import org.jetbrains.compose.resources.Font as composeFont
 import org.jetbrains.compose.resources.painterResource
 
@@ -2276,7 +2274,7 @@ fun BitChordDesktopApp() {
         ),
     )
 
-    /** Typing, from the page's field or the sidebar's: the typeahead follows, and an empty field goes back to recents. */
+    /** Typing updates typeahead; an empty field returns to recents. */
     fun editQuery(text: String) {
         query = text
         searchTyping = true
@@ -3360,6 +3358,7 @@ fun BitChordDesktopApp() {
                             true
                         }
                         DesktopPlatform.isMac && event.isMetaPressed && event.key == Key.F -> {
+                            selectDestination(DesktopDestination.SEARCH)
                             searchFocusRequested = true
                             true
                         }
@@ -3464,22 +3463,10 @@ fun BitChordDesktopApp() {
                         accountPlaylists = sidebarAccountPlaylists,
                         localPlaylists = playlists,
                         openedCollectionId = openedCollection?.browseId,
-                        query = query,
-                        onQueryChange = { text ->
-                            editQuery(text)
-                            if (destination != DesktopDestination.SEARCH || overlays.settingsPage != null) {
-                                selectDestination(DesktopDestination.SEARCH)
-                            }
-                        },
-                        onSearch = ::search,
                         onDestinationSelected = ::selectDestination,
                         onOpenAccountPlaylist = { openShelfItem(it, PLAYLISTS_SHELF) },
                         onOpenLocalPlaylist = ::openPlaylist,
                         onOpenSettings = ::openSettings,
-                        // On the Search page the field there owns the focus; this box is the
-                        // shortcut from every other page, so it takes the request only there.
-                        focusSearch = searchFocusRequested && destination != DesktopDestination.SEARCH,
-                        onSearchFocused = { searchFocusRequested = false },
                     )
                 },
                 bottomBar = { compact ->
@@ -4584,9 +4571,6 @@ fun BitChordDesktopApp() {
                             onHistoryClear = DesktopSearchHistory::clear,
                             onTypeaheadLongPress = ::openMenu,
                             contentPadding = sharedPagePadding,
-                            // The page carries its own search bar, Spotify-style; the sidebar's
-                            // box stays the shortcut from every other page. A little top room so
-                            // the pill clears the player bar above it.
                             topPadding = 10.dp,
                             showField = true,
                         )
@@ -5077,10 +5061,8 @@ private fun DesktopTopBar(
                     }
                 }
             }
-            HorizontalDivider(
+            SoftHorizontalDivider(
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-                thickness = 1.dp,
-                color = desktopChromeDivider(),
             )
         }
     }
@@ -5233,40 +5215,11 @@ private fun DesktopSidebar(
     accountPlaylists: List<ShelfItem>,
     localPlaylists: List<DesktopPlaylist>,
     openedCollectionId: String?,
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
     onDestinationSelected: (DesktopDestination) -> Unit,
     onOpenAccountPlaylist: (ShelfItem) -> Unit,
     onOpenLocalPlaylist: (DesktopPlaylist) -> Unit,
     onOpenSettings: () -> Unit,
-    /** Search was picked: the sidebar's box is the page's field, so it takes the focus. */
-    focusSearch: Boolean,
-    onSearchFocused: () -> Unit,
 ) {
-    val searchFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(focusSearch) {
-        if (focusSearch) {
-            runCatching { searchFocusRequester.requestFocus() }
-            onSearchFocused()
-        }
-    }
-    val windowInfo = LocalWindowInfo.current
-    var searchFocused by remember { mutableStateOf(false) }
-    var restoreSearchFocus by remember { mutableStateOf(false) }
-
-    LaunchedEffect(windowInfo.isWindowFocused) {
-        if (!windowInfo.isWindowFocused) {
-            restoreSearchFocus = searchFocused
-        } else if (restoreSearchFocus) {
-            // Let the desktop window finish its activation before asking Compose to put the native
-            // text input target back in focus.
-            yield()
-            searchFocusRequester.requestFocus()
-            restoreSearchFocus = false
-        }
-    }
-
     val titleBarEnabled by DesktopTitleBarSetting.enabled.collectAsState()
     val inlineCaption = DesktopPlatform.drawsOwnWindowFrame && !titleBarEnabled
     // Rows the listener has tucked away; keyed the same way the sidebar lists them.
@@ -5316,18 +5269,6 @@ private fun DesktopSidebar(
                 }
             }
             Spacer(Modifier.height(if (collapsed) 8.dp else 12.dp))
-            if (!collapsed && destination != DesktopDestination.SEARCH) {
-                // The Search page carries its own field; this box is the shortcut from every
-                // other page, and two live inputs on one screen is one too many.
-                DesktopSearchField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onSearch = onSearch,
-                    focusRequester = searchFocusRequester,
-                    onFocusChanged = { searchFocused = it },
-                )
-                Spacer(Modifier.height(20.dp))
-            }
             DesktopSidebarItem(BitChordIcons.Home, DesktopStrings["home", "Home"], destination == DesktopDestination.LISTEN_NOW, collapsed = collapsed) {
                 onDestinationSelected(DesktopDestination.LISTEN_NOW)
             }
@@ -5341,9 +5282,7 @@ private fun DesktopSidebar(
                 onDestinationSelected(DesktopDestination.SEARCH)
             }
             if (!collapsed) {
-                Spacer(Modifier.height(6.dp))
-                HorizontalDivider(color = desktopChromeDivider())
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(18.dp))
             }
             if (HISTORY_KEY !in hiddenSidebar) {
                 DesktopSidebarItem(
@@ -5377,9 +5316,7 @@ private fun DesktopSidebar(
                 )
             }
             if (!collapsed) {
-                Spacer(Modifier.height(6.dp))
-                HorizontalDivider(color = desktopChromeDivider())
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(18.dp))
             }
             val visibleAccount = accountPlaylists.filterNot { "account:${it.browseId}" in hiddenSidebar }
             val visibleLocal = localPlaylists.filterNot { "local:${it.id}" in hiddenSidebar }
@@ -5421,8 +5358,7 @@ private fun DesktopSidebar(
                 }
             }
             if (!collapsed) {
-                HorizontalDivider(color = desktopChromeDivider())
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
                 if (hiddenSidebar.isNotEmpty()) {
                     DesktopSidebarRestoreRow(hiddenSidebar)
                 }
@@ -5432,13 +5368,6 @@ private fun DesktopSidebar(
             }
         }
         }
-        Box(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .width(1.dp)
-                .fillMaxHeight()
-                .background(desktopChromeDivider()),
-        )
     }
 }
 
@@ -8180,40 +8109,12 @@ internal fun Modifier.desktopWindowGlass(
     return if (backdrop == DesktopBackdrop.OFF) {
         desktopChromeGlass(edge, fade)
     } else {
-        val base = background(Color.Black.copy(alpha = WINDOW_GLASS_TINT))
-        if (edge == DesktopChromeEdge.BOTTOM) {
-            // Subtle liquid glass specular highlight along the top edge
-            base.drawBehind {
-                drawLine(
-                    color = Color.White.copy(alpha = 0.08f),
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1f,
-                )
-            }
-        } else {
-            base
-        }
+        background(Color.Black.copy(alpha = WINDOW_GLASS_TINT))
     }
 }
 
 /** Enough to keep white text readable over a bright wallpaper, little enough to let it through. */
 private const val WINDOW_GLASS_TINT = 0.28f
-
-/**
- * The separators in the window's chrome. Acrylic lets the wallpaper through bright, and the solid
- * dark divider cut across it as a black line; a faint white one reads as an edge in the glass
- * instead. Mica is dark enough for the usual one.
- */
-@Composable
-internal fun desktopChromeDivider(): Color {
-    val backdrop by DesktopWindowBackdrop.active.collectAsState()
-    return when {
-        backdrop == DesktopBackdrop.ACRYLIC -> Color.White.copy(alpha = 0.14f)
-        DesktopPlatform.isMac && backdrop != DesktopBackdrop.OFF -> Color.White.copy(alpha = 0.10f)
-        else -> DesktopDivider
-    }
-}
 
 @Composable
 @OptIn(ExperimentalHazeApi::class)

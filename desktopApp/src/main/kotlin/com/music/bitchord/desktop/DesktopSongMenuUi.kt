@@ -40,7 +40,7 @@ import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import com.music.bitchord.ui.components.SoftHorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -705,10 +705,8 @@ private fun DesktopMenuHeader(title: String, onBack: () -> Unit) {
 
 @Composable
 private fun DesktopMenuDivider() {
-    HorizontalDivider(
-        Modifier.padding(vertical = 5.dp),
-        thickness = 0.5.dp,
-        color = DesktopCardEdge,
+    SoftHorizontalDivider(
+        Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
     )
 }
 

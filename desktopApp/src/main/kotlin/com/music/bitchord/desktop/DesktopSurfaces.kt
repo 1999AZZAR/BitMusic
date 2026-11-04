@@ -17,7 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.border
-import androidx.compose.material3.HorizontalDivider
+import com.music.bitchord.ui.components.SoftHorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -83,7 +83,7 @@ internal fun Modifier.desktopCardInset(shape: Shape): Modifier =
 @Composable
 internal fun DesktopCardRule(modifier: Modifier = Modifier) {
     if (LocalDesktopPanelIsPage.current) return
-    HorizontalDivider(modifier, thickness = 0.5.dp, color = DesktopCardEdge)
+    SoftHorizontalDivider(modifier)
 }
 
 /**
