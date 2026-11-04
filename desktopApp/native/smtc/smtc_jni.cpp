@@ -40,6 +40,7 @@ namespace {
 JavaVM* g_vm = nullptr;
 std::thread g_thread;
 std::atomic<bool> g_running{false};
+std::atomic<bool> g_finished{false};
 std::atomic<DWORD> g_thread_id{0};
 HWND g_window = nullptr;
 SystemMediaTransportControls g_controls{nullptr};
@@ -161,7 +162,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
     return DefWindowProcW(window, message, wparam, lparam);
 }
 
-void pump() {
+void pump_impl() {
     init_apartment(apartment_type::single_threaded);
     g_thread_id = GetCurrentThreadId();
 
@@ -239,6 +240,15 @@ void pump() {
     g_running = false;
 }
 
+void pump() {
+    try {
+        pump_impl();
+    } catch (...) {
+        g_running = false;
+    }
+    g_finished = true;
+}
+
 }  // namespace
 
 extern "C" {
@@ -251,16 +261,22 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 JNIEXPORT jboolean JNICALL
 Java_com_music_bitchord_desktop_DesktopWindowsMedia_nativeStart(JNIEnv*, jobject) {
     if (g_thread.joinable()) return g_running ? JNI_TRUE : JNI_FALSE;
+    g_finished = false;
     g_thread = std::thread(pump);
     // The controls exist or they do not within a moment; a caller that had to
     // poll would be the only one who cared.
     for (int i = 0; i < 200 && !g_running && g_thread_id == 0; ++i) {
         Sleep(5);
     }
-    for (int i = 0; i < 100 && !g_running; ++i) {
+    for (int i = 0; i < 100 && !g_running && !g_finished; ++i) {
         Sleep(5);
     }
-    return g_running ? JNI_TRUE : JNI_FALSE;
+    const bool running = g_running;
+    if (!running) {
+        if (g_window != nullptr) PostMessageW(g_window, WM_BITCHORD_QUIT, 0, 0);
+        if (g_thread.joinable()) g_thread.join();
+    }
+    return running ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL

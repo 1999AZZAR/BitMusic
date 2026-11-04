@@ -413,7 +413,9 @@ Java_com_music_bitchord_desktop_DesktopWindowsMedia_nativeStart(JNIEnv*, jobject
     for (int i = 0; i < 400 && !g_finished; ++i) {
         Sleep(5);
     }
-    return g_running ? JNI_TRUE : JNI_FALSE;
+    const bool running = g_running;
+    if (!running && g_thread.joinable()) g_thread.join();
+    return running ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
