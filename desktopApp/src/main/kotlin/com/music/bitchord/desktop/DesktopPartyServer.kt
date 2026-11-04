@@ -14,6 +14,7 @@ internal object DesktopPartyServer {
 
     fun isAvailable(): Boolean = DesktopPlatform.isLinux
 
+    @Synchronized
     fun start() {
         if (!isAvailable()) return
         if (process?.isAlive == true) return
@@ -35,6 +36,7 @@ internal object DesktopPartyServer {
         }.onFailure { DesktopTrackLog.log("party server: failed to start: ${it.message}") }
     }
 
+    @Synchronized
     fun stop() {
         runCatching { process?.destroy() }
         process = null

@@ -18,10 +18,9 @@ class DesktopArtworkCacheTest {
     private fun lru(budget: Long) = DesktopByteBudgetLru<Long>(budget) { it }
 
     @Test
-    fun theBudgetIsAFractionOfTheHeapRatherThanEverything() {
+    fun desktopAndPlayerShareASmallNativeImageBudget() {
         val budget = DesktopArtworkCache.budgetBytes
-        assertTrue(budget >= 32L * 1024 * 1024, "a small heap should still cache something: $budget")
-        assertTrue(budget <= 128L * 1024 * 1024, "the cache should not grow without reason: $budget")
+        assertEquals(24L * 1024 * 1024, budget)
     }
 
     @Test

@@ -534,8 +534,11 @@ compose.desktop {
             it.metadata.installationPath.asFile.absolutePath
         }.get()
         mainClass = composeMainClass
-        jvmArgs("-Xmx512m")
+        jvmArgs("-Xms32m", "-Xmx384m", "-XX:ActiveProcessorCount=4")
         jvmArgs("-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=20000", "-XX:G1PeriodicGCSystemLoadThreshold=0")
+        jvmArgs("-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=20")
+        jvmArgs("-Dskiko.gpu.resourceCacheLimit=32M")
+        jvmArgs("-Dkotlinx.coroutines.io.parallelism=8")
         jvmArgs("-Dbitchord.version=$appVersion")
         if (desktopModuleIndexUrl.isNotBlank()) {
             jvmArgs("-Dbitchord.module.index=$desktopModuleIndexUrl")

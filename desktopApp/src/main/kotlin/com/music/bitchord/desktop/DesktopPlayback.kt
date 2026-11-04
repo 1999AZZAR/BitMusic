@@ -60,6 +60,9 @@ data class DesktopPlaybackState(
         com.music.bitchord.data.settings.SmartAnalysis(),
 )
 
+internal fun DesktopPlaybackState.withoutPlayhead(): DesktopPlaybackState =
+    copy(positionMs = 0L, positionSampledAtNanos = 0L)
+
 internal data class DesktopStream(
     val url: String,
     val format: DesktopStreamFormat = DesktopStreamFormat(),

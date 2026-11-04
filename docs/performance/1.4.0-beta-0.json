@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-04",
+  "units": {
+    "memory": "KiB",
+    "cpu": "percent of one logical CPU"
+  },
+  "workload": "offline muted local WAV, default UI",
+  "time_scale": 1,
+  "baseline": {
+    "version": "1.3.19",
+    "production_commit": "2d519508b5a8904893c5acce63aeb65af7420248",
+    "summary": {
+      "hidden-paused": {
+        "rss_kib": 708636,
+        "pss_kib": 572745,
+        "cpu_percent": 1.97,
+        "threads": 68,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "hidden-playback": {
+        "rss_kib": 710364,
+        "pss_kib": 574479,
+        "cpu_percent": 2.98,
+        "threads": 93,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "idle": {
+        "rss_kib": 572986,
+        "pss_kib": 443652.5,
+        "cpu_percent": 51.16,
+        "threads": 77,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "playback": {
+        "rss_kib": 708468,
+        "pss_kib": 574007,
+        "cpu_percent": 59.58,
+        "threads": 95,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "startup": {
+        "rss_kib": 571058,
+        "pss_kib": 441725,
+        "cpu_percent": 69.55,
+        "threads": 78,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "visible-paused": {
+        "rss_kib": 708708,
+        "pss_kib": 572823.5,
+        "cpu_percent": 47.28,
+        "threads": 68,
+        "processes": 1,
+        "swap_kib": 0
+      }
+    }
+  },
+  "beta": {
+    "version": "1.4.0-beta-0",
+    "artifacts": {
+      "desktopApp-cff220b2c02f999417e0901adef3c8e.jar": "9b92bde6c54d43acca7db8062dd4eea882aa3c98bd0fbee4b877d54786a053e2",
+      "desktopUi-jvm-ec84f81e53728ad36cd4ef82a26319.jar": "ff1452adfdd1de407e037ba2b50095b42833197ea5a77f01564979d0d01556a8",
+      "shared-jvm-26c9fa73ef7f7987301615be8486bdcd.jar": "24edfb4d8afd569eb0737fe1498918b43fe40915f32b34964446648f4ca1671c"
+    },
+    "summary": {
+      "hidden-paused": {
+        "rss_kib": 568444,
+        "pss_kib": 436126,
+        "cpu_percent": 0,
+        "threads": 56,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "hidden-playback": {
+        "rss_kib": 569080,
+        "pss_kib": 436763,
+        "cpu_percent": 1.99,
+        "threads": 68,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "idle": {
+        "rss_kib": 504800,
+        "pss_kib": 375173,
+        "cpu_percent": 0,
+        "threads": 68,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "playback": {
+        "rss_kib": 591766,
+        "pss_kib": 459448,
+        "cpu_percent": 37.71,
+        "threads": 73,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "startup": {
+        "rss_kib": 504708,
+        "pss_kib": 375081,
+        "cpu_percent": 0.99,
+        "threads": 69,
+        "processes": 1,
+        "swap_kib": 0
+      },
+      "visible-paused": {
+        "rss_kib": 566568,
+        "pss_kib": 434249.5,
+        "cpu_percent": 0,
+        "threads": 57,
+        "processes": 1,
+        "swap_kib": 0
+      }
+    }
+  }
+}

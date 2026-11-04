@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -20,7 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.music.bitchord.data.canvas.CanvasArtwork
@@ -36,7 +37,6 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorType
-import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 import kotlin.math.roundToInt
 
@@ -53,6 +53,7 @@ import kotlin.math.roundToInt
 @Composable
 internal fun DesktopCanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) {
     val canvas = spec.canvas
+    val rendering by DesktopWindowVisibility.renderingActive.collectAsState()
     var frame by remember(canvas) { mutableStateOf<ImageBitmap?>(null) }
     val rendered = frame != null
     val running by rememberUpdatedState(spec.isPlaying && !spec.pausedForTransition)
@@ -62,33 +63,33 @@ internal fun DesktopCanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) {
     val reportCover by rememberUpdatedState(spec.onCoverChanged)
     val presentationAlpha by rememberUpdatedState(spec.presentationAlpha)
 
-    LaunchedEffect(canvas) {
+    LaunchedEffect(canvas, rendering) {
+        if (!rendering) return@LaunchedEffect
         // Round and round for as long as the clip is mounted: a canvas is a few
         // seconds long, and the decoder cannot be relied on to rewind an HLS
         // manifest itself, so each pass reopens it.
         while (isActive) {
             val decoder = DesktopCanvasDecoder()
-            val opened = withContext(Dispatchers.IO) {
-                var last: Result<Unit> = Result.failure(IllegalStateException("the clip could not be fetched"))
-                for (candidate in listOfNotNull(canvas.url, canvas.fallbackUrl)) {
-                    val source = if (isManifest(candidate)) {
-                        candidate
-                    } else {
-                        DesktopCanvasCache.fileFor(candidate)?.toAbsolutePath()?.toString() ?: continue
-                    }
-                    last = decoder.open(source)
-                    if (last.isSuccess) break
-                }
-                last
-            }
-            if (opened.isFailure) {
-                DesktopTrackLog.log("canvas: ${opened.exceptionOrNull()?.message}")
-                withContext(Dispatchers.IO) { decoder.close() }
-                return@LaunchedEffect
-            }
-            reportAspect(decoder.width.toFloat() / decoder.height.coerceAtLeast(1))
             var shown = 0
             try {
+                val opened = withContext(Dispatchers.IO) {
+                    var last: Result<Unit> = Result.failure(IllegalStateException("the clip could not be fetched"))
+                    for (candidate in listOfNotNull(canvas.url, canvas.fallbackUrl)) {
+                        val source = if (isManifest(candidate)) {
+                            candidate
+                        } else {
+                            DesktopCanvasCache.fileFor(candidate)?.toAbsolutePath()?.toString() ?: continue
+                        }
+                        last = decoder.open(source)
+                        if (last.isSuccess) break
+                    }
+                    last
+                }
+                if (opened.isFailure) {
+                    DesktopTrackLog.log("canvas: ${opened.exceptionOrNull()?.message}")
+                    return@LaunchedEffect
+                }
+                reportAspect(decoder.width.toFloat() / decoder.height.coerceAtLeast(1))
                 val pixels = ByteArray(decoder.width * decoder.height * 4)
                 val info = ImageInfo.makeN32(decoder.width, decoder.height, ColorAlphaType.OPAQUE)
                 while (isActive) {
@@ -99,9 +100,7 @@ internal fun DesktopCanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) {
                     val decoded = withContext(Dispatchers.IO) { decoder.nextFrame(pixels) }
                     if (!decoded) break
                     shown++
-                    // Handed to Skia rather than copied, so the next frame
-                    // cannot be decoded into the same array.
-                    frame = Image.makeRaster(info, pixels.copyOf(), decoder.width * 4).toComposeImageBitmap()
+                    frame = canvasFrame(info, pixels)
                     val spent = System.currentTimeMillis() - started
                     delay((decoder.frameIntervalMillis - spent).coerceAtLeast(0L))
                 }
@@ -224,11 +223,14 @@ internal fun ImageBitmap.captureAtMost(maxEdge: Int): ImageBitmap {
         bytes[at + 3] = ((argb shr 24) and 0xFF).toByte()
     }
     val info = ImageInfo(targetWidth, targetHeight, ColorType.BGRA_8888, ColorAlphaType.PREMUL)
+    return canvasFrame(info, bytes)
+}
+
+internal fun canvasFrame(info: ImageInfo, pixels: ByteArray): ImageBitmap {
     val bitmap = Bitmap()
-    bitmap.allocPixels(info)
-    bitmap.installPixels(bytes)
+    check(bitmap.installPixels(info, pixels, info.width * 4)) { "Could not allocate canvas frame" }
     bitmap.setImmutable()
-    return Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+    return bitmap.asComposeImageBitmap()
 }
 
 /** The desktop's clip, in the shared player's terms. */

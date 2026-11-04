@@ -17,6 +17,13 @@ internal object DesktopWindowVisibility {
     /** What the window's own `visible` is driven from. */
     val visible: StateFlow<Boolean> = _visible
 
+    private val _renderingActive = MutableStateFlow(true)
+    val renderingActive: StateFlow<Boolean> = _renderingActive
+
+    fun setRenderingActive(active: Boolean) {
+        _renderingActive.value = active
+    }
+
     /** Whether a close should hide rather than quit. */
     @Volatile
     var keepRunningWhenClosed: Boolean = false

@@ -18,10 +18,12 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -54,10 +56,12 @@ import kotlin.coroutines.resumeWithException
  * once the page has loaded and `console` is routed to it.
  */
 class DesktopPoTokenWebView private constructor(
-    // to be used exactly once only during initialization!
-    private val continuation: Continuation<DesktopPoTokenWebView>,
+    continuation: Continuation<DesktopPoTokenWebView>,
 ) : PoTokenMinter {
-    private lateinit var engine: WebEngine
+    private var initialization: Continuation<DesktopPoTokenWebView>? = continuation
+    private var webEngine: WebEngine? = null
+    private val engine: WebEngine get() = checkNotNull(webEngine)
+    private var idleClose: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + JavaFx)
 
     // Guards the single-shot init continuation: an error can arrive from the page, from a
@@ -132,7 +136,7 @@ class DesktopPoTokenWebView private constructor(
             Files.createTempDirectory("potoken_fx_").toFile().apply { deleteOnExit() }
         }.getOrNull()
         userDataDir = dir
-        engine = WebEngine()
+        webEngine = WebEngine()
         if (dir != null) {
             engine.userDataDirectory = dir
         }
@@ -237,7 +241,9 @@ class DesktopPoTokenWebView private constructor(
     private fun onMinterCreated() {
         TrackLog.d(TAG, "poToken minter created successfully, initialization complete")
         if (initResumed.compareAndSet(false, true)) {
-            continuation.resume(this)
+            val continuation = initialization
+            initialization = null
+            continuation?.resume(this)
         }
     }
 
@@ -260,6 +266,8 @@ class DesktopPoTokenWebView private constructor(
 
     private suspend fun generatePoTokenInternal(identifier: String, requestKey: String): String =
         withContext(JavaFx) {
+            check(!closed) { "PoToken WebView has been closed" }
+            idleClose?.cancel()
             suspendCancellableCoroutine { cont ->
                 TrackLog.d(TAG, "PO-token generation requested")
                 poTokenContinuations[requestKey] = cont
@@ -302,7 +310,18 @@ class DesktopPoTokenWebView private constructor(
         get() = Instant.now().isAfter(expirationInstant)
 
     private fun popPoTokenContinuation(identifier: String): Continuation<String>? =
-        poTokenContinuations.remove(identifier)
+        poTokenContinuations.remove(identifier).also {
+            if (poTokenContinuations.isEmpty() && !closed) {
+                idleClose?.cancel()
+                idleClose = scope.launch {
+                    delay(IDLE_RELEASE_MS)
+                    if (poTokenContinuations.isEmpty()) {
+                        isDead = true
+                        close()
+                    }
+                }
+            }
+        }
 
     private fun popAllPoTokenContinuations(): Map<String, Continuation<String>> {
         val result = synchronized(poTokenContinuations) { poTokenContinuations.toMap() }
@@ -343,20 +362,30 @@ class DesktopPoTokenWebView private constructor(
     }
 
     private fun onInitializationErrorCloseAndCancel(error: Throwable) {
+        val continuation = initialization
+        initialization = null
         close()
         if (initResumed.compareAndSet(false, true)) {
-            runCatching { continuation.resumeWithException(error) }
+            runCatching { continuation?.resumeWithException(error) }
         }
     }
 
     override fun close() {
         if (closed) return
         closed = true
+        initialization = null
         scope.cancel()
         val dataDir = userDataDir
         userDataDir = null
         runOnFx {
-            runCatching { if (::engine.isInitialized) engine.load("about:blank") }
+            val current = webEngine
+            webEngine = null
+            runCatching {
+                current?.loadWorker?.cancel()
+                current?.setOnError(null)
+                current?.isJavaScriptEnabled = false
+                current?.load(null)
+            }
                 .onFailure { TrackLog.w(TAG, "PO-token WebView teardown failed type=${it::class.simpleName ?: "unknown"}") }
             runCatching { dataDir?.deleteRecursively() }
         }
@@ -373,6 +402,7 @@ class DesktopPoTokenWebView private constructor(
         private const val INIT_TIMEOUT_MS = 45_000L
 
         private const val GENERATE_TIMEOUT_MS = 15_000L
+        private const val IDLE_RELEASE_MS = 60_000L
 
         /** Whether JavaFX could be started in this process; checked once. */
         val available: Boolean by lazy { startFx() }

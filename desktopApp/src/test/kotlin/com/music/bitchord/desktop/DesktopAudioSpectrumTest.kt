@@ -66,6 +66,15 @@ class DesktopAudioSpectrumTest {
         assertTrue("silence should read flat: ${bands.joinToString()}", bands.all { it < 0.05f })
     }
 
+    @Test
+    fun `stopped audio decays to exact silence instead of rendering stale samples`() {
+        val tone = FloatArray(4096) { sin(2.0 * PI * 440.0 * it / 44_100).toFloat() }
+        DesktopAudioSpectrum.offer(tone, tone.size, 1, 44_100)
+        assertTrue(DesktopAudioSpectrum.analyzeSnapshot().any { it > 0.3f })
+        repeat(32) { DesktopAudioSpectrum.decaySnapshot() }
+        assertTrue(DesktopAudioSpectrum.bands.value.all { it == 0f })
+    }
+
     /** Which band index a frequency folds into, mirroring the analyzer's log mapping. */
     private fun bandOf(hz: Double, rate: Int): Int {
         val binHz = rate.toDouble() / 2_048
