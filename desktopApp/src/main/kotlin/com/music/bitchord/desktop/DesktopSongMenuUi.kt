@@ -653,7 +653,14 @@ private class DesktopMenuPosition : PopupPositionProvider {
             // margins.
             else -> margin
         }
-        val x = anchorBounds.left.coerceIn(
+        // Keep the menu's trailing edge aligned with the button in LTR layouts. This makes a
+        // row's trailing overflow menu open inward instead of covering content to its right.
+        val preferredX = if (layoutDirection == LayoutDirection.Ltr) {
+            anchorBounds.right - popupContentSize.width
+        } else {
+            anchorBounds.left
+        }
+        val x = preferredX.coerceIn(
             margin,
             (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin),
         )

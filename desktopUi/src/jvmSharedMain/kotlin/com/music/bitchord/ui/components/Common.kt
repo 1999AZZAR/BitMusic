@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Rect
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
 import com.music.bitchord.ui.AppUiHost
 import com.music.bitchord.ui.AppUi
@@ -53,6 +54,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
@@ -656,12 +659,17 @@ fun RowMoreButton(
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     iconSize: Dp = 20.dp,
 ) {
+    var anchorBounds by remember { mutableStateOf<Rect?>(null) }
     Box(
         modifier = modifier
             .hangIntoGutter(ROW_MORE_OUTSET)
             .size(36.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .onGloballyPositioned { anchorBounds = it.boundsInWindow() }
+            .clickable {
+                anchorBounds?.let(DesktopMenuAnchor::record)
+                onClick()
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

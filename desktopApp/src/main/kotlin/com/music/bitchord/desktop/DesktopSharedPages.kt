@@ -37,14 +37,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.SearchHistoryEntity
 import com.music.bitchord.data.settings.LibrarySort
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.ui.AppUiHost
+import com.music.bitchord.ui.components.DesktopMenuAnchor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.builtins.ListSerializer
@@ -228,11 +233,14 @@ internal fun <T : Any> DesktopPointerMenuHost(
     modifier: Modifier = Modifier,
     content: @Composable (open: (T) -> Unit) -> Unit,
 ) {
+    val density = LocalDensity.current
     var pointer by remember { mutableStateOf(Offset.Zero) }
-    var target by remember { mutableStateOf<Pair<T, Offset>?>(null) }
+    var hostCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var target by remember { mutableStateOf<Pair<T, Rect>?>(null) }
     Box(
         modifier
             .fillMaxSize()
+            .onGloballyPositioned { hostCoordinates = it }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -242,12 +250,23 @@ internal fun <T : Any> DesktopPointerMenuHost(
                 }
             },
     ) {
-        content { item -> target = item to pointer }
+        content { item ->
+            val explicitAnchor = DesktopMenuAnchor.consume()
+            val anchor = explicitAnchor?.let { bounds ->
+                hostCoordinates?.windowToLocal(Offset(bounds.left, bounds.top))?.let { topLeft ->
+                    Rect(topLeft, topLeft + Offset(bounds.width, bounds.height))
+                }
+            } ?: Rect(pointer, pointer + Offset(1f, 1f))
+            target = item to anchor
+        }
         target?.let { (item, at) ->
             Box(
                 Modifier
-                    .offset { IntOffset(at.x.roundToInt(), at.y.roundToInt()) }
-                    .size(1.dp),
+                    .offset { IntOffset(at.left.roundToInt(), at.top.roundToInt()) }
+                    .size(
+                        with(density) { at.width.coerceAtLeast(1f).toDp() },
+                        with(density) { at.height.coerceAtLeast(1f).toDp() },
+                    ),
             ) {
                 menu(item) { target = null }
             }
