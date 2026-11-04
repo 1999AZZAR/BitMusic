@@ -6,7 +6,7 @@
 
 BitMusic is a high-fidelity YouTube Music client designed specifically for desktop: Linux, Windows, and macOS.
 
-The project is an independent fork of [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh and contributors. BitMusic decouples the core codebase from mobile phones to focus entirely on large viewports, high-fidelity desktop audio pipelines, multi-source stream aggregation, and remote-driven television interfaces.
+The project is an independent fork of [BitChord](https://github.com/kushagrasinghx/BitChord) by Kushagra Singh and contributors. BitMusic focuses on large desktop viewports, high-fidelity audio pipelines, and multi-source stream aggregation.
 
 ---
 
@@ -14,15 +14,20 @@ The project is an independent fork of [BitChord](https://github.com/kushagrasing
 
 <div align="center">
 
-| Discover & Home Dashboard | Multi-Source Search (YouTube + SoundCloud) |
+| Home & Floating Glass Player | Multi-Source Search (YouTube, Audius & SoundCloud) |
 |:---:|:---:|
-| <img src="docs/screenshots/home.png" alt="Discover and Home Dashboard" width="100%" /> | <img src="docs/screenshots/search.png" alt="Multi-Source Search" width="100%" /> |
+| <img src="docs/screenshots/home.png" alt="Home dashboard with the floating frosted-glass player" width="100%" /> | <img src="docs/screenshots/search.png" alt="Multi-source search with source filters and Audius results" width="100%" /> |
 
-| Now Playing & Synchronized Lyrics | Audio Sources & Routing Settings |
+| Now Playing & Queue | Audio Sources & Settings |
 |:---:|:---:|
-| <img src="docs/screenshots/now_playing.png" alt="Now Playing and Synchronized Lyrics" width="100%" /> | <img src="docs/screenshots/settings.png" alt="Audio Sources and Settings" width="100%" /> |
+| <img src="docs/screenshots/now_playing.png" alt="Now Playing with the upcoming queue" width="100%" /> | <img src="docs/screenshots/settings.png" alt="Audio source order and settings above the floating player" width="100%" /> |
+
+<p><strong>Compact Desktop Window — Split Floating Player</strong></p>
+<img src="docs/screenshots/compact_player.png" alt="A smaller desktop window separates track metadata and playback controls into two floating panels" width="900" />
 
 </div>
+
+Captured from the 1.4.2 desktop UI. Playback uses demo tracks and artwork; discovery and search show live public results.
 
 ---
 
@@ -83,11 +88,11 @@ For detailed platform guides and release packaging instructions, see:
 
 ## Branch & Release Model
 
-BitMusic uses a branch-aware versioning model with base version `1.1.0`:
+BitMusic uses a branch-aware versioning model. The current release base is `1.4.2`:
 
-- `master`: Production release-ready code (`1.1.0`, `1.1.1`, ...).
-- `staging`: Ongoing development branch (`1.1.0-beta-0`, `-beta-1`, ...).
-- `feature/<name>`: New feature branches created off `staging` (`1.1.0-beta-<name>-0`).
+- `master`: Production release-ready code (`1.4.2`).
+- `staging`: Ongoing development branch (`1.4.2-beta-0`, `-beta-1`, ...).
+- `feature/<name>`: New feature branches created off `staging` (`1.4.2-beta-<name>-0`).
 
 All contributions merge into `staging` via pull request before promotion to `master`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
