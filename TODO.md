@@ -48,9 +48,9 @@ A prioritized backlog of upcoming features, UX refinements, audio pipeline enhan
 - [ ] **Subsonic / Navidrome API (Self-Hosted)**
   - Native integration for personal music servers (Navidrome, Jellyfin, Gonic, Airsonic).
   - Fast server-side search, instant indexing of massive libraries, artist biographies, and lossless streaming over standard REST API.
-- [ ] **Audius Integration**
-  - Decentralized, free music streaming API offering high-quality 320kbps MP3 streams.
-  - No API key constraints, ideal for electronic, hip-hop, and indie artists.
+- [x] **Audius Integration** ✔️
+  - Added the public REST search/direct-URL resolver and 320kbps MP3 stream adapter.
+  - Integrated Audius into source priority, quality gating, filters, badges, and persisted source settings.
 - [ ] **Bandcamp Public Stream Discovery**
   - Discover and preview public track and album streams from Bandcamp artists.
 

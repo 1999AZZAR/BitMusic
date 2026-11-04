@@ -51,13 +51,21 @@ internal enum class DesktopSourceKind(
         supportsLossless = false,
         rank = 2,
     ),
+    AUDIUS(
+        label = "Audius",
+        detail = "Free · Independent · 320kbps",
+        labels = listOf("Free", "Independent", "320kbps"),
+        needsServer = false,
+        supportsLossless = false,
+        rank = 3,
+    ),
     SOUNDCLOUD(
         label = "SoundCloud",
         detail = "Free · Remixes · Indie",
         labels = listOf("Free", "Remixes", "Indie"),
         needsServer = false,
         supportsLossless = false,
-        rank = 3,
+        rank = 4,
     ),
     YOUTUBE(
         label = "YouTube Music",
@@ -65,7 +73,7 @@ internal enum class DesktopSourceKind(
         labels = listOf("Lossy", "Full catalogue", "Radio"),
         needsServer = false,
         supportsLossless = false,
-        rank = 4,
+        rank = 5,
     ),
 }
 
@@ -78,8 +86,8 @@ internal enum class DesktopAudioQuality(
 ) {
     LOW(64, "Low", "~64 kbps · smallest download"),
     MEDIUM(Int.MAX_VALUE, "Medium", "Best available · ~171 kbps Opus"),
-    HIGH(Int.MAX_VALUE, "High", "JioSaavn up to 320kbps, SoundCloud, YouTube fallback"),
-    LOSSLESS(Int.MAX_VALUE, "Lossless", "Your addons + JioSaavn + SoundCloud, bit-exact where available"),
+    HIGH(Int.MAX_VALUE, "High", "JioSaavn and Audius up to 320kbps, SoundCloud, YouTube fallback"),
+    LOSSLESS(Int.MAX_VALUE, "Lossless", "Your addons + JioSaavn, Audius and SoundCloud, bit-exact where available"),
     ;
 
     /** Whether a stream started under this ceiling may be served by [kind]. */

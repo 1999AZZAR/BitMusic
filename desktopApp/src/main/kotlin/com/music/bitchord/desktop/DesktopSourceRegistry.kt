@@ -114,6 +114,20 @@ internal object DesktopSourceRegistry {
         override suspend fun matches(song: Song): List<Song> = DesktopSoundCloud.matches(song)
     }
 
+    private class AudiusAdapter(
+        override val config: DesktopSourceConfig,
+    ) : SourceAdapter {
+        override val descriptor: DesktopSourceDescriptor
+            get() = config.descriptor()
+
+        override fun owns(song: Song): Boolean = song.videoId.startsWith("audius:")
+
+        override suspend fun resolve(song: Song, quality: String?): Result<DesktopStream?> =
+            DesktopAudius.stream(song.videoId)
+
+        override suspend fun matches(song: Song): List<Song> = DesktopAudius.matches(song)
+    }
+
     private class YouTubeAdapter(
         override val config: DesktopSourceConfig,
     ) : SourceAdapter {
@@ -205,6 +219,7 @@ internal object DesktopSourceRegistry {
                     DesktopSourceKind.MODULE,
                     -> ModuleAdapter(config)
                     DesktopSourceKind.JIOSAAVN -> JioAdapter(config)
+                    DesktopSourceKind.AUDIUS -> AudiusAdapter(config)
                     DesktopSourceKind.SOUNDCLOUD -> SoundCloudAdapter(config)
                     DesktopSourceKind.YOUTUBE -> YouTubeAdapter(config)
                 }
@@ -218,6 +233,11 @@ internal object DesktopSourceRegistry {
 
     /** Search YouTube Music, plus enabled non-YouTube sources when searching songs. */
     suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> = runCatching {
+        if (isEnabled("audius") && DesktopAudius.isAudiusUrl(query)) {
+            DesktopAudius.resolveUrl(query).getOrNull()?.let { song ->
+                return@runCatching listOf(SearchResult.TopTrack(song), SearchResult.Track(song))
+            }
+        }
         if (isEnabled("soundcloud") && com.music.bitchord.data.soundcloud.SoundCloudService.isSoundCloudUrl(query)) {
             val resolved = DesktopSoundCloud.resolveUrl(query).getOrNull()
             if (resolved != null) {
@@ -237,10 +257,14 @@ internal object DesktopSourceRegistry {
         val scJob: Deferred<List<SearchResult>>? = if (isEnabled("soundcloud") && (filter == SearchFilter.ALL || filter == SearchFilter.SONGS)) {
             scope.async { DesktopSoundCloud.search(query, limit = 15).getOrDefault(emptyList()) }
         } else null
+        val audiusJob: Deferred<List<SearchResult>>? = if (isEnabled("audius") && (filter == SearchFilter.ALL || filter == SearchFilter.SONGS)) {
+            scope.async { DesktopAudius.search(query, limit = 15).getOrDefault(emptyList()) }
+        } else null
 
         val yt = ytJob.await()
         val sc = scJob?.await().orEmpty()
-        yt + sc
+        val audius = audiusJob?.await().orEmpty()
+        yt + audius + sc
     }
 
     suspend fun resolve(
@@ -260,6 +284,7 @@ internal object DesktopSourceRegistry {
                 it.config.kind == DesktopSourceKind.CUSTOM_MODULE || it.config.kind == DesktopSourceKind.MODULE
             }
             song.videoId.startsWith("jiosaavn:") -> available.firstOrNull { it.config.kind == DesktopSourceKind.JIOSAAVN }
+            song.videoId.startsWith("audius:") -> available.firstOrNull { it.config.kind == DesktopSourceKind.AUDIUS }
             song.videoId.startsWith("soundcloud:") -> available.firstOrNull { it.config.kind == DesktopSourceKind.SOUNDCLOUD }
             else -> null
         }
@@ -269,7 +294,7 @@ internal object DesktopSourceRegistry {
         // than refused the way a disabled source's row is.
         val heldBack = addonReference != null && owned == null &&
             configs().any { it.id == addonReference.sourceId && it.enabled && it.isComplete }
-        if (!heldBack && (addonReference != null || moduleReference != null || song.videoId.startsWith("jiosaavn:") || song.videoId.startsWith("soundcloud:"))) {
+        if (!heldBack && (addonReference != null || moduleReference != null || song.videoId.startsWith("jiosaavn:") || song.videoId.startsWith("audius:") || song.videoId.startsWith("soundcloud:"))) {
             if (owned == null) error("The source for this track is disabled or no longer configured")
             // This path has nothing to race.
             DesktopTrackLog.log(
@@ -353,6 +378,7 @@ internal object DesktopSourceRegistry {
         val owned = available.any { it.owns(song) } ||
             DesktopModuleSource.parseTrack(song.videoId) != null ||
             song.videoId.startsWith("jiosaavn:") ||
+            song.videoId.startsWith("audius:") ||
             song.videoId.startsWith("soundcloud:")
         if (owned) {
             return@runCatching DesktopLiveResolution(resolve(song, quality, excludedSourceId).getOrThrow())

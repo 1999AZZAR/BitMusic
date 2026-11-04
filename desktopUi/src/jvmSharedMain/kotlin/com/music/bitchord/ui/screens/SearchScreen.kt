@@ -247,7 +247,7 @@ fun SearchScreen(
                     }
                 }
             }
-            // Source scope filters (All, YouTube, SoundCloud, Local) are always reachable right under the search box
+            // Source scope filters (All, YouTube, Audius, SoundCloud, Local) are always reachable right under the search box
             if (!searchingLibrary && !searchingAddons) {
                 SearchSourceFilterTabs(
                     sourceFilter = activeSourceFilter,
@@ -313,6 +313,7 @@ fun SearchScreen(
                         val emptyMessage = when (activeSourceFilter) {
                             SearchSourceFilter.ALL -> stringResource(Res.string.search_empty)
                             SearchSourceFilter.YOUTUBE -> "Search official studio tracks, artists, and albums on YouTube Music."
+                            SearchSourceFilter.AUDIUS -> "Search Audius tracks from independent and electronic artists."
                             SearchSourceFilter.SOUNDCLOUD -> "Search SoundCloud tracks, bootlegs, or paste any soundcloud.com link."
                             SearchSourceFilter.LOCAL -> "Search your scanned local music files."
                         }
@@ -338,6 +339,13 @@ fun SearchScreen(
                                 is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.YOUTUBE
                                 is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.YOUTUBE
                                 is SearchResult.Browse -> !row.item.browseId.startsWith("soundcloud:")
+                            }
+                        }
+                        SearchSourceFilter.AUDIUS -> results.data.filter { row ->
+                            when (row) {
+                                is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.AUDIUS
+                                is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.AUDIUS
+                                is SearchResult.Browse -> row.item.browseId.startsWith("audius:")
                             }
                         }
                         SearchSourceFilter.SOUNDCLOUD -> results.data.filter { row ->
@@ -1054,6 +1062,7 @@ private fun SearchSourceFilterTabs(
             val activeColor = when (entry) {
                 SearchSourceFilter.ALL -> MaterialTheme.colorScheme.primary
                 SearchSourceFilter.YOUTUBE -> Color(0xFFFF453A)
+                SearchSourceFilter.AUDIUS -> Color(0xFF7C3AED)
                 SearchSourceFilter.SOUNDCLOUD -> Color(0xFFFF5500)
                 SearchSourceFilter.LOCAL -> Color(0xFF30D158)
             }

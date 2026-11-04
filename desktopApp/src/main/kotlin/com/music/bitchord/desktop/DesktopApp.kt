@@ -2294,6 +2294,13 @@ fun BitChordDesktopApp() {
                     is SearchResult.Browse -> !row.item.browseId.startsWith("soundcloud:")
                 }
             }
+            SearchSourceFilter.AUDIUS -> rows.filter { row ->
+                when (row) {
+                    is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.AUDIUS
+                    is SearchResult.Track -> row.song.audioSourceOrigin == AudioSourceOrigin.AUDIUS
+                    is SearchResult.Browse -> row.item.browseId.startsWith("audius:")
+                }
+            }
             SearchSourceFilter.SOUNDCLOUD -> rows.filter { row ->
                 when (row) {
                     is SearchResult.TopTrack -> row.song.audioSourceOrigin == AudioSourceOrigin.SOUNDCLOUD
@@ -7462,6 +7469,7 @@ private fun DesktopSourceSettingsRow(
                 DesktopSourceKind.ADDON -> Icons.Rounded.Extension
                 DesktopSourceKind.CUSTOM_MODULE, DesktopSourceKind.MODULE -> Icons.Rounded.Extension
                 DesktopSourceKind.JIOSAAVN -> Icons.Rounded.GraphicEq
+                DesktopSourceKind.AUDIUS -> Icons.Rounded.GraphicEq
                 DesktopSourceKind.SOUNDCLOUD -> Icons.Rounded.Cloud
                 DesktopSourceKind.YOUTUBE -> Icons.Rounded.PlayCircle
             },

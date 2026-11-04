@@ -370,6 +370,7 @@ enum class AudioSourceOrigin(
     val label: String,
     val shortLabel: String,
 ) {
+    AUDIUS("Audius", "AUDIUS"),
     SOUNDCLOUD("SoundCloud", "SC"),
     YOUTUBE("YouTube", "YT"),
     LOCAL("Local", "LOCAL"),
@@ -379,6 +380,7 @@ enum class AudioSourceOrigin(
 
 val Song.audioSourceOrigin: AudioSourceOrigin
     get() = when {
+        videoId.startsWith("audius:") -> AudioSourceOrigin.AUDIUS
         videoId.startsWith("soundcloud:") -> AudioSourceOrigin.SOUNDCLOUD
         videoId.startsWith("local:") || videoId.startsWith("file://") || videoId.startsWith("content://") -> AudioSourceOrigin.LOCAL
         videoId.startsWith("jiosaavn:") -> AudioSourceOrigin.JIOSAAVN
@@ -414,11 +416,12 @@ enum class SearchFilter(val label: String, val params: String?) {
 }
 
 /**
- * Filter scope for multi-source search (All sources, official YouTube Music, SoundCloud, or Local files).
+ * Filter scope for multi-source search (All sources, official YouTube Music, Audius, SoundCloud, or Local files).
  */
 enum class SearchSourceFilter(val label: String) {
     ALL("All Sources"),
     YOUTUBE("YouTube"),
+    AUDIUS("Audius"),
     SOUNDCLOUD("SoundCloud"),
     LOCAL("Local"),
 }
