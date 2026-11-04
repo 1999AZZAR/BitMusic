@@ -8113,15 +8113,15 @@ internal fun Modifier.desktopBarGlass(shape: Shape): Modifier {
 
     return this
         .desktopFrosted(
-            opaque = surface.copy(alpha = if (isLight) 0.78f else 0.72f),
-            tintAlpha = if (isLight) 0.78f else 0.65f,
+            opaque = surface.copy(alpha = if (isLight) 0.70f else 0.58f),
+            tintAlpha = if (isLight) 0.72f else 0.58f,
         )
         .border(0.75.dp, specularBorder, shape)
         .drawBehind {
             drawRect(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = if (isLight) 0.14f else 0.07f),
+                        Color.White.copy(alpha = if (isLight) 0.18f else 0.11f),
                         Color.Transparent,
                     ),
                     startY = 0f,
@@ -8150,8 +8150,8 @@ internal fun Modifier.desktopChromeGlass(
     // and top bar are made of follows the playing record's tint with everything else.
     val surface = MaterialTheme.colorScheme.surface
     return desktopFrosted(
-        opaque = surface.copy(alpha = 0.78f),
-        tintAlpha = 0.60f,
+        opaque = surface.copy(alpha = 0.68f),
+        tintAlpha = 0.54f,
         edge = edge,
         fade = fade,
     )
@@ -8231,11 +8231,11 @@ private fun Modifier.desktopFrosted(
         blurEnabled = true
         inputScale = HazeInputScale.Fixed(0.33f)
         backgroundColor = surface
-        blurRadius = 40.dp
+        blurRadius = 48.dp
         // Dark enough that white text on the pane always wins, translucent enough that the
         // colour of what is behind it still comes through.
         tints = listOf(HazeTint(surface.copy(alpha = tintAlpha)))
-        noiseFactor = 0.04f
+        noiseFactor = 0.035f
         // Assigned either way: the scope belongs to the node and outlives the draw, so a pane that
         // stops dissolving — the leading stretch of the top bar, when the window grows back out of
         // compact — would otherwise keep the mask it was given in the other layout.
