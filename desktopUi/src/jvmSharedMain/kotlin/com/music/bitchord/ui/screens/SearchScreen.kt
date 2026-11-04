@@ -44,7 +44,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
+import com.music.bitchord.ui.components.SoftHorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -143,10 +143,7 @@ fun SearchScreen(
      * of the tab, so the field has to clear it; the desktop has no such bar.
      */
     topPadding: Dp,
-    /**
-     * Whether the page draws its own search field. The desktop's sidebar has
-     * the one search box the window needs, so the page there is results only.
-     */
+    /** Whether the host lets this page own the search field. */
     showField: Boolean = true,
     /**
      * Whether the page is searching the device's Local Music folder instead of
@@ -428,10 +425,8 @@ fun SearchScreen(
                                 )
                             }
                             if (index < section.rows.lastIndex) {
-                                HorizontalDivider(
+                                SoftHorizontalDivider(
                                     modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
-                                    thickness = 0.5.dp,
-                                    color = MaterialTheme.colorScheme.outline,
                                 )
                             }
                         }
@@ -518,10 +513,8 @@ private fun LazyListScope.librarySearchResults(
                     showSourceQuality = addons,
                 )
                 if (index < tracks.lastIndex) {
-                    HorizontalDivider(
+                    SoftHorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outline,
                     )
                 }
             }
@@ -719,10 +712,8 @@ private fun LazyListScope.searchTypeaheadDropdown(
         currentSong,
     )
     item(key = "typeahead:divider") {
-        HorizontalDivider(
+        SoftHorizontalDivider(
             modifier = Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER),
-            thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
         )
     }
     items(typeaheadResults, key = { result ->

@@ -31,7 +31,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import com.music.bitchord.ui.components.SoftHorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -288,10 +288,8 @@ private fun LibraryLinkList(links: List<LibraryLink>, onClick: (ShelfItem) -> Un
                 )
             }
             if (index < links.lastIndex) {
-                HorizontalDivider(
+                SoftHorizontalDivider(
                     modifier = Modifier.padding(start = PAGE_GUTTER + LINK_ICON_SIZE + LINK_ICON_GAP),
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outline,
                 )
             }
         }

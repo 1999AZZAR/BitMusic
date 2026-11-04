@@ -7,7 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
+import com.music.bitchord.ui.components.SoftVerticalDivider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -83,10 +83,10 @@ internal fun DesktopSidePanelColumn(
                 .fillMaxHeight()
                 .clipToBounds(),
         ) {
-            Box(Modifier.width(1.dp).fillMaxHeight().background(DesktopDivider))
+            SoftVerticalDivider()
             Box(
                 Modifier
-                    .width(SIDE_PANEL_WIDTH - 1.dp)
+                    .width(SIDE_PANEL_WIDTH - 0.5.dp)
                     .fillMaxHeight()
                     .graphicsLayer { alpha = contentAlpha },
             ) {
