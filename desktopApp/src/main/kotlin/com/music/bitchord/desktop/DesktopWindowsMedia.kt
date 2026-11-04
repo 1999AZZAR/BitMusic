@@ -48,6 +48,7 @@ internal object DesktopWindowsMedia {
         this.controller = controller
         if (!available || !started.compareAndSet(false, true)) return
         if (!nativeStart()) {
+            runCatching { nativeStop() }
             started.set(false)
             DesktopTrackLog.log("Windows media controls could not be created")
             return
