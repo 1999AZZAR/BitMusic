@@ -57,30 +57,19 @@ internal object DesktopAutoplay {
             ?.videoId
     }
 
-    /** One batch of station tracks to append after [existing]. */
+    /** One mixed-source batch of station tracks to append after [existing]. */
     suspend fun tracksFor(
         existing: List<Song>,
         seedSong: Song,
         limit: Int = MAX_QUEUED_AUTOPLAY,
     ): Result<List<Song>> {
-        if (seedSong.videoId.startsWith("soundcloud:")) {
-            val relatedSc = DesktopSoundCloud.getRelatedTracks(seedSong.videoId, limit).getOrNull()
-            if (!relatedSc.isNullOrEmpty()) {
-                val extra = QueueBuilder.extend(existing, relatedSc, limit)
-                if (extra.isNotEmpty()) {
-                    DesktopTrackLog.log("autoplay: soundcloud station for '${seedSong.title}' offered ${extra.size} tracks")
-                    return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
-                }
-            }
-        }
         val seed = youtubeSeedFor(seedSong)
-        if (seed == null) {
-            DesktopTrackLog.log("autoplay: no YouTube match to seed a station on for '${seedSong.title}'")
-            return Result.success(emptyList())
-        }
-        val related = DesktopSearchClient.radio(seed).getOrElse { return Result.failure(it) }
-        DesktopTrackLog.log("autoplay: station for '${seedSong.title}' offered ${related.size} tracks")
-        val extra = QueueBuilder.extend(existing, related, limit)
+        val batches = DesktopSourceRegistry.autoplayCandidates(seedSong, seed, limit)
+        DesktopTrackLog.log(
+            "autoplay: sources for '${seedSong.title}': " +
+                batches.joinToString { "${it.sourceId}=${it.candidates.size}" },
+        )
+        val extra = QueueBuilder.extendMixed(existing, batches, limit)
         if (extra.isEmpty()) return Result.success(emptyList())
         return Result.success(extra.map { it.copy(queueTier = QueueTier.AUTOPLAY, radioName = seedSong.radioName) })
     }

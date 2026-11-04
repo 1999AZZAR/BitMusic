@@ -3,6 +3,7 @@ package com.music.bitchord.desktop
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.playback.QueueBuilder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -266,6 +268,53 @@ internal object DesktopSourceRegistry {
         val audius = audiusJob?.await().orEmpty()
         yt + audius + sc
     }
+
+    /** Builds one recommendation bucket per eligible source for the mixed AutoPlay queue. */
+    suspend fun autoplayCandidates(
+        seedSong: Song,
+        youtubeSeed: String?,
+        limit: Int,
+    ): List<QueueBuilder.CandidateBatch> = coroutineScope {
+        val query = DesktopTrackMatcher.queries(seedSong).firstOrNull().orEmpty()
+        playbackAdapters(null)
+            .map { adapter ->
+                async {
+                    val candidates = try {
+                        when (adapter.config.kind) {
+                            DesktopSourceKind.YOUTUBE -> youtubeSeed
+                                ?.let { DesktopSearchClient.radio(it).getOrDefault(emptyList()) }
+                                .orEmpty()
+                            DesktopSourceKind.SOUNDCLOUD -> {
+                                val related = if (seedSong.videoId.startsWith("soundcloud:")) {
+                                    DesktopSoundCloud.getRelatedTracks(seedSong.videoId, limit).getOrDefault(emptyList())
+                                } else {
+                                    emptyList()
+                                }
+                                related.ifEmpty {
+                                    searchTracks(DesktopSoundCloud.search(query, limit))
+                                }
+                            }
+                            DesktopSourceKind.AUDIUS -> searchTracks(DesktopAudius.search(query, limit))
+                            DesktopSourceKind.JIOSAAVN -> searchTracks(DesktopJioSaavn.search(query, limit))
+                            DesktopSourceKind.ADDON -> searchTracks(
+                                DesktopAddonSource.search(adapter.config, query, limit),
+                            )
+                            DesktopSourceKind.CUSTOM_MODULE,
+                            DesktopSourceKind.MODULE,
+                            -> searchTracks(DesktopModuleSource.search(adapter.config, query, limit))
+                        }.take(limit)
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    QueueBuilder.CandidateBatch(adapter.config.id, candidates)
+                }
+            }
+            .awaitAll()
+            .filter { it.candidates.isNotEmpty() }
+    }
+
+    private fun searchTracks(result: Result<List<SearchResult>>): List<Song> = result.getOrDefault(emptyList())
+        .mapNotNull { (it as? SearchResult.Track)?.song }
 
     suspend fun resolve(
         song: Song,

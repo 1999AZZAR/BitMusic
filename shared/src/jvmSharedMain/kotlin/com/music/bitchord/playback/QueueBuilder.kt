@@ -24,6 +24,12 @@ import java.util.Locale
  */
 object QueueBuilder {
 
+    /** Candidates returned by one catalogue, kept separate until the mix is assembled. */
+    data class CandidateBatch(
+        val sourceId: String,
+        val candidates: List<Song>,
+    )
+
     /** No more than this many tracks by one artist in a single batch. */
     const val PER_ARTIST_LIMIT = 2
 
@@ -69,6 +75,67 @@ object QueueBuilder {
             out += candidate
         }
         return out
+    }
+
+    /**
+     * Extends a queue by taking turns across source batches.
+     *
+     * A source with fewer usable candidates naturally drops out, allowing the remaining sources
+     * to fill the requested window. Recording identity and artist caps are shared across all
+     * batches, so changing source does not reintroduce a duplicate or bypass station variety.
+     */
+    fun extendMixed(
+        existing: List<Song>,
+        batches: List<CandidateBatch>,
+        limit: Int,
+    ): List<Song> {
+        if (limit <= 0) return emptyList()
+        val taken = existing.toMutableList()
+        val perArtist = mutableMapOf<String, Int>()
+        val seedArtists = existing.lastOrNull()?.artist?.let(::artistSet).orEmpty()
+        val pending = batches
+            .filter { it.candidates.isNotEmpty() }
+            .map { it.candidates.toMutableList() }
+            .toMutableList()
+        val out = mutableListOf<Song>()
+        var cursor = 0
+
+        while (out.size < limit && pending.isNotEmpty()) {
+            val sourceIndex = cursor % pending.size
+            val source = pending[sourceIndex]
+            val candidate = takeEligible(source, taken, perArtist, seedArtists)
+            if (candidate == null) {
+                pending.removeAt(sourceIndex)
+                continue
+            }
+            taken += candidate
+            out += candidate
+            cursor = (sourceIndex + 1) % pending.size.coerceAtLeast(1)
+        }
+        return out
+    }
+
+    private fun takeEligible(
+        candidates: MutableList<Song>,
+        taken: List<Song>,
+        perArtist: MutableMap<String, Int>,
+        seedArtists: Set<String>,
+    ): Song? {
+        while (candidates.isNotEmpty()) {
+            val candidate = candidates.removeAt(0)
+            if (taken.any { isSameRecording(it, candidate) }) continue
+
+            val artists = artistSet(candidate.artist)
+            val key = artists.minOrNull()
+            if (key != null) {
+                val cap = if (artists.any { it in seedArtists }) SEED_ARTIST_LIMIT else PER_ARTIST_LIMIT
+                val played = perArtist[key] ?: 0
+                if (played >= cap) continue
+                perArtist[key] = played + 1
+            }
+            return candidate
+        }
+        return null
     }
 
     /**
