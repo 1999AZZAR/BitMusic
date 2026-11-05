@@ -4050,6 +4050,10 @@ fun BitChordDesktopApp() {
                 Box(
                     Modifier
                         .fillMaxSize()
+                        .padding(
+                            horizontal = if (destination == DesktopDestination.LISTEN_NOW && overlays.settingsPage == null) 0.dp else 8.dp,
+                            vertical = if (destination == DesktopDestination.LISTEN_NOW && overlays.settingsPage == null) 0.dp else 12.dp,
+                        )
                         .pointerInput(Unit) {
                             awaitPointerEventScope {
                                 while (true) {
@@ -6245,7 +6249,7 @@ private fun DesktopSettingsScreen(
                     SettingsNavigationRow(
                         title = DesktopStrings["equalizer", "Equalizer"],
                         subtitle = if (eqOn) {
-                            DesktopStrings["equalizer_subtitle", "Tone, seven bands and balance"]
+                            "Tone, ten bands and balance"
                         } else {
                             DesktopStrings["d_off", "Off"]
                         },

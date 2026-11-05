@@ -3,6 +3,7 @@ package com.music.bitchord.desktop
 import com.music.bitchord.playback.EqLayout
 import com.music.bitchord.playback.EqualizerPreset
 import com.music.bitchord.playback.manualCurve
+import com.music.bitchord.playback.restoreEqualizerBands
 import com.music.bitchord.playback.toneCurve
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +31,7 @@ internal object DesktopEqualizerSettings {
     private val _toneY = MutableStateFlow(clampStep(persistence.string(KEY_TONE_Y, "0").toIntOrNull() ?: 0))
     private val _focused = MutableStateFlow(persistence.boolean(KEY_FOCUSED, false))
     private val _balance = MutableStateFlow(
-        (persistence.string(KEY_BALANCE, "0").toFloatOrNull() ?: 0f).coerceIn(-1f, 1f),
+        (persistence.string(KEY_BALANCE, "0").toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f).coerceIn(-1f, 1f),
     )
     private val _bands = MutableStateFlow(readBands())
     private val _preset = MutableStateFlow(EqualizerPreset.matching(_bands.value))
@@ -50,7 +51,7 @@ internal object DesktopEqualizerSettings {
     /** Left/right trim, -1 hard left to +1 hard right. Applies to both tabs. */
     val balance: StateFlow<Float> = _balance
 
-    /** The manual tab's seven gains, in decibels, low to high. */
+    /** The manual tab's ten gains, in decibels, low to high. */
     val bands: StateFlow<List<Float>> = _bands
 
     /** Which preset the bands currently are, or [EqualizerPreset.CUSTOM]. */
@@ -79,18 +80,18 @@ internal object DesktopEqualizerSettings {
     }
 
     fun setBalance(value: Float) {
-        _balance.value = value.coerceIn(-1f, 1f)
+        _balance.value = if (value.isFinite()) value.coerceIn(-1f, 1f) else 0f
         persistence.saveString(KEY_BALANCE, _balance.value.toString())
     }
 
     /**
-     * Writes the manual tab's seven gains, and renames the preset row to suit.
+     * Writes the manual tab's ten gains, and renames the preset row to suit.
      *
-     * Stored as one string rather than seven keys so that it is one thing to keep in step.
+     * Stored as one string rather than ten keys so that it is one thing to keep in step.
      */
     fun setBands(values: List<Float>) {
         val clamped = List(EqLayout.MANUAL_COUNT) {
-            values.getOrElse(it) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
+            values.getOrElse(it) { 0f }.takeIf { it.isFinite() }?.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB) ?: 0f
         }
         _bands.value = clamped
         _preset.value = EqualizerPreset.matching(clamped)
@@ -112,12 +113,10 @@ internal object DesktopEqualizerSettings {
     private fun readBands(): List<Float> {
         val stored = persistence.string(KEY_BANDS, "")
             .split(",")
-            .mapNotNull { it.trim().toFloatOrNull() }
+            .map { it.trim().toFloatOrNull() ?: 0f }
         // Padded rather than rejected: a file written by a build with a different band count should
         // restore the ones it does have.
-        return List(EqLayout.MANUAL_COUNT) {
-            stored.getOrElse(it) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
-        }
+        return restoreEqualizerBands(stored)
     }
 
     private fun clampStep(value: Int) = value.coerceIn(-EqLayout.TONE_STEPS, EqLayout.TONE_STEPS)

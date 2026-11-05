@@ -836,6 +836,11 @@ class DesktopPlaybackEngine(
         workAvailable.drainPermits()
         drainCommands()
         recoverSinkIfNeeded()
+        if (current != null && (!sink.isOpen || sink.isBroken)) {
+            pumpExpected = false
+            workAvailable.tryAcquire(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+            return
+        }
         val track = current
         if (track == null || paused) {
             if (paused) sink.pause()
@@ -898,14 +903,14 @@ class DesktopPlaybackEngine(
         }
         updateLoudness(track, samples, count)
         sink.gain = volume * normalizationGain
-        sink.write(samples, count)
+        val accepted = sink.write(samples, count)
         // The visualizer's tap: the finished mix, exactly as written to the speakers.
         if (DesktopAudioSpectrum.isNeeded) {
-            DesktopAudioSpectrum.offer(samples, count, sink.format.channels, sink.format.sampleRate)
+            DesktopAudioSpectrum.offer(samples, accepted, sink.format.channels, sink.format.sampleRate)
         }
-        framesWritten += count / sink.format.channels.coerceAtLeast(1)
+        framesWritten += accepted / sink.format.channels.coerceAtLeast(1)
         watchSinkHealth()
-        if (count > 0 && _state.value.awaitingAudio) _state.update { it.copy(awaitingAudio = false) }
+        if (accepted > 0 && _state.value.awaitingAudio) _state.update { it.copy(awaitingAudio = false) }
     }
 
     /** The beatmatch stretch [track] is actually rendered at — [DesktopTempoBuffer]'s clamp included. */
@@ -2145,7 +2150,7 @@ class DesktopPlaybackEngine(
          * server still restarting is not hammered twice a block, short enough that the gap in the
          * music is a hiccup rather than a stopped track.
          */
-        private const val SINK_RECOVERY_RETRY_MS = 2_000L
+        private const val SINK_RECOVERY_RETRY_MS = 500L
 
         /** How long a frozen played count is tolerated once a second and a half has been written. */
         private const val SINK_STALL_NS = 3_000_000_000L

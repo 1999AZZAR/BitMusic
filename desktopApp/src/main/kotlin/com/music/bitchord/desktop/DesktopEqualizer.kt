@@ -14,7 +14,7 @@ import kotlin.math.sqrt
 import kotlin.math.tan
 
 /**
- * The app's own equaliser: ten filter sections and a balance trim over the decoded stream.
+ * The app's own equaliser: thirteen filter sections and a balance trim over the decoded stream.
  *
  * A port of Android's `EqualizerProcessor`, and it drives the same [EqCurve] the Android build
  * does — [EqLayout] and the curve maths live in `shared`, so the two targets cannot drift into
@@ -77,7 +77,7 @@ internal class DesktopEqualizer {
      * to nothing instead of cutting the current curve out from under a playing track.
      */
     fun setTuning(enabled: Boolean, curve: EqCurve, balance: Float) {
-        target = if (enabled) Tuning(curve, balance.coerceIn(-1f, 1f)) else Tuning.OFF
+        target = if (enabled) Tuning(curve, if (balance.isFinite()) balance.coerceIn(-1f, 1f) else 0f) else Tuning.OFF
     }
 
     /** Sizes the state for a stream. Snaps rather than glides: there is nothing to be continuous with. */

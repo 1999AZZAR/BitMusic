@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -38,6 +39,18 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -79,7 +92,7 @@ internal fun DesktopEqualizerDialog(onDismiss: () -> Unit) {
     val mode by DesktopEqualizerSettings.mode.collectAsState()
     val balance by DesktopEqualizerSettings.balance.collectAsState()
 
-    DesktopDialogPanel(onDismiss = onDismiss, maxWidth = 560) {
+    DesktopDialogPanel(onDismiss = onDismiss, maxWidth = 800) {
         Row(
             Modifier.fillMaxWidth().padding(start = panelInset(22.dp), end = panelInset(18.dp), top = 18.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -103,17 +116,17 @@ internal fun DesktopEqualizerDialog(onDismiss: () -> Unit) {
             )
         }
 
-        // Off, the apparatus below reads as unavailable rather than merely idle: dimmed, and it
-        // stops answering the pointer, so nobody drags a band wondering why nothing changed.
-        val alpha by animateFloatAsState(if (enabled) 1f else 0.38f, label = "equalizerEnabled")
+        val alpha by animateFloatAsState(if (enabled) 1f else 0.65f, label = "equalizerEnabled")
         Column(
             Modifier
                 .graphicsLayer { this.alpha = alpha }
-                .then(if (enabled) Modifier else Modifier.pointerInput(Unit) {})
-                .then(desktopPanelBody(cardMax = 520.dp))
+                .then(desktopPanelBody(cardMax = 760.dp))
                 .verticalScroll(rememberScrollState()),
         ) {
             Spacer(Modifier.height(14.dp))
+            if (!enabled) Text("Enable the equalizer to hear your changes.",
+                color = DesktopSecondary, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = panelInset(22.dp), vertical = 8.dp))
             ModeTabs(mode, DesktopEqualizerSettings::setMode)
 
             when (mode) {
@@ -377,13 +390,13 @@ private fun ManualTab() {
     val bands by DesktopEqualizerSettings.bands.collectAsState()
     val preset by DesktopEqualizerSettings.preset.collectAsState()
 
-    SectionLabel(DesktopStrings["equalizer_bands", "Bands"])
-    Row(Modifier.fillMaxWidth().padding(horizontal = panelInset(18.dp))) {
-        BandSliders(bands, Modifier.weight(1f)) { DesktopEqualizerSettings.setBands(it) }
-        Spacer(Modifier.width(14.dp))
+    SectionLabel("10 bands · ±12 dB")
+    Column(Modifier.fillMaxWidth().padding(horizontal = panelInset(18.dp))) {
+        BandSliders(bands, Modifier.fillMaxWidth()) { DesktopEqualizerSettings.setBands(it) }
+        Spacer(Modifier.height(14.dp))
         // Beside the bands rather than behind a sheet: a window has the width for the list, and
         // seeing the curve move as a preset is picked is the point of having them.
-        PresetList(preset, Modifier.width(168.dp))
+        PresetList(preset, Modifier.fillMaxWidth())
     }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = panelInset(22.dp), vertical = 8.dp),
@@ -422,7 +435,7 @@ private fun BandSliders(bands: List<Float>, modifier: Modifier = Modifier, onCha
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(6.dp))
-                BandFader(value) { updated ->
+                BandFader(value, formatFrequency(hz) + " Hz") { updated ->
                     onChange(bands.toMutableList().also { it[index] = updated })
                 }
                 Spacer(Modifier.height(6.dp))
@@ -433,14 +446,19 @@ private fun BandSliders(bands: List<Float>, modifier: Modifier = Modifier, onCha
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                 )
+                TextButton(onClick = { onChange(bands.toMutableList().also { it[index] = 0f }) }) {
+                    Text("0", style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.semantics { contentDescription = "Reset ${formatFrequency(hz)} Hz" })
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BandFader(value: Float, onChange: (Float) -> Unit) {
+private fun BandFader(value: Float, label: String, onChange: (Float) -> Unit) {
     val range = EqLayout.MANUAL_RANGE_DB
+    val focusRequester = remember { FocusRequester() }
     val latest by rememberUpdatedState(value)
     // The caller's lambda closes over the whole band list; a stale one writes the other bands back.
     val currentOnChange by rememberUpdatedState(onChange)
@@ -449,9 +467,26 @@ private fun BandFader(value: Float, onChange: (Float) -> Unit) {
         Modifier
             .width(30.dp)
             .height(150.dp)
+            .semantics {
+                contentDescription = label
+                progressBarRangeInfo = ProgressBarRangeInfo(value, -range..range, 47)
+                setProgress { requested ->
+                    if (!requested.isFinite()) false
+                    else { currentOnChange(snapGain(requested, range)); true }
+                }
+            }
+            .onKeyEvent {
+                if (it.type == KeyEventType.KeyDown && (it.key == Key.DirectionUp || it.key == Key.DirectionDown)) {
+                    currentOnChange((latest + if (it.key == Key.DirectionUp) 0.5f else -0.5f).coerceIn(-range, range))
+                    true
+                } else false
+            }
+            .focusRequester(focusRequester)
+            .focusable()
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    focusRequester.requestFocus()
                     down.consume()
                     var last = latest
                     fun report(offset: Offset) {

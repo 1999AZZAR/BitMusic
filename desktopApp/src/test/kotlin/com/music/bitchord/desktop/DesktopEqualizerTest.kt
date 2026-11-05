@@ -53,7 +53,7 @@ class DesktopEqualizerTest {
     fun theEndBandsAreShelvesHalfWayUpAtTheirCorner() {
         val low = EqLayout.MANUAL_BANDS_HZ[0].toDouble()
         assertEquals(BOOST_DB / 2.0, measureBand(0, BOOST_DB, low), TOLERANCE_DB, "60 Hz corner")
-        assertEquals(BOOST_DB.toDouble(), measureBand(0, BOOST_DB, 20.0), TOLERANCE_DB, "20 Hz shelf")
+        assertEquals(BOOST_DB.toDouble(), measureBand(0, BOOST_DB, low / 4), TOLERANCE_DB, "below the low shelf")
 
         val top = EqLayout.MANUAL_COUNT - 1
         val high = EqLayout.MANUAL_BANDS_HZ.last().toDouble()

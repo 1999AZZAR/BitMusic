@@ -88,11 +88,11 @@ For detailed platform guides and release packaging instructions, see:
 
 ## Branch & Release Model
 
-BitMusic uses a branch-aware versioning model. The current release base is `1.4.2`:
+BitMusic uses a branch-aware versioning model. The current release base is `1.4.3`:
 
-- `master`: Production release-ready code (`1.4.2`).
-- `staging`: Ongoing development branch (`1.4.2-beta-0`, `-beta-1`, ...).
-- `feature/<name>`: New feature branches created off `staging` (`1.4.2-beta-<name>-0`).
+- `master`: Production release-ready code (`1.4.3`).
+- `staging`: Ongoing development branch (`1.4.3-beta-0`, `-beta-1`, ...).
+- `feature/<name>`: New feature branches created off `staging` (`1.4.3-beta-<name>-0`).
 
 All contributions merge into `staging` via pull request before promotion to `master`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
