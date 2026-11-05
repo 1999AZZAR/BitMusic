@@ -17,6 +17,8 @@ internal class DesktopAudioSink {
     private var pulseOutput = false
 
     private var windowsBufferBytes = 0
+    private var windowsWriteFailed = false
+    private var pulseBufferBytes = 0
 
     /** The selection for which [line] was opened, including the blank system-default choice. */
     private var openedForSelection: String? = null
@@ -38,11 +40,10 @@ internal class DesktopAudioSink {
     val isOpen: Boolean get() = windowsOutput || pulseOutput || line != null
 
     /**
-     * Whether the native route is dead and needs reopening. Only the Linux sink reports it: the
-     * Windows one moves its own stream when its endpoint changes, and Java Sound lines fail by
-     * throwing instead. The engine reopens the output when it sees this.
+     * Whether the native route disconnected or failed to accept a write. Java Sound failures
+     * close the line instead. The engine reopens either route on its next recovery attempt.
      */
-    val isBroken: Boolean get() = pulseOutput && DesktopLinuxAudio.isBroken
+    val isBroken: Boolean get() = (windowsOutput && windowsWriteFailed) || (pulseOutput && DesktopLinuxAudio.isBroken)
 
     /** Whether the output has already been told it is paused; [pause] is called every step. */
     private var pauseAnnounced = false
@@ -59,6 +60,7 @@ internal class DesktopAudioSink {
                 val previous = line
                 line = null
                 windowsOutput = true
+                windowsWriteFailed = false
                 windowsBufferBytes = native.getOrThrow()
                 // Read live from the native side instead: it moves the stream itself when the
                 // Windows default changes or a chosen device is unplugged.
@@ -83,6 +85,7 @@ internal class DesktopAudioSink {
                 val previous = line
                 line = null
                 pulseOutput = true
+                pulseBufferBytes = pulse.getOrThrow()
                 openedOn = null
                 openedForSelection = selectedDevice
                 format = requested
@@ -193,7 +196,7 @@ internal class DesktopAudioSink {
     val bufferBytes: Int
         get() = when {
             windowsOutput -> windowsBufferBytes
-            pulseOutput -> DesktopLinuxAudio.bufferedBytes()
+            pulseOutput -> pulseBufferBytes
             else -> runCatching { line?.bufferSize ?: 0 }.getOrDefault(0)
         }
 
@@ -201,8 +204,9 @@ internal class DesktopAudioSink {
     fun write(samples: FloatArray, count: Int): Int {
         if (windowsOutput) {
             val written = DesktopWindowsAudio.write(samples, count, gain)
+            if (count > 0 && written == 0) windowsWriteFailed = true
             diagnose(samples, count, written)
-            return written
+            return written / format.bytesPerSample
         }
         if (pulseOutput) {
             val written = DesktopLinuxAudio.write(samples, count, gain)
@@ -212,9 +216,15 @@ internal class DesktopAudioSink {
         val target = line ?: return 0
         if (count <= 0) return 0
         val bytes = convert(samples, count)
-        val written = target.write(bytes, 0, count * format.bytesPerSample)
-        diagnose(samples, count, written)
-        return written
+        return try {
+            val written = target.write(bytes, 0, count * format.bytesPerSample)
+            diagnose(samples, count, written)
+            written / format.bytesPerSample
+        } catch (failure: Exception) {
+            close()
+            DesktopTrackLog.log("Java Sound output interrupted: ${failure.message}")
+            0
+        }
     }
 
     private fun diagnose(samples: FloatArray, count: Int, written: Int) {

@@ -8,13 +8,16 @@ import kotlin.math.sqrt
 /**
  * The shape of one filter in [EqLayout].
  *
- * Shelves rather than bells at the two ends of the manual tab: a bell centred
- * at 60 Hz leaves 40 Hz almost untouched, so "turn the bass up" doesn't turn up
- * the part of the bass people mean. A shelf lifts everything below its corner,
- * which is what the bottom slider is asked for, and the same argument upside
- * down applies to 14 kHz.
+ * Shelves rather than bells at the two ends of the manual tab: a bell centred at 60 Hz leaves 40 Hz
+ * almost untouched, so "turn the bass up" doesn't turn up the part of the bass people mean. A shelf
+ * lifts everything below its corner, which is what the bottom slider is asked for, and the same
+ * argument upside down applies to 14 kHz.
  */
-enum class FilterKind { BELL, LOW_SHELF, HIGH_SHELF }
+enum class FilterKind {
+    BELL,
+    LOW_SHELF,
+    HIGH_SHELF,
+}
 
 /** A slot's fixed identity: its shape and where on the spectrum it sits. */
 class FilterSlot(val kind: FilterKind, val frequencyHz: Float)
@@ -22,44 +25,45 @@ class FilterSlot(val kind: FilterKind, val frequencyHz: Float)
 /**
  * Every filter either tab can ask for, in one fixed list.
  *
- * Both tabs drive the *same* ten slots, and a slot the current tab doesn't use
- * is held at 0 dB rather than removed. That costs nothing — a section at 0 dB
- * is skipped outright by [EqualizerProcessor] — and it buys the thing that
- * matters: the set of running filters never changes shape, so switching tab or
- * preset is a gain change like any other and glides silently. Rebuilding the
- * cascade instead would drop filter state on the floor mid-signal, which is a
- * click every time.
+ * Both tabs drive the same thirteen slots, and a slot the current tab doesn't use is held at 0 dB
+ * rather than removed. That costs nothing — a section at 0 dB is skipped outright by
+ * [EqualizerProcessor] — and it buys the thing that matters: the set of running filters never
+ * changes shape, so switching tab or preset is a gain change like any other and glides silently.
+ * Rebuilding the cascade instead would drop filter state on the floor mid-signal, which is a click
+ * every time.
  */
 object EqLayout {
 
-    /** The seven centres the manual tab puts a slider under. */
-    val MANUAL_BANDS_HZ = floatArrayOf(60f, 150f, 400f, 1_000f, 2_500f, 6_000f, 14_000f)
+    /** The ten centres the manual tab puts a slider under. */
+    val MANUAL_BANDS_HZ =
+        floatArrayOf(31.25f, 62.5f, 125f, 250f, 500f, 1_000f, 2_000f, 4_000f, 8_000f, 16_000f)
 
     /**
-     * Wide enough to overlap its neighbours — the centres are about 1.3 octaves
-     * apart, so a Q near 1 means pushing every slider up lifts the whole band
-     * evenly instead of leaving scallops between them.
+     * Wide enough to overlap its neighbours — the centres are about 1.3 octaves apart, so a Q near
+     * 1 means pushing every slider up lifts the whole band evenly instead of leaving scallops
+     * between them.
      */
     const val MANUAL_Q = 1.0f
 
-    /** Slots 0..6: the manual tab. */
+    /** Slots 0..9: the manual tab. */
     const val MANUAL_FIRST = 0
-    const val MANUAL_COUNT = 7
+    const val MANUAL_COUNT = 10
 
-    /** Slots 7..9: the tone pad's tilt pair and its mid contour. */
-    const val TONE_LOW = 7
-    const val TONE_MID = 8
-    const val TONE_HIGH = 9
+    /** Slots 10..12: the tone pad's tilt pair and its mid contour. */
+    const val TONE_LOW = MANUAL_COUNT
+    const val TONE_MID = MANUAL_COUNT + 1
+    const val TONE_HIGH = MANUAL_COUNT + 2
 
-    const val SLOTS = 10
+    const val SLOTS = MANUAL_COUNT + 3
 
     val slots: List<FilterSlot> = buildList {
         MANUAL_BANDS_HZ.forEachIndexed { index, hz ->
-            val kind = when (index) {
-                0 -> FilterKind.LOW_SHELF
-                MANUAL_BANDS_HZ.lastIndex -> FilterKind.HIGH_SHELF
-                else -> FilterKind.BELL
-            }
+            val kind =
+                when (index) {
+                    0 -> FilterKind.LOW_SHELF
+                    MANUAL_BANDS_HZ.lastIndex -> FilterKind.HIGH_SHELF
+                    else -> FilterKind.BELL
+                }
             add(FilterSlot(kind, hz))
         }
         add(FilterSlot(FilterKind.LOW_SHELF, 250f))
@@ -83,23 +87,20 @@ object EqLayout {
 /**
  * A tuning, rendered: what every slot in [EqLayout] is set to right now.
  *
- * Gains and Qs both, because Broad/Focused moves Q while the pad stays put —
- * see [toneCurve].
+ * Gains and Qs both, because Broad/Focused moves Q while the pad stays put — see [toneCurve].
  */
 class EqCurve(
     val gainsDb: FloatArray,
     val qs: FloatArray,
     /**
-     * Make-up attenuation, always at or below zero: half of however far the
-     * curve's loudest point was pushed up.
+     * Make-up attenuation, always at or below zero: half of however far the curve's loudest point
+     * was pushed up.
      *
-     * Half rather than all of it. Taking the whole boost back assumes the
-     * music has full-scale content sitting exactly on the boosted frequency,
-     * which almost nothing does, and the price of that assumption was every
-     * boost reading as "the track got quieter" — a +6 dB bass lift left the
-     * bass where it was and turned everything else down 6 dB. The overs the
-     * remaining half lets through are rare and brief, and [PeakLimiter] takes
-     * them instead.
+     * Half rather than all of it. Taking the whole boost back assumes the music has full-scale
+     * content sitting exactly on the boosted frequency, which almost nothing does, and the price of
+     * that assumption was every boost reading as "the track got quieter" — a +6 dB bass lift left
+     * the bass where it was and turned everything else down 6 dB. The overs the remaining half lets
+     * through are rare and brief, and [PeakLimiter] takes them instead.
      */
     val preampDb: Float,
 ) {
@@ -112,31 +113,51 @@ class EqCurve(
     }
 }
 
-/** The seven sliders, as a curve. Slots the tone pad owns stay flat. */
+/** The ten sliders, as a curve. Slots the tone pad owns stay flat. */
 fun manualCurve(bandsDb: List<Float>): EqCurve {
     val gains = FloatArray(EqLayout.SLOTS)
     val qs = FloatArray(EqLayout.SLOTS) { 0.707f }
     for (band in 0 until EqLayout.MANUAL_COUNT) {
         gains[EqLayout.MANUAL_FIRST + band] =
-            bandsDb.getOrElse(band) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
+            bandsDb
+                .getOrElse(band) { 0f }
+                .takeIf { it.isFinite() }
+                ?.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB) ?: 0f
         qs[EqLayout.MANUAL_FIRST + band] = EqLayout.MANUAL_Q
     }
     return EqCurve.of(gains, qs)
 }
 
+/** Restores legacy seven-band curves by interpolating gains on the logarithmic frequency axis. */
+fun restoreEqualizerBands(values: List<Float>): List<Float> {
+    val clean = values.map { if (it.isFinite()) it.coerceIn(-12f, 12f) else 0f }
+    if (clean.size != 7) return List(EqLayout.MANUAL_COUNT) { clean.getOrElse(it) { 0f } }
+    val legacy = floatArrayOf(60f, 150f, 400f, 1_000f, 2_500f, 6_000f, 14_000f)
+    return EqLayout.MANUAL_BANDS_HZ.map { hz ->
+        val upper = legacy.indexOfFirst { it >= hz }
+        when {
+            upper == 0 -> clean.first()
+            upper < 0 -> clean.last()
+            else -> {
+                val fraction =
+                    log10(hz / legacy[upper - 1]) / log10(legacy[upper] / legacy[upper - 1])
+                clean[upper - 1] + (clean[upper] - clean[upper - 1]) * fraction
+            }
+        }
+    }
+}
+
 /**
  * The tone pad, as a curve. Slots the manual tab owns stay flat.
  *
- * [x] tilts: left is warm (low shelf up, high shelf down), right is bright, and
- * the two move by the same amount in opposite directions so the middle of the
- * spectrum — where most of a mix lives — keeps its level whichever way the puck
- * goes. [y] is the contour: down scoops the mids into a V, up pushes them
- * forward.
+ * [x] tilts: left is warm (low shelf up, high shelf down), right is bright, and the two move by the
+ * same amount in opposite directions so the middle of the spectrum — where most of a mix lives —
+ * keeps its level whichever way the puck goes. [y] is the contour: down scoops the mids into a V,
+ * up pushes them forward.
  *
- * [focused] narrows all three. Apple describes the two settings as wider ranges
- * with a richer sound against specific ranges with less distraction, which is a
- * description of bandwidth and nothing else, so that is the only thing it
- * changes.
+ * [focused] narrows all three. Apple describes the two settings as wider ranges with a richer sound
+ * against specific ranges with less distraction, which is a description of bandwidth and nothing
+ * else, so that is the only thing it changes.
  */
 fun toneCurve(x: Int, y: Int, focused: Boolean): EqCurve {
     val gains = FloatArray(EqLayout.SLOTS)
@@ -160,11 +181,10 @@ fun toneCurve(x: Int, y: Int, focused: Boolean): EqCurve {
 /**
  * How far down the curve is pulled: [MAKEUP_FRACTION] of its peak boost.
  *
- * Taking the largest single band gain would under-read it: the bands overlap,
- * so two neighbours at +6 dB are worth more than +6 dB between them. This walks
- * the summed response instead — magnitudes multiply through a cascade, so
- * decibels add — and takes its actual peak. Runs on whoever changed the
- * setting, never on the audio thread.
+ * Taking the largest single band gain would under-read it: the bands overlap, so two neighbours at
+ * +6 dB are worth more than +6 dB between them. This walks the summed response instead — magnitudes
+ * multiply through a cascade, so decibels add — and takes its actual peak. Runs on whoever changed
+ * the setting, never on the audio thread.
  */
 private fun preampFor(gainsDb: FloatArray, qs: FloatArray): Float {
     var peak = 0f
@@ -188,10 +208,9 @@ private fun responseFrequency(point: Int): Float {
 /**
  * One section's contribution at [hz], in decibels.
  *
- * The analog prototypes these are the magnitudes of are exactly what
- * [EqualizerProcessor]'s state-variable mixes realise — the bilinear transform
- * only bends the frequency axis near Nyquist, which is nowhere near where a
- * peak worth attenuating for lands.
+ * The analog prototypes these are the magnitudes of are exactly what [EqualizerProcessor]'s
+ * state-variable mixes realise — the bilinear transform only bends the frequency axis near Nyquist,
+ * which is nowhere near where a peak worth attenuating for lands.
  */
 internal fun sectionGainDb(slot: FilterSlot, gainDb: Float, q: Float, hz: Float): Float {
     if (abs(gainDb) < 0.01f) return 0f
@@ -200,20 +219,21 @@ internal fun sectionGainDb(slot: FilterSlot, gainDb: Float, q: Float, hz: Float)
     val x = (hz / slot.frequencyHz).toDouble()
     val x2 = x * x
     val qq = (q * q).toDouble()
-    val magnitude = when (slot.kind) {
-        FilterKind.BELL -> {
-            val flat = (1 - x2) * (1 - x2)
-            sqrt((flat + x2 * a2 / qq) / (flat + x2 / (a2 * qq)))
+    val magnitude =
+        when (slot.kind) {
+            FilterKind.BELL -> {
+                val flat = (1 - x2) * (1 - x2)
+                sqrt((flat + x2 * a2 / qq) / (flat + x2 / (a2 * qq)))
+            }
+            FilterKind.LOW_SHELF -> {
+                val common = x2 * a / qq
+                a * sqrt(((a - x2) * (a - x2) + common) / ((1 - a * x2) * (1 - a * x2) + common))
+            }
+            FilterKind.HIGH_SHELF -> {
+                val common = x2 * a / qq
+                a * sqrt(((1 - a * x2) * (1 - a * x2) + common) / ((a - x2) * (a - x2) + common))
+            }
         }
-        FilterKind.LOW_SHELF -> {
-            val common = x2 * a / qq
-            a * sqrt(((a - x2) * (a - x2) + common) / ((1 - a * x2) * (1 - a * x2) + common))
-        }
-        FilterKind.HIGH_SHELF -> {
-            val common = x2 * a / qq
-            a * sqrt(((1 - a * x2) * (1 - a * x2) + common) / ((a - x2) * (a - x2) + common))
-        }
-    }
     return (20.0 * log10(magnitude)).toFloat()
 }
 

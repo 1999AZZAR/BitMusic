@@ -456,6 +456,7 @@ internal fun DesktopFloatingPlayer(
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val showVisualizer = active && maxWidth >= 1000.dp
+        val showSplitVisualizer = active && maxWidth >= 400.dp
         if (maxWidth < SPLIT_WIDTH) {
             val coverOnly = maxWidth < 560.dp
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PANEL_GAP)) {
@@ -469,7 +470,7 @@ internal fun DesktopFloatingPlayer(
                     }
                 }
                 PlayerPanel(Modifier.fillMaxWidth().height(PLAYER_HEIGHT)) {
-                    transport(Modifier.fillMaxSize(), false)
+                    transport(Modifier.fillMaxSize(), showSplitVisualizer)
                 }
             }
         } else {

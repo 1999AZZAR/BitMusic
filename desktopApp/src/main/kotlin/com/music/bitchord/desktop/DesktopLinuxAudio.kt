@@ -1,216 +1,303 @@
 package com.music.bitchord.desktop
 
-import com.sun.jna.Library
-import com.sun.jna.Native
-import com.sun.jna.NativeLong
-import com.sun.jna.Pointer
-import com.sun.jna.Structure
+import com.sun.jna.*
+import com.sun.jna.ptr.IntByReference
+import com.sun.jna.ptr.LongByReference
 
-/**
- * The Linux desktop's own output: PulseAudio's blocking "simple" client.
- *
- * Java Sound under OpenJDK talks raw ALSA — it bypasses PipeWire entirely, steals the
- * device from every other stream and cannot open the one PulseAudio keeps busy. The
- * desktop session's sound runs through PulseAudio/PipeWire, so hand it interleaved
- * 32-bit float PCM and let the server mix, resample and route; the stream follows the
- * default sink, so speakers, headphones and volume keys all just work.
- */
+/** Single-owner asynchronous PulseAudio output with bounded server waits. */
 internal object DesktopLinuxAudio {
-
-    private val native: PulseSimple? by lazy {
-        if (DesktopPlatform.isLinux) {
-            runCatching { Native.load(LIBRARY, PulseSimple::class.java) }
-                .onFailure {
-                    DesktopTrackLog.log("PulseAudio unavailable; playback falls back to Java Sound: ${it.message}")
-                }
-                .getOrNull()
-        } else {
-            null
-        }
+    private val native: Pulse? by lazy {
+        if (DesktopPlatform.isLinux)
+            runCatching { Native.load("libpulse.so.0", Pulse::class.java) }.getOrNull()
+        else null
     }
-
-    private val available: Boolean get() = native != null
-
-    /** The server-side handle, valid until [close]; non-null while this sink holds the output. */
+    private var loop: Pointer? = null
+    private var context: Pointer? = null
     private var stream: Pointer? = null
-
-    /** The stream's own format; latency arithmetic needs the rate and the channel width. */
-    private var sampleRate = 0
+    private var rate = 0
     private var channels = 0
-
-    /** Reused float buffer; the playback thread is the only writer. */
+    private var written = 0L
+    private var played = 0L
+    private var nextTiming = 0L
+    private var buffer: Memory? = null
     private var staged = FloatArray(0)
-
-    /** Frames handed to the server in total, the base of the honest playback position. */
-    private var writtenFrames = 0L
-
+    private val latency = LongByReference()
+    private val negative = IntByReference()
     private var broken = false
+    val isBroken
+        get() = broken
 
-    /**
-     * Whether the server-side stream is dead after a failed write. The engine watches this and
-     * reopens the output: without it, a PulseAudio/PipeWire restart mid-track left every later
-     * write failing silently until the next track change or device switch happened to reopen.
-     */
-    val isBroken: Boolean get() = broken
-
-    /** Opens the default sink for [requested]; on Linux the system route outranks per-device picks. */
     fun open(device: String, requested: DesktopPcmFormat): Result<Int> = runCatching {
-        val bindings = available.let { native } ?: error("libpulse-simple is not installed")
-        val recovering = broken
         close()
-        val spec = PaSampleSpec().apply {
+        val api = native ?: error("libpulse unavailable")
+        try {
+            val mainloop = checkNotNull(api.pa_mainloop_new())
+            loop = mainloop
+            val client =
+                checkNotNull(api.pa_context_new(api.pa_mainloop_get_api(mainloop), "BitMusic"))
+            context = client
+            check(api.pa_context_connect(client, null, 1, null) >= 0)
+            awaitReady { api.pa_context_get_state(client).also { check(it !in 5..6) } == 4 }
+            val spec =
+                PaSampleSpec().apply {
+                    rate = requested.sampleRate
+                    channels = requested.channels.toByte()
+                }
+            val output =
+                checkNotNull(api.pa_stream_new(client, "BitMusic desktop playback", spec, null))
+            stream = output
             rate = requested.sampleRate
-            format = PA_SAMPLE_FLOAT32LE
-            this.channels = requested.channels.toByte()
-        }
-        val error = intArrayOf(0)
-        val opened = bindings.pa_simple_new(
-            null,
-            "BitMusic",
-            PA_STREAM_PLAYBACK,
-            null,
-            "BitMusic desktop playback",
-            spec,
-            null,
-            null,
-            error,
-        )
-        checkNotNull(opened) { "PulseAudio could not open a playback stream: ${strerror(bindings, error[0])}" }
-        stream = opened
-        sampleRate = requested.sampleRate
-        channels = requested.channels
-        writtenFrames = 0
-        lastQueuedFrames = 0
-        broken = false
-        if (recovering) DesktopTrackLog.log("PulseAudio stream re-opened after a failure")
-        requested.byteRate / 5
-    }
-
-    /** Writes [count] interleaved samples, scaled by [gain]; blocks while the server digests the queue. */
-    fun write(samples: FloatArray, count: Int, gain: Float): Int {
-        val handle = stream
-        val bindings = native
-        if (broken || handle == null || bindings == null || count <= 0) return 0
-        if (staged.size < count) staged = FloatArray(count)
-        System.arraycopy(samples, 0, staged, 0, count)
-        if (gain != 1f) {
-            for (index in 0 until count) staged[index] *= gain
-        }
-        val error = intArrayOf(0)
-        val result = runCatching {
-            bindings.pa_simple_write(handle, staged, NativeLong(count.toLong() * 4), error)
-        }
-        if (result.getOrNull() != 0) {
-            broken = true
-            DesktopTrackLog.log(
-                "PulseAudio write failed: ${strerror(bindings, error[0])} (${result.exceptionOrNull()?.message})",
+            channels = requested.channels
+            val bytesPerSecond = rate * channels * 4
+            val attr =
+                PaBufferAttr().apply {
+                    tlength = bytesPerSecond / 5
+                    minreq = bytesPerSecond / 50
+                }
+            check(
+                api.pa_stream_connect_playback(output, null, attr, 2 or 8 or 8192, null, null) >= 0
             )
-            return 0
+            awaitReady { api.pa_stream_get_state(output).also { check(it !in 3..4) } == 2 }
+            bytesPerSecond / 5
+        } catch (failure: Throwable) {
+            close()
+            throw failure
         }
-        writtenFrames += count / channels.coerceAtLeast(1)
-        return count
     }
 
-    /** The last latency reading that answered, held for the query's bad days; see [framesPlayed]. */
-    private var lastQueuedFrames = 0L
+    private fun pump() {
+        check(native!!.pa_mainloop_iterate(loop!!, 0, null) >= 0) { "PulseAudio event loop failed" }
+    }
 
-    /**
-     * Frames the server has actually finished — everything written, minus what it still holds.
-     *
-     * A failed query used to read as "nothing queued", which leapt the playhead a queue's length
-     * ahead of the music. A query that fails while the stream itself still answers is a hiccup,
-     * not a queue that emptied, so the last good reading is held instead.
-     */
+    private fun awaitReady(ready: () -> Boolean) {
+        val deadline = System.nanoTime() + 1_500_000_000L
+        while (true) {
+            pump()
+            if (ready()) return
+            check(System.nanoTime() < deadline) { "PulseAudio response timed out" }
+            Thread.sleep(4)
+        }
+    }
+
+    fun write(samples: FloatArray, count: Int, gain: Float): Int {
+        if (broken || stream == null || count <= 0) return 0
+        var accepted = 0
+        runCatching {
+                val api = native!!
+                val output = stream!!
+                val bytes = count * 4L
+                if (buffer == null || buffer!!.size() < bytes) {
+                    buffer?.close()
+                    buffer = Memory(bytes)
+                }
+                if (gain == 1f) buffer!!.write(0, samples, 0, count)
+                else {
+                    if (staged.size < count) staged = FloatArray(count)
+                    for (i in 0 until count) staged[i] = samples[i] * gain
+                    buffer!!.write(0, staged, 0, count)
+                }
+                val deadline = System.nanoTime() + 1_500_000_000L
+                while (accepted < count) {
+                    pump()
+                    check(
+                        api.pa_stream_get_state(output) == 2 &&
+                            api.pa_context_get_state(context!!) == 4
+                    ) {
+                        "PulseAudio disconnected"
+                    }
+                    val available = api.pa_stream_writable_size(output).toLong()
+                    check(available >= 0)
+                    val frameBytes = channels * 4L
+                    val chunk = minOf(available, (count - accepted) * 4L) / frameBytes * frameBytes
+                    if (chunk > 0) {
+                        check(
+                            api.pa_stream_write(
+                                output,
+                                buffer!!.share(accepted * 4L),
+                                NativeLong(chunk),
+                                null,
+                                0,
+                                0,
+                            ) >= 0
+                        )
+                        accepted += (chunk / 4).toInt()
+                        written += chunk / frameBytes
+                    } else {
+                        check(System.nanoTime() < deadline) {
+                            "PulseAudio stopped consuming samples"
+                        }
+                        Thread.sleep(4)
+                    }
+                }
+            }
+            .onFailure {
+                broken = true
+                DesktopTrackLog.log("PulseAudio output interrupted: ${it.message}")
+            }
+        return accepted
+    }
+
     fun framesPlayed(): Long {
-        val handle = stream
-        val bindings = native
-        if (handle == null || bindings == null) return 0
-        val error = intArrayOf(0)
-        val usec = runCatching {
-            bindings.pa_simple_get_latency(handle, error).takeIf { error[0] == 0 && it >= 0 }
-        }.getOrNull()
-        if (usec != null) lastQueuedFrames = usec * sampleRate / 1_000_000
-        return (writtenFrames - lastQueuedFrames).coerceAtLeast(0)
+        if (broken || stream == null) return played
+        runCatching {
+                pump()
+                val now = System.nanoTime()
+                if (now >= nextTiming) {
+                    nextTiming = now + 50_000_000L
+                    native!!.pa_stream_update_timing_info(stream!!, null, null)?.let {
+                        native!!.pa_operation_unref(it)
+                    }
+                }
+                if (native!!.pa_stream_get_latency(stream!!, latency, negative) >= 0) {
+                    val queued =
+                        if (negative.value != 0) 0L
+                        else latency.value.coerceAtLeast(0) * rate / 1_000_000
+                    played = maxOf(played, (written - queued).coerceIn(0, written))
+                }
+            }
+            .onFailure { broken = true }
+        return played
     }
 
-    /** What the server is still holding, in bytes — a live read, not a constant. */
-    fun bufferedBytes(): Int {
-        val frameBytes = 4 * channels.coerceAtLeast(1)
-        val queued = (writtenFrames - framesPlayed()).coerceAtLeast(0)
-        val bytes = queued * frameBytes
-        return bytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-    }
 
-    fun deviceName(): String = "PulseAudio default sink"
+    fun deviceName() = "PulseAudio default sink"
 
-    /** The server still holds a mixed-in tail; drop it, so pausing is instant rather than an echo. */
     fun pause() = flush()
 
     fun resume() {}
 
-    fun flush() {
-        val handle = stream
-        val bindings = native
-        if (handle == null || bindings == null) return
-        runCatching { bindings.pa_simple_flush(handle, intArrayOf(0)) }
-    }
+    fun flush() =
+        operation { api, output -> api.pa_stream_flush(output, null, null) }
+            .also { played = written }
 
-    fun drain() {
-        val handle = stream
-        val bindings = native
-        if (handle == null || bindings == null) return
-        runCatching { bindings.pa_simple_drain(handle, intArrayOf(0)) }
+    fun drain() = operation { api, output -> api.pa_stream_drain(output, null, null) }
+
+    private fun operation(start: (Pulse, Pointer) -> Pointer?) {
+        if (broken || stream == null) return
+        runCatching {
+                start(native!!, stream!!)?.let { operation ->
+                    try {
+                        awaitReady { native!!.pa_operation_get_state(operation) != 0 }
+                    } finally {
+                        native!!.pa_operation_unref(operation)
+                    }
+                }
+            }
+            .onFailure { broken = true }
     }
 
     fun close() {
-        val handle = stream
-        val bindings = native
+        val api = native
+        stream?.let {
+            api?.pa_stream_disconnect(it)
+            api?.pa_stream_unref(it)
+        }
         stream = null
-        writtenFrames = 0
-        lastQueuedFrames = 0
+        context?.let {
+            api?.pa_context_disconnect(it)
+            api?.pa_context_unref(it)
+        }
+        context = null
+        loop?.let { api?.pa_mainloop_free(it) }
+        loop = null
+        buffer?.close()
+        buffer = null
+        staged = FloatArray(0)
+        written = 0
+        played = 0
+        nextTiming = 0
         broken = false
-        if (handle != null && bindings != null) runCatching { bindings.pa_simple_free(handle) }
     }
 
-    private fun strerror(bindings: PulseSimple, code: Int): String =
-        runCatching { bindings.pa_strerror(code) }.getOrNull() ?: "code $code"
-
-    /** `pa_sample_spec` untouched: format first, then rate, then channels — as libpulse lays it out. */
     class PaSampleSpec : Structure() {
-        @JvmField var format: Int = 0
-        @JvmField var rate: Int = 0
+        @JvmField var format = 5
+        @JvmField var rate = 44_100
         @JvmField var channels: Byte = 2
 
-        override fun getFieldOrder(): List<String> = listOf("format", "rate", "channels")
+        override fun getFieldOrder() = listOf("format", "rate", "channels")
     }
 
-    private interface PulseSimple : Library {
-        fun pa_simple_new(
-            server: String?,
+    class PaBufferAttr : Structure() {
+        @JvmField var maxlength = -1
+        @JvmField var tlength = -1
+        @JvmField var prebuf = -1
+        @JvmField var minreq = -1
+        @JvmField var fragsize = -1
+
+        override fun getFieldOrder() =
+            listOf("maxlength", "tlength", "prebuf", "minreq", "fragsize")
+    }
+
+    private interface Pulse : Library {
+        fun pa_mainloop_new(): Pointer?
+
+        fun pa_mainloop_get_api(loop: Pointer): Pointer
+
+        fun pa_mainloop_iterate(loop: Pointer, block: Int, result: Pointer?): Int
+
+        fun pa_mainloop_free(loop: Pointer)
+
+        fun pa_context_new(api: Pointer, name: String): Pointer?
+
+        fun pa_context_connect(context: Pointer, server: String?, flags: Int, api: Pointer?): Int
+
+        fun pa_context_get_state(context: Pointer): Int
+
+        fun pa_context_disconnect(context: Pointer)
+
+        fun pa_context_unref(context: Pointer)
+
+        fun pa_stream_new(
+            context: Pointer,
             name: String,
-            direction: Int,
-            device: String?,
-            streamName: String,
             spec: PaSampleSpec,
-            channelMap: Pointer?,
-            properties: Pointer?,
-            error: IntArray?,
+            map: Pointer?,
         ): Pointer?
 
-        fun pa_simple_write(handle: Pointer, data: FloatArray, bytes: NativeLong, error: IntArray?): Int
-        fun pa_simple_drain(handle: Pointer, error: IntArray?): Int
-        fun pa_simple_flush(handle: Pointer, error: IntArray?): Int
-        fun pa_simple_get_latency(handle: Pointer, error: IntArray?): Long
-        fun pa_simple_free(handle: Pointer)
-        fun pa_strerror(code: Int): String
+        fun pa_stream_connect_playback(
+            stream: Pointer,
+            device: String?,
+            attr: PaBufferAttr,
+            flags: Int,
+            volume: Pointer?,
+            sync: Pointer?,
+        ): Int
+
+        fun pa_stream_get_state(stream: Pointer): Int
+
+        fun pa_stream_writable_size(stream: Pointer): NativeLong
+
+        fun pa_stream_write(
+            stream: Pointer,
+            data: Pointer,
+            bytes: NativeLong,
+            free: Pointer?,
+            offset: Long,
+            seek: Int,
+        ): Int
+
+        fun pa_stream_get_latency(
+            stream: Pointer,
+            latency: LongByReference,
+            negative: IntByReference,
+        ): Int
+
+        fun pa_stream_update_timing_info(
+            stream: Pointer,
+            callback: Pointer?,
+            data: Pointer?,
+        ): Pointer?
+
+        fun pa_stream_flush(stream: Pointer, callback: Pointer?, data: Pointer?): Pointer?
+
+        fun pa_stream_drain(stream: Pointer, callback: Pointer?, data: Pointer?): Pointer?
+
+        fun pa_stream_disconnect(stream: Pointer): Int
+
+        fun pa_stream_unref(stream: Pointer)
+
+        fun pa_operation_get_state(operation: Pointer): Int
+
+        fun pa_operation_unref(operation: Pointer)
     }
 }
-
-/**
- * The full soname of the distribution's runtime library: the unversioned link only
- * exists under libpulse-dev, which a normal desktop install does not carry.
- */
-private const val LIBRARY = "libpulse-simple.so.0"
-
-private const val PA_STREAM_PLAYBACK = 1
-private const val PA_SAMPLE_FLOAT32LE = 5
