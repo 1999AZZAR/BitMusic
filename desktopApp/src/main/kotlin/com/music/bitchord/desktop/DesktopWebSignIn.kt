@@ -4,6 +4,8 @@ import java.net.CookieHandler
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javafx.application.Platform
 import javafx.concurrent.Worker
 import javafx.geometry.Insets
@@ -17,7 +19,9 @@ import javafx.scene.layout.Region
 import javafx.scene.web.WebView
 import javafx.stage.Stage
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 /**
  * In-app sign-in, as Android does it: the provider's own web login in a WebView, and the session read
@@ -56,18 +60,88 @@ internal object DesktopWebSignIn {
 
     private suspend fun capture(service: Service): String {
         check(available) { "This desktop cannot show a sign-in window (JavaFX did not start)." }
-        return suspendCancellableCoroutine { continuation ->
-            Platform.runLater {
-                val window = SignInWindow(service) { result ->
-                    if (continuation.isActive) continuation.resumeWith(result)
-                }
-                continuation.invokeOnCancellation { Platform.runLater(window::cancel) }
-                window.show()
+        val shown = CompletableDeferred<Unit>()
+        val outcome = CompletableDeferred<Result<String>>()
+        val cancelled = AtomicBoolean(false)
+        val window = AtomicReference<SignInWindow?>(null)
+        try {
+            showWindow(service, shown, outcome, window, cancelled)
+            try {
+                withTimeout(WINDOW_TIMEOUT_MS) { shown.await() }
+            } catch (_: TimeoutCancellationException) {
+                // The toolkit is up but its event thread never ran the post, which is what a
+                // toolkit that shut down underneath the app looks like: no window, no error.
+                DesktopTrackLog.log("sign-in: the ${service.name} window did not open in ${WINDOW_TIMEOUT_MS}ms")
+                throw IllegalStateException(
+                    "The sign-in window did not open. Try again, or use a browser session or a " +
+                        "pasted cookie instead.",
+                )
             }
+            return outcome.await().getOrThrow()
+        } finally {
+            cancelled.set(true)
+            // Cancelling the listener closes the window; one that finished already ignores this.
+            window.getAndSet(null)?.let { opened -> runCatching { Platform.runLater { opened.cancel() } } }
+        }
+    }
+
+    /**
+     * Posts the window to the JavaFX thread and reports when that has happened, whether it opened
+     * or not. Any failure is turned into the capture's result rather than lost on the FX thread,
+     * where it would leave the button spinning with nothing on screen.
+     */
+    private fun showWindow(
+        service: Service,
+        shown: CompletableDeferred<Unit>,
+        outcome: CompletableDeferred<Result<String>>,
+        window: AtomicReference<SignInWindow?>,
+        cancelled: AtomicBoolean,
+    ) {
+        try {
+            Platform.runLater {
+                try {
+                    if (cancelled.get()) return@runLater
+                    val opened = SignInWindow(service) { result ->
+                        if (!outcome.isCompleted) outcome.complete(result)
+                    }
+                    window.set(opened)
+                    // The caller may have timed out or been dismissed while the window was being
+                    // built; its `finally` saw no window to close, so this is the only check that
+                    // catches that and keeps an unowned stage from appearing afterwards.
+                    if (cancelled.get()) {
+                        opened.cancel()
+                        return@runLater
+                    }
+                    opened.show()
+                } catch (failure: Throwable) {
+                    DesktopTrackLog.log("sign-in: could not open the ${service.name} window: ${failure.message}")
+                    // Only exceptions leave this method: a missing WebKit or toolkit surfaces as an
+                    // Error, and rethrowing it would take the whole app down instead of the window.
+                    outcome.complete(
+                        Result.failure(
+                            failure as? Exception
+                                ?: IllegalStateException(
+                                    "The sign-in window could not be created: ${failure.message}",
+                                    failure,
+                                ),
+                        ),
+                    )
+                } finally {
+                    shown.complete(Unit)
+                }
+            }
+        } catch (failure: IllegalStateException) {
+            // Posted before the toolkit was up. runLater throws here; after shutdown it is silently
+            // ignored instead, which the window timeout above catches.
+            outcome.complete(Result.failure(failure))
+            shown.complete(Unit)
         }
     }
 
     private const val SPOTIFY_COOKIE = "sp_dc"
+
+    /** How long the toolkit has to put the window on screen before the sign-in is called failed. */
+    private const val WINDOW_TIMEOUT_MS = 10_000L
 
     /** The cookies [service] would send, as a `Cookie` header value. */
     private fun cookies(service: Service): String = runCatching {
@@ -114,7 +188,13 @@ internal object DesktopWebSignIn {
             load()
         }
 
-        fun show() = stage.show()
+        fun show() {
+            stage.show()
+            // A stage raised from an app that AWT owns can come up behind it on Windows and macOS;
+            // bring it forward and give it the keyboard before the listener types anything.
+            stage.toFront()
+            stage.requestFocus()
+        }
 
         fun cancel() = complete(Result.failure(CancellationException("sign-in window closed")))
 
