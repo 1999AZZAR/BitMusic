@@ -37,6 +37,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.Continuation
@@ -404,7 +405,16 @@ class DesktopPoTokenWebView private constructor(
         private const val GENERATE_TIMEOUT_MS = 15_000L
         private const val IDLE_RELEASE_MS = 60_000L
 
-        /** Whether JavaFX could be started in this process; checked once. */
+        private const val FX_START_TIMEOUT_MS = 5_000L
+
+        /**
+         * Whether JavaFX could be started in this process; checked once.
+         *
+         * The toolkit is started lazily, which is what macOS needs: before AWT has the Cocoa loop
+         * running, `Platform.startup` on the main thread would enter `[NSApp run]` and never
+         * return — see GlassApplication's `_runLoop`. By the time this is first read the app is up,
+         * so the call is not made from `main()`.
+         */
         val available: Boolean by lazy { startFx() }
 
         suspend fun getNewPoTokenGenerator(): DesktopPoTokenWebView {
@@ -446,9 +456,13 @@ class DesktopPoTokenWebView private constructor(
                 // Already running.
                 started.countDown()
             }
-            Platform.setImplicitExit(false)
-            started.await()
-            true
+            // Bounded: an unbounded wait here used to freeze whatever thread first asked — the
+            // composition thread when the sign-in dialog was opened.
+            runCatching { Platform.setImplicitExit(false) }
+                .onFailure { TrackLog.w(TAG, "Could not disable JavaFX implicit exit: ${it.message}") }
+            val up = started.await(FX_START_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            if (!up) TrackLog.w(TAG, "JavaFX did not start within ${FX_START_TIMEOUT_MS}ms")
+            up
         }.onFailure { TrackLog.w(TAG, "JavaFX unavailable, no PoTokens on this desktop: ${it.message}") }
             .getOrDefault(false)
 
